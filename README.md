@@ -22,6 +22,25 @@ A Bittensor subnet for deterministic, adversarial smart contract exploit discove
 1. **Incentives are on-chain and adversarial.** Every scoring rule is deterministic and published.
 2. **Validation must be cheaper than generation.** O(minutes) vs O(hours).
 
+## Documentation
+
+| Document                                               | Description                                                                               |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [Architecture](docs/ARCHITECTURE.md)                   | System architecture, component interactions, data flow diagrams, design decisions         |
+| [API Reference](docs/API_REFERENCE.md)                 | Complete API documentation: Python modules, synapses, contract ABIs, CLI, HTTP endpoints  |
+| [Deployment Guide](docs/DEPLOYMENT.md)                 | Production deployment, Docker configuration, monitoring, troubleshooting                  |
+| [Developer Guide](docs/DEVELOPER_GUIDE.md)             | Contributing code: setup, testing, adding templates/mutators/contracts                    |
+| [Miner Guide](docs/MINER_GUIDE.md)                     | Miner onboarding: writing exploits, submission workflow, scoring, strategies              |
+| [Validator Guide](docs/VALIDATOR_GUIDE.md)             | Validator setup, epoch lifecycle, weight setting, monitoring, determinism                 |
+| [Testing Guide](docs/TESTING.md)                       | Test suites, CI pipeline, determinism verification, writing tests                         |
+| [Contract Reference](docs/CONTRACT_REFERENCE.md)       | Solidity contract documentation: CommitReveal, ExploitRegistry, ProtocolRegistry, Stage 3 |
+| [Exploit Writing Guide](docs/EXPLOIT_WRITING_GUIDE.md) | Annotated exploit examples for every vulnerability class, scoring strategies              |
+| [Glossary](docs/GLOSSARY.md)                           | Definitions of all key terms and concepts used in the project                             |
+| [Threat Model](docs/THREAT_MODEL.md)                   | STRIDE analysis, risk matrix, attack surfaces, security controls                          |
+| [Contributing](CONTRIBUTING.md)                        | PR process, coding standards, development setup                                           |
+| [Security Policy](SECURITY.md)                         | Vulnerability reporting, scope, disclosure policy                                         |
+| [Changelog](CHANGELOG.md)                              | Release history and notable changes                                                       |
+
 ## Components
 
 | Component           | Location                     | Status |
@@ -354,12 +373,6 @@ Test suites:
 ```
 
 ---
-
-## 6-Month Execution Phases
-
-- **Weeks 0–4**: Single EVM contract, Solidity only, deterministic exploits
-- **Month 3–4**: Multi-contract systems (proxy, upgradeable, flash loan mocks)
-- **Month 5–6**: Adversarial mode (invariant writers vs. breakers)
 
 ## Legal
 
