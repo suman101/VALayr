@@ -1,0 +1,160 @@
+name: CI — Exploit Subnet
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  FOUNDRY_PROFILE: default
+  PYTHONHASHSEED: "0"
+
+jobs:
+  # ── Solidity Contracts ───────────────────────────────────────────────────
+  foundry:
+    name: Foundry Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly-2024-12-01
+          cache: true
+
+      - name: Check Foundry versions
+        run: |
+          forge --version
+          anvil --version
+          cast --version
+
+      - name: Compile contracts
+        run: forge build --sizes
+
+      - name: Run contract tests
+        run: forge test -vvv
+
+      - name: Run exploit tests
+        run: FOUNDRY_PROFILE=exploits forge test -vvv
+
+      - name: Check test gas snapshots
+        run: forge snapshot --check || true
+
+  # ── Python Pipeline ──────────────────────────────────────────────────────
+  python:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly-2024-12-01
+          cache: true
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create module symlinks
+        run: |
+          ln -sf task-generator task_generator
+          ln -sf subnet-adapter subnet_adapter
+
+      - name: Run integration tests
+        run: PYTHONHASHSEED=0 python -m pytest tests/test_integration.py -v --timeout=120
+
+      - name: Run pipeline tests
+        run: PYTHONHASHSEED=0 python -m pytest tests/test_pipeline.py -v --timeout=120
+
+      - name: Run live Anvil tests
+        run: PYTHONHASHSEED=0 python -m pytest tests/test_live_anvil.py -v --timeout=120
+
+      - name: Run extended tests (pytest)
+        run: PYTHONHASHSEED=0 python -m pytest tests/test_extended.py -v --timeout=60
+
+  # ── Determinism Verification ─────────────────────────────────────────────
+  determinism:
+    name: Determinism Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly-2024-12-01
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Create module symlinks
+        run: |
+          ln -sf task-generator task_generator
+          ln -sf subnet-adapter subnet_adapter
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run determinism checks
+        env:
+          ANVIL_BLOCK_TIMESTAMP: "1700000000"
+          ANVIL_BLOCK_NUMBER: "18000000"
+          ANVIL_GAS_LIMIT: "30000000"
+          ANVIL_CHAIN_ID: "31337"
+          PYTHONHASHSEED: "0"
+        run: bash scripts/verify-determinism.sh
+
+  # ── Solidity Lint ────────────────────────────────────────────────────────
+  lint:
+    name: Solidity Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly-2024-12-01
+
+      - name: Check formatting
+        run: forge fmt --check
+
+      - name: Compile with warnings as errors
+        run: forge build 2>&1 | tee /tmp/build.log
+        continue-on-error: true
+
+      - name: Check for compiler warnings
+        run: |
+          if grep -q "Warning" /tmp/build.log; then
+            echo "::warning::Compiler warnings found"
+            grep "Warning" /tmp/build.log
+          fi

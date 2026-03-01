@@ -1,0 +1,128 @@
+# ── Exploit Subnet Validator Stack ────────────────────────────────────────────
+# Architecture:
+#   - validator: Neuron that receives submissions, pushes weights (NEEDS network)
+#   - validation-sandbox: Anvil-based sandbox for isolated exploit execution (NO network)
+#   - consensus-relay: Anti-collusion engine + metrics (NEEDS network)
+#   - miner: Exploit discovery miner (NEEDS network)
+
+services:
+  # ── Validator Neuron (network-enabled for Bittensor) ────────────────────
+  validator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.validator
+    image: ghcr.io/exploit-subnet/validator:v0.1.0
+    container_name: exploit-validator
+    # NOTE: Validator neuron needs network to communicate with Bittensor,
+    # miners, and consensus relay. The validation sandbox is isolated separately.
+    environment:
+      - ANVIL_BLOCK_TIMESTAMP=1700000000
+      - ANVIL_BLOCK_NUMBER=18000000
+      - ANVIL_GAS_LIMIT=30000000
+      - ANVIL_CHAIN_ID=31337
+      - PYTHONHASHSEED=0
+      - VALIDATOR_ID=validator-0
+      - BITTENSOR_NETWORK=finney
+      - WALLET_NAME=default
+      - WALLET_HOTKEY=default
+      - NETUID=1
+    volumes:
+      - validator-data:/app/data
+      - task-corpus:/app/contracts/corpus:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+        reservations:
+          cpus: "2"
+          memory: 4G
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import validator.engine.validate; print('ok')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Consensus Relay (has network access for validator coordination) ──────
+  consensus-relay:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.validator
+    image: ghcr.io/exploit-subnet/validator:v0.1.0
+    container_name: exploit-consensus
+    command:
+      [
+        "python3",
+        "-m",
+        "validator.anticollusion.consensus",
+        "--host",
+        "0.0.0.0",
+      ]
+    environment:
+      - VALIDATOR_ID=validator-0
+      - BITTENSOR_NETWORK=finney
+    volumes:
+      - validator-data:/app/data
+    ports:
+      - "9946:9946" # Health/metrics + consensus relay
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:9946/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Miner Node ──────────────────────────────────────────────────────────
+  miner:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.miner
+    image: ghcr.io/exploit-subnet/miner:v0.1.0
+    container_name: exploit-miner
+    environment:
+      - PYTHONHASHSEED=0
+      - BITTENSOR_NETWORK=finney
+      - WALLET_NAME=default
+      - WALLET_HOTKEY=default
+      - NETUID=1
+    volumes:
+      - miner-data:/app/data
+    restart: unless-stopped
+
+  # ── Validation Sandbox (network-isolated for determinism) ───────────────
+  # Used by the validator to execute untrusted exploit code in isolation.
+  # Launched on-demand by the orchestrator's Docker sandbox mode.
+  validation-sandbox:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.validator
+    image: ghcr.io/exploit-subnet/validator:v0.1.0
+    container_name: exploit-sandbox
+    network_mode: "none" # CRITICAL: No internet during exploit execution
+    environment:
+      - ANVIL_BLOCK_TIMESTAMP=1700000000
+      - ANVIL_BLOCK_NUMBER=18000000
+      - ANVIL_GAS_LIMIT=30000000
+      - ANVIL_CHAIN_ID=31337
+      - PYTHONHASHSEED=0
+    volumes:
+      - validator-data:/app/data:ro
+    profiles:
+      - sandbox # Only started on-demand, not with `docker compose up`
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+
+volumes:
+  validator-data:
+  task-corpus:
+  miner-data:

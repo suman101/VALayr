@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+
+# Foundry build output (rebuilt inside container)
+contracts/out
+contracts/cache
+cache
+
+# Data / runtime state (should not be baked into image)
+data/
+
+# IDE / OS
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Docs
+*.md
+!requirements.txt
+LICENSE

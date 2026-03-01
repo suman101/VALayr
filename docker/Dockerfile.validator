@@ -1,0 +1,93 @@
+# ── Validator Docker Image ────────────────────────────────────────────────────
+# IMMUTABLE TAG REQUIRED. Never use :latest in production.
+# Build: docker build -t ghcr.io/exploit-subnet/validator:v0.1.0 -f docker/Dockerfile.validator .
+# Hash: docker inspect --format='{{.Id}}' ghcr.io/exploit-subnet/validator:v0.1.0
+#
+# CRITICAL: If two validators compile different bytecode, the subnet dies.
+# Pin EVERYTHING. Hash EVERYTHING. Version EVERYTHING.
+# ──────────────────────────────────────────────────────────────────────────────
+
+FROM ubuntu:22.04@sha256:a6d2b38300ce017add71440577d5b0a90460d0e57fd7aec21dd0d1b0761bbfb2
+
+LABEL maintainer="exploit-subnet"
+LABEL version="0.1.0"
+
+# ── System Dependencies ──────────────────────────────────────────────────────
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    python3 \
+    python3-pip \
+    python3-venv \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Install Foundry (PINNED VERSION) ─────────────────────────────────────────
+ENV FOUNDRY_VERSION=nightly-2024-12-01
+RUN curl -L https://foundry.paradigm.xyz | bash && \
+    /root/.foundry/bin/foundryup --version ${FOUNDRY_VERSION}
+ENV PATH="/root/.foundry/bin:${PATH}"
+
+# Verify versions
+RUN forge --version && anvil --version && cast --version
+
+# ── Install solc (PINNED VERSION) ────────────────────────────────────────────
+ENV SOLC_VERSION=0.8.28
+RUN curl -L "https://github.com/ethereum/solidity/releases/download/v${SOLC_VERSION}/solc-static-linux" \
+    -o /usr/local/bin/solc && chmod +x /usr/local/bin/solc
+RUN solc --version
+
+# ── Python Dependencies ──────────────────────────────────────────────────────
+COPY requirements.txt /app/requirements.txt
+RUN pip3 install --no-cache-dir -r /app/requirements.txt
+
+# ── Application Code ─────────────────────────────────────────────────────────
+COPY validator/ /app/validator/
+COPY task-generator/ /app/task-generator/
+COPY subnet-adapter/ /app/subnet-adapter/
+COPY neurons/ /app/neurons/
+COPY miner/ /app/miner/
+COPY orchestrator.py /app/orchestrator.py
+COPY pyproject.toml /app/pyproject.toml
+COPY contracts/ /app/contracts/
+COPY foundry.toml /app/foundry.toml
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Create module symlinks for hyphenated directories
+RUN ln -sf /app/task-generator /app/task_generator && \
+    ln -sf /app/subnet-adapter /app/subnet_adapter
+
+# Install package in editable mode for proper module resolution
+RUN pip3 install --no-cache-dir -e . 2>/dev/null || true
+
+# ── Non-root user ─────────────────────────────────────────────────────────────
+RUN useradd -m -s /bin/bash appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+ENV PATH="/home/appuser/.foundry/bin:/root/.foundry/bin:${PATH}"
+
+WORKDIR /app
+
+# ── Network Isolation ─────────────────────────────────────────────────────────
+# CRITICAL: No internet access during validation.
+# This is enforced at runtime via Docker network config:
+#   docker run --network=none ghcr.io/exploit-subnet/validator:v0.1.0
+# The entrypoint verifies network isolation.
+
+# ── Deterministic Config ──────────────────────────────────────────────────────
+ENV ANVIL_BLOCK_TIMESTAMP=1700000000
+ENV ANVIL_BLOCK_NUMBER=18000000
+ENV ANVIL_GAS_LIMIT=30000000
+ENV ANVIL_CHAIN_ID=31337
+ENV PYTHONHASHSEED=0
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# ── Health Check ──────────────────────────────────────────────────────────────
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD forge --version > /dev/null 2>&1 && python3 --version > /dev/null 2>&1
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["validate"]

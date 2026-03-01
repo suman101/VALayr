@@ -1,0 +1,12 @@
+# Python requirements — pinned for determinism
+# Do NOT use >= or ~= specifiers. Pin exact versions.
+
+# No bittensor import in core — only in subnet-adapter wrapper
+# bittensor==7.3.1  # Uncomment when integrating with Bittensor
+
+# Core dependencies
+pycryptodome==3.21.0
+
+# Dev / test dependencies
+pytest==8.3.4
+pytest-timeout==2.3.1

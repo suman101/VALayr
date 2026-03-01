@@ -1,0 +1,52 @@
+# ── Miner Docker Image ────────────────────────────────────────────────────────
+# Lighter than the validator — no Foundry/Anvil required.
+# Build: docker build -t ghcr.io/exploit-subnet/miner:v0.1.0 -f docker/Dockerfile.miner .
+# ──────────────────────────────────────────────────────────────────────────────
+
+FROM python:3.11-slim@sha256:3bc8a4fa48c8c72e925d3e5c74e64b13c3c0b53d58a47b1f2ad3f682c6996bf0
+
+LABEL maintainer="exploit-subnet"
+LABEL version="0.1.0"
+
+# ── System Dependencies ──────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl git jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python Dependencies ──────────────────────────────────────────────────────
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# ── Application Code ─────────────────────────────────────────────────────────
+COPY neurons/ /app/neurons/
+COPY miner/ /app/miner/
+COPY validator/ /app/validator/
+COPY task-generator/ /app/task-generator/
+COPY subnet-adapter/ /app/subnet-adapter/
+COPY orchestrator.py /app/orchestrator.py
+COPY pyproject.toml /app/pyproject.toml
+COPY foundry.toml /app/foundry.toml
+COPY contracts/corpus/ /app/contracts/corpus/
+
+# Module symlinks for hyphenated directories
+RUN ln -sf /app/task-generator /app/task_generator && \
+    ln -sf /app/subnet-adapter /app/subnet_adapter
+
+WORKDIR /app
+
+# ── Install package in editable mode ─────────────────────────────────────────
+RUN pip install --no-cache-dir -e . 2>/dev/null || true
+
+# ── Non-root user ─────────────────────────────────────────────────────────────
+RUN useradd -m -s /bin/bash appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+ENV PYTHONHASHSEED=0
+ENV PYTHONDONTWRITEBYTECODE=1
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD python3 -c "import neurons.miner; print('ok')"
+
+ENTRYPOINT ["python3", "-m", "neurons.miner"]
+CMD ["--local"]

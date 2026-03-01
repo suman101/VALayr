@@ -1,0 +1,341 @@
+"""
+Task Generator — Deterministic Corpus Builder for Exploit Subnet.
+
+Generates task packages from synthetic vulnerable contracts.
+Each task package contains:
+  - Flattened Solidity source
+  - solc version
+  - Deployment config (constructor args, initial state)
+  - Optional invariant spec
+  - Package hash (task ID)
+
+CRITICAL: Tasks must be reproducible across validators byte-for-byte.
+"""
+
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
+from typing import Optional
+
+# Ensure project root on path for validator.utils imports
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+
+from task_generator.mutator import MutationRegistry
+
+
+def _safe_keccak(data: bytes) -> str:
+    """Compute keccak256 — determinism-critical, must match Solidity.
+
+    Raises RuntimeError if neither pycryptodome nor ``cast`` is available.
+    Using SHA-3 as a fallback would silently break cross-validator consensus.
+    """
+    try:
+        from validator.utils.hashing import keccak256
+        return keccak256(data)
+    except (ImportError, RuntimeError):
+        pass
+
+    # Fallback: Foundry cast CLI
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["cast", "keccak", "0x" + data.hex()],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip().startswith("0x"):
+            return result.stdout.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    raise RuntimeError(
+        "Cannot compute Ethereum keccak256: install pycryptodome "
+        "(pip install pycryptodome) or ensure `cast` is on PATH"
+    )
+
+# ── Constants ────────────────────────────────────────────────────────────────
+
+SOLC_VERSION = "0.8.28"
+DEFAULT_BLOCK_TIMESTAMP = 1_700_000_000  # Fixed for determinism
+DEFAULT_BLOCK_NUMBER = 18_000_000
+DEFAULT_GAS_LIMIT = 30_000_000
+DEFAULT_CHAIN_ID = 31337  # Anvil default
+
+CORPUS_DIR = Path(__file__).parent / "corpus"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+OUTPUT_DIR = Path(__file__).parent.parent / "contracts" / "corpus"
+
+
+# ── Data Structures ──────────────────────────────────────────────────────────
+
+@dataclass
+class DeploymentConfig:
+    """Deterministic deployment parameters."""
+    constructor_args: list = field(default_factory=list)
+    initial_balance: int = 0  # Wei to send with deployment
+    deployer_address: str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"  # Anvil[0]
+    block_timestamp: int = DEFAULT_BLOCK_TIMESTAMP
+    block_number: int = DEFAULT_BLOCK_NUMBER
+    gas_limit: int = DEFAULT_GAS_LIMIT
+    chain_id: int = DEFAULT_CHAIN_ID
+
+
+@dataclass
+class InvariantSpec:
+    """Optional invariant for the task (Solidity assertion or condition)."""
+    description: str
+    solidity_condition: str  # e.g., "address(this).balance >= 1 ether"
+    spec_type: str = "assertion"  # "assertion" | "property"
+
+
+@dataclass
+class TaskPackage:
+    """Complete task package for a single vulnerable contract."""
+    source_code: str
+    solc_version: str
+    deployment_config: DeploymentConfig
+    vulnerability_class: str  # e.g., "reentrancy", "storage-collision", "auth-bypass"
+    difficulty: int  # 1-5
+    invariant_spec: Optional[InvariantSpec] = None
+    metadata: dict = field(default_factory=dict)
+    task_id: str = ""  # Computed: keccak256(canonical_json)
+
+    def compute_task_id(self) -> str:
+        """Compute deterministic task ID from canonical package content."""
+        canonical = json.dumps({
+            "source_code": self.source_code,
+            "solc_version": self.solc_version,
+            "deployment_config": asdict(self.deployment_config),
+            "vulnerability_class": self.vulnerability_class,
+            "difficulty": self.difficulty,
+            "invariant_spec": asdict(self.invariant_spec) if self.invariant_spec else None,
+        }, sort_keys=True, separators=(",", ":"))
+
+        self.task_id = _safe_keccak(canonical.encode())
+        return self.task_id
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["task_id"] = self.task_id
+        return d
+
+    def save(self, output_dir: Path) -> Path:
+        """Save task package to deterministic directory structure."""
+        if not self.task_id:
+            self.compute_task_id()
+
+        task_dir = output_dir / self.task_id[:10]
+        task_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save source
+        (task_dir / "Vulnerable.sol").write_text(self.source_code)
+
+        # Save config
+        config = {
+            "task_id": self.task_id,
+            "solc_version": self.solc_version,
+            "deployment_config": asdict(self.deployment_config),
+            "vulnerability_class": self.vulnerability_class,
+            "difficulty": self.difficulty,
+            "invariant_spec": asdict(self.invariant_spec) if self.invariant_spec else None,
+            "metadata": self.metadata,
+        }
+        (task_dir / "task.json").write_text(
+            json.dumps(config, sort_keys=True, indent=2)
+        )
+
+        return task_dir
+
+
+# ── Template Registry ────────────────────────────────────────────────────────
+
+VULNERABILITY_TEMPLATES: dict[str, list[str]] = {
+    "reentrancy": [
+        "reentrancy_basic.sol",
+        "reentrancy_cross_function.sol",
+        "reentrancy_erc721.sol",
+    ],
+    "storage-collision": [
+        "storage_collision_proxy.sol",
+        "storage_collision_delegatecall.sol",
+    ],
+    "auth-bypass": [
+        "auth_bypass_tx_origin.sol",
+        "auth_bypass_missing_modifier.sol",
+        "auth_bypass_initializer.sol",
+    ],
+    "integer-overflow": [
+        "overflow_unchecked.sol",
+        "overflow_casting.sol",
+    ],
+    "access-control": [
+        "access_selfdestruct.sol",
+        "access_unprotected_setter.sol",
+    ],
+    "flash-loan": [
+        "flash_loan_price_manipulation.sol",
+    ],
+    # ── Stage 2: Multi-contract systems ──────────────────────────────────
+    "flash-loan-system": [
+        "stage2/flash_loan_system.sol",
+    ],
+    "upgradeable-vault": [
+        "stage2/upgradeable_vault.sol",
+    ],
+}
+
+
+# ── Corpus Generator ─────────────────────────────────────────────────────────
+
+class CorpusGenerator:
+    """Generates deterministic task packages from templates and mutations."""
+
+    def __init__(self, templates_dir: Path = TEMPLATES_DIR, output_dir: Path = OUTPUT_DIR):
+        self.templates_dir = templates_dir
+        self.output_dir = output_dir
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self._mutation_registry = MutationRegistry()
+
+    def generate_from_template(self, template_name: str, vuln_class: str,
+                                 difficulty: int = 1,
+                                 mutations: Optional[dict] = None) -> TaskPackage:
+        """Load a template, optionally apply mutations, produce TaskPackage."""
+        template_path = self.templates_dir / template_name
+        if not template_path.exists():
+            raise FileNotFoundError(f"Template not found: {template_path}")
+
+        source = template_path.read_text()
+
+        if mutations:
+            source = self._apply_mutations(source, mutations)
+
+        pkg = TaskPackage(
+            source_code=source,
+            solc_version=SOLC_VERSION,
+            deployment_config=DeploymentConfig(
+                initial_balance=mutations.get("initial_balance", 10 * 10**18)
+                if mutations else 10 * 10**18
+            ),
+            vulnerability_class=vuln_class,
+            difficulty=difficulty,
+            metadata={
+                "template": template_name,
+                "mutations": mutations or {},
+                "generated_at": DEFAULT_BLOCK_TIMESTAMP,  # Use fixed time for determinism
+            },
+        )
+
+        pkg.compute_task_id()
+        return pkg
+
+    def _apply_mutations(self, source: str, mutations: dict) -> str:
+        """Apply deterministic mutations to source code via the mutator registry."""
+        return self._mutation_registry.apply(source, mutations)
+
+    def generate_batch(self, count_per_class: int = 3, seed: int = 42) -> list[TaskPackage]:
+        """Generate a batch of task packages across all vulnerability classes."""
+        packages = []
+        idx = 0
+
+        for vuln_class, templates in VULNERABILITY_TEMPLATES.items():
+            for template_name in templates:
+                # Base version
+                try:
+                    pkg = self.generate_from_template(template_name, vuln_class, difficulty=1)
+                    packages.append(pkg)
+                except FileNotFoundError:
+                    continue
+
+                # Mutations
+                for i in range(count_per_class - 1):
+                    mut_seed = seed + idx + i
+                    mutations = {
+                        "storage_prefix": f"mut_{mut_seed}",
+                        "rename_map": {},
+                        "initial_balance": (mut_seed % 10 + 1) * 10**18,
+                    }
+                    try:
+                        pkg = self.generate_from_template(
+                            template_name, vuln_class,
+                            difficulty=min(5, 1 + i),
+                            mutations=mutations
+                        )
+                        packages.append(pkg)
+                    except FileNotFoundError:
+                        continue
+                    idx += 1
+
+        return packages
+
+    def save_batch(self, packages: list[TaskPackage]) -> list[Path]:
+        """Save all packages and return their directories."""
+        paths = []
+        for pkg in packages:
+            p = pkg.save(self.output_dir)
+            paths.append(p)
+        return paths
+
+    def generate_manifest(self, packages: list[TaskPackage]) -> dict:
+        """Generate a manifest of all task packages for validator sync."""
+        manifest = {
+            "version": 1,
+            "solc_version": SOLC_VERSION,
+            "generated_at": DEFAULT_BLOCK_TIMESTAMP,
+            "total_tasks": len(packages),
+            "tasks": [],
+        }
+
+        for pkg in packages:
+            manifest["tasks"].append({
+                "task_id": pkg.task_id,
+                "vulnerability_class": pkg.vulnerability_class,
+                "difficulty": pkg.difficulty,
+                "source_hash": _safe_keccak(pkg.source_code.encode()),
+            })
+
+        return manifest
+
+
+# ── CLI Entry Point ──────────────────────────────────────────────────────────
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate deterministic task corpus")
+    parser.add_argument("--output", type=str, default=str(OUTPUT_DIR),
+                       help="Output directory for task packages")
+    parser.add_argument("--count", type=int, default=3,
+                       help="Mutations per vulnerability class")
+    parser.add_argument("--seed", type=int, default=42,
+                       help="Deterministic seed for mutations")
+    parser.add_argument("--manifest", action="store_true",
+                       help="Generate manifest JSON")
+    args = parser.parse_args()
+
+    gen = CorpusGenerator(output_dir=Path(args.output))
+
+    print(f"[*] Generating corpus (seed={args.seed}, count_per_class={args.count})")
+    packages = gen.generate_batch(count_per_class=args.count, seed=args.seed)
+
+    print(f"[*] Generated {len(packages)} task packages")
+    paths = gen.save_batch(packages)
+
+    for pkg, path in zip(packages, paths):
+        print(f"  {pkg.vulnerability_class:20s} difficulty={pkg.difficulty} → {path.name}")
+
+    if args.manifest:
+        manifest = gen.generate_manifest(packages)
+        manifest_path = Path(args.output) / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+        print(f"[*] Manifest written to {manifest_path}")
+
+    print("[+] Done.")
+
+
+if __name__ == "__main__":
+    main()

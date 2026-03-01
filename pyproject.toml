@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exploit-subnet"
+version = "0.1.0"
+description = "Bittensor subnet for adversarial smart-contract exploit discovery"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+dependencies = [
+    "pycryptodome==3.21.0",
+]
+
+[project.optional-dependencies]
+bittensor = [
+    "bittensor==7.3.1",
+    "torch==2.2.2",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-timeout>=2.3",
+    "black",
+    "ruff",
+]
+
+[project.scripts]
+exploit-validator = "neurons.validator:main"
+exploit-miner = "neurons.miner:main"
+exploit-orchestrator = "orchestrator:main"
+
+[tool.setuptools]
+py-modules = ["orchestrator"]
+
+[tool.setuptools.packages.find]
+include = [
+    "neurons*",
+    "validator*",
+    "miner*",
+    "task_generator*",
+    "subnet_adapter*",
+]
+exclude = [
+    "contracts*",
+    "exploits*",
+    "tests*",
+    "data*",
+    "docker*",
+    "scripts*",
+]
+
+[tool.setuptools.package-dir]
+task_generator = "task-generator"
+subnet_adapter = "subnet-adapter"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

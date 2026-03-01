@@ -1,0 +1,43 @@
+# Build artifacts
+contracts/out/
+contracts/cache/
+contracts/corpus/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Data
+data/
+*.db
+*.lock
+
+# Logs
+*.log
+
+# Generated
+cache/
+task-generator/corpus/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+docker/data/
+
+# Environment
+.env
+.env.local

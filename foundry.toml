@@ -1,0 +1,37 @@
+[profile.default]
+src = "contracts/src"
+out = "contracts/out"
+libs = ["contracts/lib"]
+test = "contracts/test"
+script = "contracts/script"
+
+# Determinism: pin compiler
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+
+# Reproducible builds
+bytecode_hash = "ipfs"
+cbor_metadata = true
+extra_output = ["storageLayout", "abi", "evm.bytecode", "evm.deployedBytecode"]
+
+[profile.default.fuzz]
+runs = 256
+seed = "0x000000000000000000000000000000000000000000000000000000000000002a"
+
+[fmt]
+line_length = 120
+tab_width = 4
+bracket_spacing = false
+
+# Profile for running example exploit submissions
+[profile.exploits]
+src = "contracts/src"
+out = "contracts/out"
+libs = ["contracts/lib"]
+test = "exploits"
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
