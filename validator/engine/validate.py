@@ -863,6 +863,10 @@ def main():
         Path(args.output).write_text(json.dumps(report.to_dict(), indent=2))
         logger.info("Report saved to %s", args.output)
 
+    # Always emit JSON on stdout as the LAST line so the Docker sandbox
+    # orchestrator (_validate_in_docker) can parse it.
+    print(json.dumps(report.to_dict(), separators=(",", ":")))
+
 
 if __name__ == "__main__":
     main()

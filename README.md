@@ -77,7 +77,7 @@ A Bittensor subnet for deterministic, adversarial smart contract exploit discove
 
 ```bash
 # 1. Clone
-git clone <REPO_URL> && cd XYZ
+git clone https://github.com/suman101/VALayr.git && cd VALayr
 
 # 2. Install Foundry (pinned)
 curl -L https://foundry.paradigm.xyz | bash

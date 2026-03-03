@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/stage3/AdversarialMode.sol";
+import "../src/Ownable2Step.sol";
 
 /// @title AdversarialModeTest — Foundry tests for InvariantRegistry + AdversarialScoring.
 contract AdversarialModeTest is Test {
@@ -83,7 +84,7 @@ contract AdversarialModeTest is Test {
 
         address nobody = address(0x999);
         vm.prank(nobody);
-        vm.expectRevert(InvariantRegistry.Unauthorized.selector);
+        vm.expectRevert(Ownable2Step.Unauthorized.selector);
         registry.recordChallenge(id, false);
     }
 
@@ -120,21 +121,29 @@ contract AdversarialModeTest is Test {
 
     function test_setValidator_nonOwner_reverts() public {
         vm.prank(address(0xDEAD));
-        vm.expectRevert(InvariantRegistry.Unauthorized.selector);
+        vm.expectRevert(Ownable2Step.Unauthorized.selector);
         registry.setValidator(address(0x123), true);
     }
 
     function test_transferOwnership_zeroAddress_reverts() public {
-        vm.expectRevert(InvariantRegistry.ZeroAddress.selector);
+        vm.expectRevert(Ownable2Step.ZeroAddress.selector);
         registry.transferOwnership(address(0));
     }
 
     function test_transferOwnership() public {
         address newOwner = address(0x42);
+        // Step 1: Initiate transfer
         registry.transferOwnership(newOwner);
+        // Owner is still the test contract
+        assertEq(registry.owner(), address(this));
+
+        // Step 2: New owner accepts
+        vm.prank(newOwner);
+        registry.acceptOwnership();
+        assertEq(registry.owner(), newOwner);
 
         // Old owner can no longer set validators
-        vm.expectRevert(InvariantRegistry.Unauthorized.selector);
+        vm.expectRevert(Ownable2Step.Unauthorized.selector);
         registry.setValidator(address(0x99), true);
 
         // New owner can
@@ -184,12 +193,12 @@ contract AdversarialModeTest is Test {
         );
 
         vm.prank(address(0xBEEF));
-        vm.expectRevert(AdversarialScoring.Unauthorized.selector);
+        vm.expectRevert(Ownable2Step.Unauthorized.selector);
         scoring.processChallenge(id, classA, classB, true);
     }
 
     function test_scoring_transferOwnership_zeroAddress_reverts() public {
-        vm.expectRevert(AdversarialScoring.ZeroAddress.selector);
+        vm.expectRevert(Ownable2Step.ZeroAddress.selector);
         scoring.transferOwnership(address(0));
     }
 

@@ -49,8 +49,8 @@ VALayr is a Bittensor subnet where **miners compete to find exploits in vulnerab
 
 ```bash
 # Clone the repository
-git clone https://github.com/<org>/valayr.git
-cd valayr
+git clone https://github.com/suman101/VALayr.git
+cd VALayr
 
 # Install Python dependencies
 pip install -r requirements.txt

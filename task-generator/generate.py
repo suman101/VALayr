@@ -32,31 +32,13 @@ from task_generator.mutator import MutationRegistry
 def _safe_keccak(data: bytes) -> str:
     """Compute keccak256 — determinism-critical, must match Solidity.
 
-    Raises RuntimeError if neither pycryptodome nor ``cast`` is available.
-    Using SHA-3 as a fallback would silently break cross-validator consensus.
+    Delegates to the shared ``validator.utils.hashing.keccak256`` utility which
+    uses pycryptodome (primary) or ``cast keccak`` CLI (fallback).
+
+    Raises RuntimeError if neither backend is available.
     """
-    try:
-        from validator.utils.hashing import keccak256
-        return keccak256(data)
-    except (ImportError, RuntimeError):
-        pass
-
-    # Fallback: Foundry cast CLI
-    import subprocess
-    try:
-        result = subprocess.run(
-            ["cast", "keccak", "0x" + data.hex()],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode == 0 and result.stdout.strip().startswith("0x"):
-            return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    raise RuntimeError(
-        "Cannot compute Ethereum keccak256: install pycryptodome "
-        "(pip install pycryptodome) or ensure `cast` is on PATH"
-    )
+    from validator.utils.hashing import keccak256
+    return keccak256(data)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -187,7 +169,85 @@ VULNERABILITY_TEMPLATES: dict[str, list[str]] = {
     "upgradeable-vault": [
         "stage2/upgradeable_vault.sol",
     ],
+    "cross-reentrancy": [
+        "stage2/cross_contract_reentrancy.sol",
+    ],
+    "governance-attack": [
+        "stage2/governance_attack.sol",
+    ],
+    "oracle-manipulation": [
+        "stage2/oracle_manipulation.sol",
+    ],
+    "token-bridge": [
+        "stage2/token_bridge.sol",
+    ],
+    "staking-exploit": [
+        "stage2/staking_rewards.sol",
+    ],
 }
+
+
+# ── Difficulty Helpers ────────────────────────────────────────────────────────
+
+_CLASS_INVARIANTS: dict[str, InvariantSpec] = {
+    "reentrancy": InvariantSpec(
+        description="Contract balance must not decrease during a single call",
+        solidity_condition="address(this).balance >= _preCallBalance",
+    ),
+    "storage-collision": InvariantSpec(
+        description="Admin slot must remain unchanged after delegate calls",
+        solidity_condition="_admin == initialAdmin",
+    ),
+    "auth-bypass": InvariantSpec(
+        description="Only owner can modify privileged state",
+        solidity_condition="owner == _expectedOwner",
+    ),
+    "integer-overflow": InvariantSpec(
+        description="Token total supply must equal sum of all balances",
+        solidity_condition="totalSupply == _computedSum",
+    ),
+    "access-control": InvariantSpec(
+        description="Contract must remain alive (not self-destructed)",
+        solidity_condition="address(this).code.length > 0",
+    ),
+    "flash-loan": InvariantSpec(
+        description="Oracle price must not deviate > 10% in a single block",
+        solidity_condition="price <= _lastPrice * 110 / 100",
+    ),
+    "flash-loan-system": InvariantSpec(
+        description="Pool reserves must balance after flash loan repayment",
+        solidity_condition="reserveA * reserveB >= _kLast",
+    ),
+    "upgradeable-vault": InvariantSpec(
+        description="Implementation address must be set by owner only",
+        solidity_condition="_implementation == _expectedImpl",
+    ),
+    "cross-reentrancy": InvariantSpec(
+        description="Vault deposits must not decrease during a single external call",
+        solidity_condition="totalDeposits <= _preCallDeposits",
+    ),
+    "governance-attack": InvariantSpec(
+        description="Proposal execution requires genuine token holding period",
+        solidity_condition="block.number > proposal.startBlock + votingPeriod",
+    ),
+    "oracle-manipulation": InvariantSpec(
+        description="Oracle price deviation within a single block must be bounded",
+        solidity_condition="currentPrice <= lastPrice * 110 / 100 && currentPrice >= lastPrice * 90 / 100",
+    ),
+    "token-bridge": InvariantSpec(
+        description="Minted wrapped tokens must equal locked ETH value",
+        solidity_condition="wrappedToken.totalSupply() <= address(bridge).balance",
+    ),
+    "staking-exploit": InvariantSpec(
+        description="Claimed rewards must not exceed distributed reward tokens",
+        solidity_condition="totalClaimed <= rewardToken.balanceOf(address(pool)) + totalClaimed",
+    ),
+}
+
+
+def _invariant_for_class(vuln_class: str) -> Optional[InvariantSpec]:
+    """Return an invariant spec for a vulnerability class, or None."""
+    return _CLASS_INVARIANTS.get(vuln_class)
 
 
 # ── Corpus Generator ─────────────────────────────────────────────────────────
@@ -237,21 +297,30 @@ class CorpusGenerator:
         """Apply deterministic mutations to source code via the mutator registry."""
         return self._mutation_registry.apply(source, mutations)
 
-    def generate_batch(self, count_per_class: int = 3, seed: int = 42) -> list[TaskPackage]:
-        """Generate a batch of task packages across all vulnerability classes."""
+    def generate_batch(self, count_per_class: int = 3, seed: int = 42,
+                        max_difficulty: int = 1) -> list[TaskPackage]:
+        """Generate a batch of task packages across all vulnerability classes.
+
+        Args:
+            count_per_class: Number of variants per template (1 = base only).
+            seed: Deterministic seed for mutations.
+            max_difficulty: Maximum difficulty level (1-3). Higher difficulties
+                apply heavier mutations, add invariant specs, and increase
+                initial balances to create harder-to-exploit scenarios.
+        """
         packages = []
         idx = 0
 
         for vuln_class, templates in VULNERABILITY_TEMPLATES.items():
             for template_name in templates:
-                # Base version
+                # Base version (difficulty 1)
                 try:
                     pkg = self.generate_from_template(template_name, vuln_class, difficulty=1)
                     packages.append(pkg)
                 except FileNotFoundError:
                     continue
 
-                # Mutations
+                # Mutations at difficulty 1
                 for i in range(count_per_class - 1):
                     mut_seed = seed + idx + i
                     mutations = {
@@ -262,13 +331,63 @@ class CorpusGenerator:
                     try:
                         pkg = self.generate_from_template(
                             template_name, vuln_class,
-                            difficulty=min(5, 1 + i),
+                            difficulty=1,
                             mutations=mutations
                         )
                         packages.append(pkg)
                     except FileNotFoundError:
                         continue
                     idx += 1
+
+                # Difficulty 2: heavier mutations + invariant specs
+                if max_difficulty >= 2:
+                    for i in range(count_per_class):
+                        mut_seed = seed + idx + i + 1000
+                        mutations = {
+                            "storage_prefix": f"d2_{mut_seed}",
+                            "rename_map": {},
+                            "initial_balance": (mut_seed % 20 + 5) * 10**18,
+                            "deadcode_count": 3,
+                        }
+                        invariant = _invariant_for_class(vuln_class)
+                        try:
+                            pkg = self.generate_from_template(
+                                template_name, vuln_class,
+                                difficulty=2,
+                                mutations=mutations,
+                            )
+                            if invariant:
+                                pkg.invariant_spec = invariant
+                                pkg.compute_task_id()  # Recompute with invariant
+                            packages.append(pkg)
+                        except FileNotFoundError:
+                            continue
+                        idx += 1
+
+                # Difficulty 3: maximum mutations, all mutators active
+                if max_difficulty >= 3:
+                    for i in range(count_per_class):
+                        mut_seed = seed + idx + i + 2000
+                        mutations = {
+                            "storage_prefix": f"d3_{mut_seed}",
+                            "rename_map": {},
+                            "initial_balance": (mut_seed % 50 + 10) * 10**18,
+                            "deadcode_count": 6,
+                        }
+                        invariant = _invariant_for_class(vuln_class)
+                        try:
+                            pkg = self.generate_from_template(
+                                template_name, vuln_class,
+                                difficulty=3,
+                                mutations=mutations,
+                            )
+                            if invariant:
+                                pkg.invariant_spec = invariant
+                                pkg.compute_task_id()
+                            packages.append(pkg)
+                        except FileNotFoundError:
+                            continue
+                        idx += 1
 
         return packages
 
@@ -313,14 +432,17 @@ def main():
                        help="Mutations per vulnerability class")
     parser.add_argument("--seed", type=int, default=42,
                        help="Deterministic seed for mutations")
+    parser.add_argument("--difficulty", type=int, default=1, choices=[1, 2, 3],
+                       help="Maximum difficulty level (1=base, 2=heavy mutations+invariants, 3=max)")
     parser.add_argument("--manifest", action="store_true",
                        help="Generate manifest JSON")
     args = parser.parse_args()
 
     gen = CorpusGenerator(output_dir=Path(args.output))
 
-    print(f"[*] Generating corpus (seed={args.seed}, count_per_class={args.count})")
-    packages = gen.generate_batch(count_per_class=args.count, seed=args.seed)
+    print(f"[*] Generating corpus (seed={args.seed}, count_per_class={args.count}, max_difficulty={args.difficulty})")
+    packages = gen.generate_batch(count_per_class=args.count, seed=args.seed,
+                                   max_difficulty=args.difficulty)
 
     print(f"[*] Generated {len(packages)} task packages")
     paths = gen.save_batch(packages)

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "../Ownable2Step.sol";
+
 /// @title AdversarialMode — Stage 3 invariant writer vs. breaker system.
 /// @dev Month 5-6. Two miner classes compete:
 ///   Class A: Submit invariants (formal properties)
@@ -12,7 +14,7 @@ pragma solidity ^0.8.28;
 /// This is the actual moat. Evolutionary pressure.
 
 /// ── Invariant Registry ──────────────────────────────────────────────────────
-contract InvariantRegistry {
+contract InvariantRegistry is Ownable2Step {
     struct Invariant {
         address submitter; // Class A miner
         bytes32 targetContractHash; // Which contract this invariant covers
@@ -29,7 +31,6 @@ contract InvariantRegistry {
     uint256 public propertyCount;
     mapping(uint256 => Invariant) public properties;
     mapping(address => bool) public validators;
-    address public owner;
 
     event InvariantSubmitted(
         uint256 indexed id,
@@ -43,24 +44,12 @@ contract InvariantRegistry {
     );
     event InvariantDeactivated(uint256 indexed id);
     event ValidatorUpdated(address indexed validator, bool status);
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
 
-    error Unauthorized();
     error InvariantNotFound();
     error InvariantInactive();
-    error ZeroAddress();
 
-    constructor() {
-        owner = msg.sender;
-    }
+    constructor() Ownable2Step() {}
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert Unauthorized();
-        _;
-    }
     modifier onlyValidator() {
         if (!validators[msg.sender]) revert Unauthorized();
         _;
@@ -125,20 +114,12 @@ contract InvariantRegistry {
         validators[v] = status;
         emit ValidatorUpdated(v, status);
     }
-
-    function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert ZeroAddress();
-        address prev = owner;
-        owner = newOwner;
-        emit OwnershipTransferred(prev, newOwner);
-    }
 }
 
 /// ── Adversarial Scoring ─────────────────────────────────────────────────────
 /// @dev Computes rewards for both miner classes.
-contract AdversarialScoring {
+contract AdversarialScoring is Ownable2Step {
     InvariantRegistry public registry;
-    address public owner;
 
     // Scoring weights for Class A (invariant writers)
     int256 public constant W_HOLD_REWARD = 100; // Points per successful defense
@@ -152,22 +133,9 @@ contract AdversarialScoring {
     mapping(address => int256) public classBScores;
 
     event ScoreUpdated(address indexed miner, string class_, int256 newScore);
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
 
-    error Unauthorized();
-    error ZeroAddress();
-
-    constructor(address _registry) {
+    constructor(address _registry) Ownable2Step() {
         registry = InvariantRegistry(_registry);
-        owner = msg.sender;
-    }
-
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert Unauthorized();
-        _;
     }
 
     /// @notice Update scores after a challenge round.
@@ -193,12 +161,5 @@ contract AdversarialScoring {
             emit ScoreUpdated(classAMiner, "A", classAScores[classAMiner]);
             emit ScoreUpdated(classBMiner, "B", classBScores[classBMiner]);
         }
-    }
-
-    function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert ZeroAddress();
-        address prev = owner;
-        owner = newOwner;
-        emit OwnershipTransferred(prev, newOwner);
     }
 }

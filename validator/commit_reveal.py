@@ -250,30 +250,8 @@ class CommitRevealClient:
     @staticmethod
     def _keccak256_hex(data: bytes) -> str:
         """Compute keccak256 and return as 0x-prefixed hex bytes32."""
-        # Primary: use pycryptodome's Keccak (matches Solidity exactly)
-        try:
-            from Crypto.Hash import keccak as _keccak
-            k = _keccak.new(digest_bits=256)
-            k.update(data)
-            return "0x" + k.hexdigest()
-        except ImportError:
-            pass
-
-        # Fallback: use Foundry's `cast keccak` CLI
-        try:
-            result = subprocess.run(
-                ["cast", "keccak", "0x" + data.hex()],
-                capture_output=True, text=True, timeout=5,
-            )
-            if result.returncode == 0 and result.stdout.strip().startswith("0x"):
-                return result.stdout.strip()
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-
-        raise RuntimeError(
-            "Cannot compute Ethereum keccak256: install pycryptodome "
-            "(pip install pycryptodome) or ensure `cast` is on PATH"
-        )
+        from validator.utils.hashing import keccak256
+        return keccak256(data)
 
     @staticmethod
     def _compute_commit_hash(task_id: str, artifact_hash: str, nonce: str) -> str:
@@ -281,31 +259,22 @@ class CommitRevealClient:
         Compute commit hash matching Solidity's:
         keccak256(abi.encodePacked(taskId, exploitArtifactHash, nonce))
         """
-        packed_bytes = bytes.fromhex(task_id[2:] + artifact_hash[2:] + nonce[2:])
+        from validator.utils.hashing import keccak256
 
-        # Primary: pycryptodome keccak
-        try:
-            from Crypto.Hash import keccak as _keccak
-            k = _keccak.new(digest_bits=256)
-            k.update(packed_bytes)
-            return "0x" + k.hexdigest()
-        except ImportError:
-            pass
+        def _to_hex_bytes(val: str) -> str:
+            """Convert a value to raw hex string (no 0x prefix).
 
-        # Fallback: cast keccak CLI
-        try:
-            result = subprocess.run(
-                ["cast", "keccak", f"0x{packed_bytes.hex()}"],
-                capture_output=True, text=True, timeout=5,
-            )
-            if result.returncode == 0 and result.stdout.strip().startswith("0x"):
-                return result.stdout.strip()
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+            If the value is already a 0x-prefixed hex string, strip the prefix.
+            Otherwise, encode as UTF-8 hex (to handle plain string task IDs).
+            """
+            if val.startswith("0x"):
+                return val[2:]
+            # Treat as raw bytes (non-hex string like "task_1")
+            return val.encode().hex()
 
-        raise RuntimeError(
-            "Cannot compute Ethereum keccak256: install pycryptodome or ensure `cast` on PATH"
-        )
+        packed_hex = _to_hex_bytes(task_id) + _to_hex_bytes(artifact_hash) + _to_hex_bytes(nonce)
+        packed_bytes = bytes.fromhex(packed_hex)
+        return keccak256(packed_bytes)
 
     # ── On-chain Interaction Helpers ─────────────────────────────────────
 

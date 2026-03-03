@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Stage 3 Python integration** — `validator/engine/adversarial.py`: AdversarialEngine for Class A/B miner flows (invariant submission, challenge processing, scoring, weight computation)
+- Orchestrator Stage 3 methods: `submit_invariant()`, `submit_challenge()`, `get_adversarial_weights()`
+- Orchestrator CLI commands: `invariant` and `challenge`
+- Adversarial weight blending in `close_epoch()` (70% exploit + 30% adversarial)
+- `tests/test_adversarial.py` — 35 tests for Stage 3 subsystem
+- **Python lint & type-check CI job** — ruff, black, mypy in `lint-python` workflow job
+- `[tool.mypy]` configuration in `pyproject.toml`
+- Example data files in `data/reports/`, `data/anticollusion/`, `data/commit-reveal/`
+
+### Changed
+
+- Consolidated keccak256 utility — `commit_reveal.py` and `generate.py` now delegate to `validator/utils/hashing.keccak256` (removed ~60 lines of duplicate code)
+- Repository URL placeholders replaced with `https://github.com/suman101/VALayr.git`
+- CI lint job split into `lint-solidity` and `lint-python`
+- Pinned `ruff==0.8.6`, `black==24.10.0`, `mypy==1.14.1` in `requirements.txt`
+
+## [0.1.0] — 2026-03-03
+
+### Added
+
 - **Threat model** (`docs/THREAT_MODEL.md`) — STRIDE analysis, risk matrix, data-flow diagrams, asset inventory
 - **Security policy** (`SECURITY.md`) — responsible disclosure, scope, contributor checklist
 - **Contributing guide** (`CONTRIBUTING.md`) — dev setup, PR process, coding standards

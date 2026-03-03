@@ -30,8 +30,8 @@ For **deployment and operations**, see [DEPLOYMENT.md](DEPLOYMENT.md).
 ### 1.1 Clone & Install
 
 ```bash
-git clone https://github.com/<org>/valayr.git
-cd valayr
+git clone https://github.com/suman101/VALayr.git
+cd VALayr
 
 # Python dependencies
 pip install -e ".[dev]"

@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "./Ownable2Step.sol";
+
 /// @title ProtocolRegistry — Opt-in registry for protocols submitting contracts to the exploit subnet.
 /// @notice Protocols register contract addresses, deposit bounty escrow, and enforce disclosure windows.
 /// @dev Only registered contracts are valid targets. This is the legal firewall.
-contract ProtocolRegistry {
+contract ProtocolRegistry is Ownable2Step {
     // ── Reentrancy Guard ─────────────────────────────────────────────────
 
     uint256 private _locked = 1;
@@ -47,7 +49,6 @@ contract ProtocolRegistry {
 
     // ── State ────────────────────────────────────────────────────────────
 
-    address public owner;
     uint256 public registrationCount;
 
     // contractHash => RegisteredContract
@@ -83,14 +84,9 @@ contract ProtocolRegistry {
     );
     event ValidatorUpdated(address indexed validator, bool status);
     event BountyWithdrawn(bytes32 indexed contractHash, uint256 amount);
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
 
     // ── Errors ───────────────────────────────────────────────────────────
 
-    error Unauthorized();
     error AlreadyRegistered();
     error NotRegistered();
     error InsufficientBounty();
@@ -98,16 +94,10 @@ contract ProtocolRegistry {
     error ExploitAlreadyClaimed();
     error DisclosureWindowActive();
     error InvalidValidator();
-    error ZeroAddress();
     error PaymentFailed();
     error TooManyClaims();
 
     // ── Modifiers ────────────────────────────────────────────────────────
-
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert Unauthorized();
-        _;
-    }
 
     modifier onlyValidator() {
         if (!validators[msg.sender]) revert InvalidValidator();
@@ -122,9 +112,7 @@ contract ProtocolRegistry {
 
     // ── Constructor ──────────────────────────────────────────────────────
 
-    constructor() {
-        owner = msg.sender;
-    }
+    constructor() Ownable2Step() {}
 
     // ── Protocol Functions ───────────────────────────────────────────────
 
@@ -270,13 +258,6 @@ contract ProtocolRegistry {
         if (validator == address(0)) revert ZeroAddress();
         validators[validator] = status;
         emit ValidatorUpdated(validator, status);
-    }
-
-    function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert ZeroAddress();
-        address prev = owner;
-        owner = newOwner;
-        emit OwnershipTransferred(prev, newOwner);
     }
 
     // ── View Functions ───────────────────────────────────────────────────

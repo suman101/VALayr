@@ -131,8 +131,44 @@ jobs:
           PYTHONHASHSEED: "0"
         run: bash scripts/verify-determinism.sh
 
+  # ── Docker E2E ───────────────────────────────────────────────────────────
+  docker-e2e:
+    name: Docker E2E Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build Docker images
+        run: |
+          docker build -t exploit-subnet/validator:test -f docker/Dockerfile.validator .
+          docker build -t exploit-subnet/miner:test -f docker/Dockerfile.miner .
+
+      - name: Verify validator image
+        run: |
+          docker run --rm exploit-subnet/validator:test \
+            python3 -c "import validator.engine.validate; print('validator OK')"
+
+      - name: Verify miner image
+        run: |
+          docker run --rm exploit-subnet/miner:test \
+            python3 -c "import miner.cli; print('miner OK')"
+
+      - name: Run validation pipeline in sandbox
+        run: |
+          docker run --rm \
+            --network=none \
+            -e PYTHONHASHSEED=0 \
+            -e ANVIL_BLOCK_TIMESTAMP=1700000000 \
+            -e ANVIL_BLOCK_NUMBER=18000000 \
+            -e ANVIL_GAS_LIMIT=30000000 \
+            -e ANVIL_CHAIN_ID=31337 \
+            exploit-subnet/validator:test \
+            python3 -m pytest tests/test_pipeline.py -v --timeout=120
+
   # ── Solidity Lint ────────────────────────────────────────────────────────
-  lint:
+  lint-solidity:
     name: Solidity Lint
     runs-on: ubuntu-latest
     steps:
@@ -158,3 +194,37 @@ jobs:
             echo "::warning::Compiler warnings found"
             grep "Warning" /tmp/build.log
           fi
+
+  # ── Python Lint & Type Check ─────────────────────────────────────────────
+  lint-python:
+    name: Python Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff black mypy
+
+      - name: Create module symlinks
+        run: |
+          ln -sf task-generator task_generator
+          ln -sf subnet-adapter subnet_adapter
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Black format check
+        run: black --check --diff .
+
+      - name: Mypy type check
+        run: mypy --ignore-missing-imports .

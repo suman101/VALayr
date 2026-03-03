@@ -1,0 +1,34 @@
+# Prometheus scrape configuration for VALayr subnet.
+# Place in /etc/prometheus/prometheus.yml (or mount into Prometheus container).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# ── Alert Rules ──────────────────────────────────────────────────────────────
+rule_files:
+  - "alerts.yml"
+
+# ── Scrape Targets ───────────────────────────────────────────────────────────
+scrape_configs:
+  # Validator metrics (exposed by validator.metrics.MetricsServer on port 9946)
+  - job_name: "valayr-validator"
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+    static_configs:
+      - targets:
+          - "localhost:9946"
+        labels:
+          service: "validator"
+          subnet: "valayr"
+
+  # Consensus relay health
+  - job_name: "valayr-consensus"
+    metrics_path: "/health"
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - "localhost:9946"
+        labels:
+          service: "consensus-relay"
+          subnet: "valayr"

@@ -188,6 +188,8 @@ class ValidatorNeuron:
 
         last_weight_block = 0
         last_refresh_epoch = 0
+        consecutive_errors = 0
+        MAX_BACKOFF = 300  # 5 minutes cap
 
         while not self.should_exit:
             try:
@@ -217,6 +219,9 @@ class ValidatorNeuron:
                     self._set_weights()
                     last_weight_block = self.current_block
 
+                # Reset backoff on success
+                consecutive_errors = 0
+
                 time.sleep(12)  # ~1 block
 
             except KeyboardInterrupt:
@@ -224,8 +229,13 @@ class ValidatorNeuron:
                 self._close_current_epoch()
                 break
             except Exception as e:
-                logger.error("Error in validator loop: %s", e, exc_info=True)
-                time.sleep(30)
+                consecutive_errors += 1
+                backoff = min(30 * (2 ** (consecutive_errors - 1)), MAX_BACKOFF)
+                logger.error(
+                    "Error in validator loop (attempt %d, backoff %ds): %s",
+                    consecutive_errors, backoff, e, exc_info=True,
+                )
+                time.sleep(backoff)
 
         logger.info("Validator exited main loop.")
 
@@ -323,16 +333,29 @@ class ValidatorNeuron:
             import bittensor as bt
             import torch
 
-            epoch_result = self._close_current_epoch()
-            if epoch_result is None or not epoch_result.weights:
+            # Use the last closed epoch result instead of re-closing
+            epochs_dir = self.orchestrator.data_dir / "epochs"
+            if not epochs_dir.exists():
                 return
 
-            # Map hotkeys to UIDs using metagraph-aware method
+            epoch_files = sorted(epochs_dir.glob("epoch_*.json"))
+            if not epoch_files:
+                return
+
+            import json
+            latest = json.loads(epoch_files[-1].read_text())
+            weights_dict = latest.get("weights", {})
+            if not weights_dict:
+                return
+
+            # Map hotkeys to UIDs using metagraph
             metagraph_hotkeys = list(self.metagraph.hotkeys)
-            uids, weights = self.orchestrator.incentive.get_weight_vector(
-                epoch_result,
-                metagraph_hotkeys=metagraph_hotkeys,
-            )
+            uids = []
+            weights = []
+            for hotkey, weight in weights_dict.items():
+                if hotkey in metagraph_hotkeys:
+                    uids.append(metagraph_hotkeys.index(hotkey))
+                    weights.append(weight)
 
             if not uids:
                 return

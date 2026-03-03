@@ -1,0 +1,55 @@
+# Prometheus alerting rules for VALayr subnet.
+# Triggers alerts for operational anomalies.
+
+groups:
+  - name: valayr-alerts
+    rules:
+      # No valid exploits processed in 3 consecutive epochs (~3 hours)
+      - alert: NoValidExploits
+        expr: increase(validations_valid[3h]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No valid exploits processed in 3 hours"
+          description: "The validator has not accepted any valid exploit in the last 3 hours. Check miner activity and task corpus."
+
+      # Validation error rate exceeds 50%
+      - alert: HighValidationErrorRate
+        expr: rate(validations_total[1h]) > 0 and (1 - rate(validations_valid[1h]) / rate(validations_total[1h])) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High validation rejection rate (>50%)"
+          description: "More than half of submissions are being rejected. Possible corpus issue or miner misbehavior."
+
+      # Duplicate rate spike (>80% duplicates)
+      - alert: HighDuplicateRate
+        expr: rate(duplicates_total[1h]) / rate(validations_valid[1h]) > 0.8
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High duplicate rate (>80%)"
+          description: "Most valid exploits are duplicates. Miners may be colluding or not innovating."
+
+      # Metrics endpoint down
+      - alert: MetricsEndpointDown
+        expr: up{job="valayr-validator"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Validator metrics endpoint unreachable"
+          description: "The validator metrics server at port 9946 is not responding."
+
+      # High validation latency (>30s average)
+      - alert: HighValidationLatency
+        expr: rate(validation_latency_ms_sum[5m]) / rate(validation_latency_ms_count[5m]) > 30000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Average validation latency exceeds 30 seconds"
+          description: "Exploit validation is taking too long. Check Anvil health and system resources."

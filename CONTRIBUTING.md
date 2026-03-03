@@ -28,8 +28,8 @@ Thank you for your interest in contributing to VALayr! This guide covers the dev
 
 ```bash
 # Clone the repository
-git clone https://github.com/<org>/valayr.git
-cd valayr
+git clone https://github.com/suman101/VALayr.git
+cd VALayr
 
 # Install Python dependencies
 pip install -r requirements.txt

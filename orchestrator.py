@@ -52,6 +52,29 @@ from validator.commit_reveal import (
     RevealResult,
 )
 from validator.anticollusion.consensus import AntiCollusionEngine
+from validator.engine.adversarial import (
+    AdversarialEngine,
+    InvariantSubmission,
+    ChallengeSubmission,
+    ChallengeReport,
+    ChallengeResult,
+)
+
+
+# ── Input Validation ──────────────────────────────────────────────────────────
+
+MAX_TASK_ID_LEN = 256
+MAX_MINER_ADDRESS_LEN = 256
+MAX_EXPLOIT_SOURCE_BYTES = 64_000  # 64 KB — mitigates DoS via huge payloads
+
+
+def _validate_str(name: str, value: str, max_len: int) -> Optional[str]:
+    """Return an error string if *value* is invalid, else None."""
+    if not isinstance(value, str) or not value.strip():
+        return f"{name} must be a non-empty string"
+    if len(value) > max_len:
+        return f"{name} exceeds maximum length ({max_len})"
+    return None
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -101,6 +124,8 @@ class Orchestrator:
         data_dir: Optional[Path] = None,
         commit_reveal_address: str = "",
         rpc_url: str = "http://127.0.0.1:8545",
+        registry_address: str = "",
+        scoring_address: str = "",
     ):
         self.mode = mode
         self.validator_id = validator_id
@@ -120,6 +145,15 @@ class Orchestrator:
         )
         self.scorer = SeverityScorer()
         self.incentive = SubnetIncentiveAdapter()
+
+        # Stage 3: Adversarial Engine
+        self.adversarial = AdversarialEngine(
+            mode=mode,
+            registry_address=registry_address,
+            scoring_address=scoring_address,
+            rpc_url=rpc_url,
+            data_dir=self.data_dir / "adversarial",
+        )
 
         # Ensure directories
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -147,11 +181,13 @@ class Orchestrator:
 
     # ── Task Corpus ───────────────────────────────────────────────────────
 
-    def generate_corpus(self, count_per_class: int = 2, seed: int = 42) -> list[TaskPackage]:
+    def generate_corpus(self, count_per_class: int = 2, seed: int = 42,
+                         max_difficulty: int = 1) -> list[TaskPackage]:
         """Generate the task corpus miners will compete on."""
-        logger.info("Generating task corpus (seed=%d)", seed)
+        logger.info("Generating task corpus (seed=%d, max_difficulty=%d)", seed, max_difficulty)
         packages = self.corpus_gen.generate_batch(
-            count_per_class=count_per_class, seed=seed
+            count_per_class=count_per_class, seed=seed,
+            max_difficulty=max_difficulty,
         )
         paths = self.corpus_gen.save_batch(packages)
         manifest = self.corpus_gen.generate_manifest(packages)
@@ -223,6 +259,19 @@ class Orchestrator:
         The miner calls this FIRST, then waits for the reveal window to open.
         Returns a CommitRecord with nonce — MUST be saved locally for reveal.
         """
+        # Input validation — fail fast before any on-chain call
+        for name, val, limit in [
+            ("task_id", task_id, MAX_TASK_ID_LEN),
+            ("miner_address", miner_address, MAX_MINER_ADDRESS_LEN),
+        ]:
+            err = _validate_str(name, val, limit)
+            if err:
+                raise ValueError(err)
+        if not isinstance(exploit_source, str) or not exploit_source.strip():
+            raise ValueError("exploit_source must be a non-empty string")
+        if len(exploit_source.encode()) > MAX_EXPLOIT_SOURCE_BYTES:
+            raise ValueError(f"exploit_source exceeds {MAX_EXPLOIT_SOURCE_BYTES} bytes")
+
         if self.commit_reveal_live:
             record = self.commit_reveal.prepare_commit(task_id, exploit_source)
             record = self.commit_reveal.submit_commit(record)
@@ -300,6 +349,26 @@ class Orchestrator:
             task_id=task_id,
             miner_address=miner_address,
         )
+
+        # ── Input validation ──
+        for name, val, limit in [
+            ("task_id", task_id, MAX_TASK_ID_LEN),
+            ("miner_address", miner_address, MAX_MINER_ADDRESS_LEN),
+        ]:
+            err = _validate_str(name, val, limit)
+            if err:
+                result.validation_result = "REJECT_INVALID_FORMAT"
+                result.error = err
+                return result
+        if not isinstance(exploit_source, str) or not exploit_source.strip():
+            result.validation_result = "REJECT_INVALID_FORMAT"
+            result.error = "exploit_source must be a non-empty string"
+            return result
+        if len(exploit_source.encode()) > MAX_EXPLOIT_SOURCE_BYTES:
+            result.validation_result = "REJECT_INVALID_FORMAT"
+            result.error = f"exploit_source exceeds {MAX_EXPLOIT_SOURCE_BYTES} bytes"
+            return result
+
         start = time.monotonic()
 
         # Step 1: Load task
@@ -389,6 +458,86 @@ class Orchestrator:
             _metrics.observe("severity_score", result.severity_score)
 
         return result
+
+    # ── Stage 3: Adversarial Mode ─────────────────────────────────────────
+
+    def submit_invariant(
+        self,
+        miner_address: str,
+        target_contract_hash: str,
+        description: str,
+        solidity_condition: str,
+        compiled_check: bytes = b"",
+    ) -> int:
+        """
+        Class A miner submits an invariant.
+
+        Returns the invariant ID assigned by the registry.
+        """
+        for name, val, limit in [
+            ("miner_address", miner_address, MAX_MINER_ADDRESS_LEN),
+            ("target_contract_hash", target_contract_hash, MAX_TASK_ID_LEN),
+            ("description", description, 2048),
+            ("solidity_condition", solidity_condition, MAX_EXPLOIT_SOURCE_BYTES),
+        ]:
+            err = _validate_str(name, val, limit)
+            if err:
+                raise ValueError(err)
+
+        submission = InvariantSubmission(
+            miner_address=miner_address,
+            target_contract_hash=target_contract_hash,
+            description=description,
+            solidity_condition=solidity_condition,
+            compiled_check=compiled_check,
+        )
+        inv_id = self.adversarial.submit_invariant(submission)
+        _metrics.inc("invariants_submitted")
+        return inv_id
+
+    def submit_challenge(
+        self,
+        miner_address: str,
+        invariant_id: int,
+        exploit_source: str,
+        target_task_id: str,
+    ) -> ChallengeReport:
+        """
+        Class B miner challenges an invariant with an exploit.
+
+        Returns a ChallengeReport with the outcome.
+        """
+        for name, val, limit in [
+            ("miner_address", miner_address, MAX_MINER_ADDRESS_LEN),
+            ("target_task_id", target_task_id, MAX_TASK_ID_LEN),
+        ]:
+            err = _validate_str(name, val, limit)
+            if err:
+                raise ValueError(err)
+        if not isinstance(exploit_source, str) or not exploit_source.strip():
+            raise ValueError("exploit_source must be a non-empty string")
+        if len(exploit_source.encode()) > MAX_EXPLOIT_SOURCE_BYTES:
+            raise ValueError(f"exploit_source exceeds {MAX_EXPLOIT_SOURCE_BYTES} bytes")
+        if not isinstance(invariant_id, int) or invariant_id < 0:
+            raise ValueError("invariant_id must be a non-negative integer")
+
+        challenge = ChallengeSubmission(
+            miner_address=miner_address,
+            invariant_id=invariant_id,
+            exploit_source=exploit_source,
+            target_task_id=target_task_id,
+        )
+        report = self.adversarial.process_challenge(challenge)
+        _metrics.inc("challenges_total")
+        if report.result == ChallengeResult.INVARIANT_BROKEN:
+            _metrics.inc("invariants_broken")
+        elif report.result == ChallengeResult.INVARIANT_HELD:
+            _metrics.inc("invariants_held")
+        return report
+
+    def get_adversarial_weights(self) -> dict[str, float]:
+        """Compute weight vector from Stage 3 adversarial scores."""
+        return self.adversarial.compute_adversarial_weights()
 
     # ── Docker Sandbox Validation ─────────────────────────────────────────
 
@@ -510,6 +659,24 @@ class Orchestrator:
         logger.info("Closing epoch %d (blocks %d-%d)", epoch_number, start_block, end_block)
         epoch = self.incentive.compute_epoch_weights(epoch_number, start_block, end_block)
 
+        # Merge adversarial weights (Stage 3) into epoch result
+        adv_weights = self.adversarial.compute_adversarial_weights()
+        if adv_weights:
+            # Blend: 70% standard exploit scoring + 30% adversarial scoring
+            EXPLOIT_WEIGHT = 0.7
+            ADVERSARIAL_WEIGHT = 0.3
+            all_miners = set(epoch.weights.keys()) | set(adv_weights.keys())
+            blended: dict[str, float] = {}
+            for miner in all_miners:
+                std = epoch.weights.get(miner, 0.0) * EXPLOIT_WEIGHT
+                adv = adv_weights.get(miner, 0.0) * ADVERSARIAL_WEIGHT
+                blended[miner] = std + adv
+            # Re-normalise
+            total = sum(blended.values())
+            if total > 0:
+                epoch.weights = {k: v / total for k, v in blended.items()}
+            logger.info("Blended adversarial weights for %d miners", len(adv_weights))
+
         # Prune stale fingerprint records (retain 30 days by default)
         pruned = self.fingerprinter.prune()
         if pruned:
@@ -519,6 +686,8 @@ class Orchestrator:
         epoch_path = self.data_dir / "epochs" / f"epoch_{epoch_number}.json"
         epoch_path.parent.mkdir(parents=True, exist_ok=True)
         epoch_data = self.incentive.export_epoch(epoch)
+        # Include adversarial scores in export
+        epoch_data["adversarial_scores"] = self.adversarial.get_all_scores()
         epoch_path.write_text(json.dumps(epoch_data, indent=2, sort_keys=True))
 
         logger.info("Epoch %d: %d/%d valid", epoch_number, epoch.total_valid, epoch.total_submissions)
@@ -541,6 +710,7 @@ class Orchestrator:
         self.anticollusion = AntiCollusionEngine(
             data_dir=self.data_dir / "anticollusion",
         )
+        self.adversarial.reset()
         # Clean reports
         if self.reports_dir.exists():
             for f in self.reports_dir.glob("*.json"):
@@ -573,6 +743,8 @@ Examples:
     gen_parser = subparsers.add_parser("generate", help="Generate task corpus")
     gen_parser.add_argument("--count", type=int, default=2, help="Mutations per class")
     gen_parser.add_argument("--seed", type=int, default=42, help="RNG seed")
+    gen_parser.add_argument("--difficulty", type=int, default=1, choices=[1, 2, 3],
+                            help="Max difficulty level (1-3)")
 
     # submit
     sub_parser = subparsers.add_parser("submit", help="Process a miner submission")
@@ -589,11 +761,26 @@ Examples:
     # list
     subparsers.add_parser("list", help="List available tasks")
 
+    # Stage 3: invariant
+    inv_parser = subparsers.add_parser("invariant", help="Submit an invariant (Class A)")
+    inv_parser.add_argument("--miner", type=str, default="0xCLASS_A", help="Class A miner address")
+    inv_parser.add_argument("--target", type=str, required=True, help="Target contract hash")
+    inv_parser.add_argument("--desc", type=str, required=True, help="Invariant description")
+    inv_parser.add_argument("--condition", type=str, required=True, help="Solidity condition")
+
+    # Stage 3: challenge
+    chal_parser = subparsers.add_parser("challenge", help="Challenge an invariant (Class B)")
+    chal_parser.add_argument("--miner", type=str, default="0xCLASS_B", help="Class B miner address")
+    chal_parser.add_argument("--invariant-id", type=int, required=True, help="Invariant ID to challenge")
+    chal_parser.add_argument("--exploit", type=str, required=True, help="Exploit .sol path")
+    chal_parser.add_argument("--task", type=str, required=True, help="Target task ID")
+
     args = parser.parse_args()
     orch = Orchestrator()
 
     if args.command == "generate":
-        orch.generate_corpus(count_per_class=args.count, seed=args.seed)
+        orch.generate_corpus(count_per_class=args.count, seed=args.seed,
+                              max_difficulty=args.difficulty)
 
     elif args.command == "submit":
         exploit_source = Path(args.exploit).read_text()
@@ -620,6 +807,32 @@ Examples:
             print("-" * 52)
             for t in tasks:
                 print(f"{t['task_id'][:18]:20s} {t['vulnerability_class']:20s} {t['difficulty']:>10d}")
+
+    elif args.command == "invariant":
+        inv_id = orch.submit_invariant(
+            miner_address=args.miner,
+            target_contract_hash=args.target,
+            description=args.desc,
+            solidity_condition=args.condition,
+        )
+        print(f"[+] Invariant submitted: ID={inv_id}")
+
+    elif args.command == "challenge":
+        exploit_source = Path(args.exploit).read_text()
+        report = orch.submit_challenge(
+            miner_address=args.miner,
+            invariant_id=args.invariant_id,
+            exploit_source=exploit_source,
+            target_task_id=args.task,
+        )
+        print(f"\n{'='*60}")
+        print(f"Challenge result: {report.result.value}")
+        print(f"Class A miner:    {report.class_a_miner}")
+        print(f"Class B miner:    {report.class_b_miner}")
+        print(f"Invariant held:   {report.invariant_held}")
+        print(f"Time:             {report.validation_time_ms}ms")
+        if report.error_message:
+            print(f"Error:            {report.error_message}")
 
     else:
         parser.print_help()

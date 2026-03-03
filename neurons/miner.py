@@ -125,7 +125,9 @@ class MinerNeuron:
         """Main miner loop."""
         logger.info("Exploit Subnet Miner — %s mode", self.mode.upper())
 
-        if self.mode == "local":
+        if self.mode == "auto":
+            self._run_auto()
+        elif self.mode == "local":
             self._run_local()
         else:
             self._run_bittensor()
@@ -148,11 +150,161 @@ class MinerNeuron:
         except KeyboardInterrupt:
             logger.info("Miner stopped.")
 
+    # ── Auto-Mine Mode ────────────────────────────────────────────────────
+
+    def _run_auto(self):
+        """
+        Auto-mine mode: continuously scan tasks, generate exploit scaffolds,
+        attempt known exploit patterns, and submit solutions.
+
+        This is useful for:
+          - Testing the full pipeline end-to-end
+          - Running a baseline miner that submits template exploits
+          - Bootstrapping initial submissions on a new network
+        """
+        logger.info("Running in AUTO-MINE mode.")
+        logger.info("Will scan for tasks and attempt known exploit patterns.")
+
+        exploits_dir = PROJECT_ROOT / "exploits"
+        submitted: set[str] = set()  # Track already-submitted task IDs
+        round_num = 0
+
+        while not self.should_exit:
+            round_num += 1
+            try:
+                tasks = self.cli.orch.list_tasks()
+                if not tasks:
+                    logger.info("[Round %d] No tasks available. Waiting...", round_num)
+                    time.sleep(10)
+                    continue
+
+                pending = [t for t in tasks if t["task_id"] not in submitted]
+                if not pending:
+                    logger.info("[Round %d] All %d tasks already attempted. Sleeping...",
+                                round_num, len(tasks))
+                    time.sleep(30)
+                    continue
+
+                logger.info("[Round %d] %d new tasks to attempt (of %d total)",
+                            round_num, len(pending), len(tasks))
+
+                for task_meta in pending:
+                    if self.should_exit:
+                        break
+
+                    task_id = task_meta["task_id"]
+                    vuln_class = task_meta.get("vulnerability_class", "unknown")
+                    submitted.add(task_id)
+
+                    # Try to find a matching example exploit
+                    exploit_source = self._find_auto_exploit(vuln_class, exploits_dir)
+                    if not exploit_source:
+                        logger.debug("No exploit template for class '%s', skipping %s",
+                                     vuln_class, task_id[:16])
+                        continue
+
+                    # Load full task to get contract details
+                    full_task = self.cli.orch.load_task(task_id)
+                    if full_task is None:
+                        continue
+
+                    # Adapt the exploit to the target contract if possible
+                    adapted = self._adapt_exploit(exploit_source, full_task)
+
+                    logger.info("  Submitting exploit for task %s (class: %s)",
+                                task_id[:16], vuln_class)
+
+                    try:
+                        result = self.cli.orch.process_submission(
+                            task_id=task_id,
+                            exploit_source=adapted,
+                            miner_address=self.miner_address,
+                        )
+                        status = result.validation_result
+                        severity = result.severity_score
+                        logger.info("    Result: %s  severity=%.4f", status, severity)
+
+                        # Save for tracking
+                        self.prepare_exploit(task_id, adapted)
+                    except Exception as e:
+                        logger.warning("    Submission failed: %s", e)
+
+                    time.sleep(SUBMISSION_COOLDOWN)
+
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                logger.error("Auto-mine error: %s", e, exc_info=True)
+                time.sleep(15)
+
+        logger.info("Auto-mine stopped. Attempted %d tasks.", len(submitted))
+
+    def _find_auto_exploit(self, vuln_class: str, exploits_dir: Path) -> Optional[str]:
+        """
+        Find a matching example exploit from the exploits/ directory.
+
+        Maps vulnerability classes to example exploit subdirectories.
+        """
+        # Map vuln classes to example exploit dirs
+        class_to_dir = {
+            "reentrancy": "reentrancy_basic",
+            "auth-bypass": "auth_bypass_missing",
+            "integer-overflow": "overflow_unchecked",
+            "access-control": "access_selfdestruct",
+            "flash-loan": "flash_loan_oracle",
+            "upgradeable": "upgradeable_vault",
+            # Stage 2 classes — no pre-built exploits yet
+            "cross-reentrancy": "reentrancy_basic",    # Closest match
+            "governance-attack": "flash_loan_oracle",   # Closest match
+        }
+
+        dir_name = class_to_dir.get(vuln_class)
+        if not dir_name:
+            return None
+
+        exploit_path = exploits_dir / dir_name / "Exploit.sol"
+        if exploit_path.exists():
+            return exploit_path.read_text()
+        return None
+
+    def _adapt_exploit(self, exploit_source: str, task: dict) -> str:
+        """
+        Minimally adapt an example exploit to the target task.
+
+        This replaces generic contract references with the actual target
+        contract name found in the task source.
+        """
+        source_dir = task.get("_source_dir", "")
+        if not source_dir:
+            return exploit_source
+
+        # Try to extract the main contract name from the vulnerable source
+        vuln_path = Path(source_dir) / "Vulnerable.sol"
+        if not vuln_path.exists():
+            return exploit_source
+
+        vuln_source = vuln_path.read_text()
+        target_name = None
+        for line in vuln_source.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("contract ") and "{" in stripped:
+                target_name = stripped.split()[1].rstrip("{").strip()
+                break
+
+        if target_name and target_name != "Vulnerable":
+            # Replace generic "Vulnerable" references
+            exploit_source = exploit_source.replace("Vulnerable", target_name)
+
+        return exploit_source
+
     def _run_bittensor(self):
         """Bittensor mode: keep-alive loop."""
         import bittensor as bt
 
         logger.info("Miner is running. Waiting for validator queries...")
+
+        consecutive_errors = 0
+        MAX_BACKOFF = 300  # 5 minutes cap
 
         while not self.should_exit:
             try:
@@ -169,14 +321,20 @@ class MinerNeuron:
                         logger.info("Block %d | Incentive: %.4f | Stake: %.4f TAO",
                                      self.current_block, incentive, stake)
 
+                consecutive_errors = 0
                 time.sleep(12)  # ~1 block
 
             except KeyboardInterrupt:
                 logger.info("Miner shutting down...")
                 break
             except Exception as e:
-                logger.error("Error: %s", e, exc_info=True)
-                time.sleep(30)
+                consecutive_errors += 1
+                backoff = min(30 * (2 ** (consecutive_errors - 1)), MAX_BACKOFF)
+                logger.error(
+                    "Error (attempt %d, backoff %ds): %s",
+                    consecutive_errors, backoff, e, exc_info=True,
+                )
+                time.sleep(backoff)
 
         logger.info("Miner exited main loop.")
 
@@ -324,6 +482,8 @@ def main():
     args = parser.parse_args()
 
     mode = "local" if args.local else "bittensor"
+    if args.auto:
+        mode = "auto"
 
     neuron = MinerNeuron(
         mode=mode,

@@ -10,3 +10,6 @@ pycryptodome==3.21.0
 # Dev / test dependencies
 pytest==8.3.4
 pytest-timeout==2.3.1
+ruff==0.8.6
+black==24.10.0
+mypy==1.14.1

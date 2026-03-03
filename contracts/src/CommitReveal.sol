@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "./Ownable2Step.sol";
+
 /// @title CommitReveal — Prevents exploit theft via commit-reveal scheme.
 /// @notice Miners commit exploit hashes before revealing. Earliest valid commitment wins priority.
 /// @dev Commitments are per-task. Reveal window is enforced. No gray zones.
-contract CommitReveal {
+contract CommitReveal is Ownable2Step {
     // ── Structs ──────────────────────────────────────────────────────────
 
     struct Commitment {
@@ -23,8 +25,6 @@ contract CommitReveal {
     uint256 public constant MAX_COMMITS_PER_TASK = 256;
 
     // ── State ────────────────────────────────────────────────────────────
-
-    address public owner;
 
     // taskId => commitment index => Commitment
     mapping(bytes32 => mapping(uint256 => Commitment)) public commitments;
@@ -57,7 +57,6 @@ contract CommitReveal {
 
     // ── Errors ───────────────────────────────────────────────────────────
 
-    error Unauthorized();
     error TaskNotOpen();
     error TaskAlreadyOpen();
     error CommitWindowClosed();
@@ -68,24 +67,10 @@ contract CommitReveal {
     error InvalidReveal();
     error MaxCommitsReached();
     error NoCommitment();
-    error ZeroAddress();
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
-
-    // ── Modifiers ────────────────────────────────────────────────────────
-
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert Unauthorized();
-        _;
-    }
 
     // ── Constructor ──────────────────────────────────────────────────────
 
-    constructor() {
-        owner = msg.sender;
-    }
+    constructor() Ownable2Step() {}
 
     // ── Task Management ──────────────────────────────────────────────────
 
@@ -208,12 +193,5 @@ contract CommitReveal {
         return
             taskOpen[taskId] &&
             block.timestamp <= taskOpenTime[taskId] + COMMIT_WINDOW;
-    }
-
-    function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert ZeroAddress();
-        address prev = owner;
-        owner = newOwner;
-        emit OwnershipTransferred(prev, newOwner);
     }
 }
