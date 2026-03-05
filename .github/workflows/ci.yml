@@ -325,7 +325,7 @@ jobs:
         run: docker build -t exploit-subnet/validator:scan -f docker/Dockerfile.validator .
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: "exploit-subnet/validator:scan"
           format: "table"
