@@ -551,3 +551,38 @@ test = "exploits"
 ```
 
 Used for running example exploit submissions: `FOUNDRY_PROFILE=exploits forge test -vvv`
+
+---
+
+## Pausable Emergency Mechanism
+
+All contracts inherit from `Pausable.sol` which provides:
+
+| Function    | Access      | Description                                                |
+| ----------- | ----------- | ---------------------------------------------------------- |
+| `pause()`   | `onlyOwner` | Pauses the contract — all `whenNotPaused` functions revert |
+| `unpause()` | `onlyOwner` | Resumes normal operation                                   |
+| `paused()`  | `view`      | Returns current pause state                                |
+
+Critical state-changing functions (`commit`, `reveal`, `openTask`, `recordExploit`, `submitInvariant`, `processChallenge`, `registerContract`, `payExploitReward`) are guarded by `whenNotPaused`.
+
+Administrative functions (`transferOwnership`, `acceptOwnership`, `setValidator`, `pause`, `unpause`) remain callable when paused.
+
+## Convenience View Functions
+
+### ExploitRegistry
+
+- `getExploit(uint256 exploitId) → ExploitRecord` — Full exploit record by ID
+
+### ProtocolRegistry
+
+- `getRemainingBounty(bytes32 contractHash) → uint256` — Remaining bounty pool for a contract
+
+### AdversarialScoring
+
+- `getClassAScore(address miner) → int256` — Class A miner score
+- `getClassBScore(address miner) → int256` — Class B miner score
+
+### CommitReveal
+
+- `getEarliestReveal(bytes32 taskId, bytes32 artifactHash) → (address, uint256)` — O(1) cached lookup of earliest reveal

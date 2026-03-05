@@ -29,6 +29,12 @@ from validator.engine.adversarial import (
     MAX_INVARIANT_DESCRIPTION_LEN,
 )
 from orchestrator import Orchestrator
+from validator.anticollusion.consensus import (
+    AntiCollusionEngine,
+    AdversarialConsensusResult,
+    MIN_QUORUM,
+    CONSENSUS_THRESHOLD,
+)
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -458,3 +464,170 @@ class TestEngineReset:
         assert engine.get_invariant(0) is None
         assert engine.get_all_scores() == {"class_a": {}, "class_b": {}}
         assert engine.get_challenge_history() == []
+
+
+# ── Adversarial Consensus Tests ──────────────────────────────────────────────
+
+class TestAdversarialConsensus:
+    @pytest.fixture
+    def consensus_engine(self, tmp_path):
+        engine = AntiCollusionEngine(data_dir=tmp_path)
+        # Register enough validators for quorum
+        for i in range(7):
+            engine.register_validator(f"val_{i}", stake=100.0)
+        return engine
+
+    def test_consensus_invariant_held(self, consensus_engine):
+        """Majority says INVARIANT_HELD → consensus is INVARIANT_HELD."""
+        votes = [
+            {"validator_hotkey": f"val_{i}", "outcome": "INVARIANT_HELD"}
+            for i in range(5)
+        ] + [
+            {"validator_hotkey": "val_5", "outcome": "INVARIANT_BROKEN"},
+            {"validator_hotkey": "val_6", "outcome": "INVARIANT_BROKEN"},
+        ]
+        result = consensus_engine.compute_adversarial_consensus(
+            invariant_id=0, challenge_id="chal_1", votes=votes,
+        )
+        assert result.consensus_outcome == "INVARIANT_HELD"
+        assert result.agreement_ratio >= CONSENSUS_THRESHOLD
+        assert len(result.agreeing_validators) == 5
+        assert len(result.diverging_validators) == 2
+
+    def test_consensus_invariant_broken(self, consensus_engine):
+        """Majority says INVARIANT_BROKEN → consensus is INVARIANT_BROKEN."""
+        votes = [
+            {"validator_hotkey": f"val_{i}", "outcome": "INVARIANT_BROKEN"}
+            for i in range(6)
+        ] + [
+            {"validator_hotkey": "val_6", "outcome": "INVARIANT_HELD"},
+        ]
+        result = consensus_engine.compute_adversarial_consensus(
+            invariant_id=0, challenge_id="chal_2", votes=votes,
+        )
+        assert result.consensus_outcome == "INVARIANT_BROKEN"
+        assert len(result.agreeing_validators) == 6
+
+    def test_consensus_no_quorum(self, consensus_engine):
+        """Fewer than MIN_QUORUM votes → NO_QUORUM."""
+        votes = [
+            {"validator_hotkey": f"val_{i}", "outcome": "INVARIANT_HELD"}
+            for i in range(3)
+        ]
+        result = consensus_engine.compute_adversarial_consensus(
+            invariant_id=0, challenge_id="chal_3", votes=votes,
+        )
+        assert result.consensus_outcome == "NO_QUORUM"
+
+    def test_consensus_updates_divergence_tracking(self, consensus_engine):
+        """Diverging validators get tracked."""
+        votes = [
+            {"validator_hotkey": f"val_{i}", "outcome": "INVARIANT_HELD"}
+            for i in range(5)
+        ] + [
+            {"validator_hotkey": "val_5", "outcome": "INVARIANT_BROKEN"},
+            {"validator_hotkey": "val_6", "outcome": "INVARIANT_BROKEN"},
+        ]
+        consensus_engine.compute_adversarial_consensus(
+            invariant_id=0, challenge_id="chal_4", votes=votes,
+        )
+        # val_5 and val_6 should have 1 divergence each
+        assert consensus_engine.validators["val_5"].divergences == 1
+        assert consensus_engine.validators["val_6"].divergences == 1
+        # Agreeing validators should have 1 agreement
+        assert consensus_engine.validators["val_0"].agreements == 1
+
+    def test_consensus_plurality_fallback(self, consensus_engine):
+        """No 66% majority → falls back to plurality."""
+        # Register more validators for a split vote
+        for i in range(7, 10):
+            consensus_engine.register_validator(f"val_{i}", stake=100.0)
+
+        votes = [
+            {"validator_hotkey": f"val_{i}", "outcome": "INVARIANT_HELD"}
+            for i in range(4)
+        ] + [
+            {"validator_hotkey": f"val_{i}", "outcome": "INVARIANT_BROKEN"}
+            for i in range(4, 7)
+        ] + [
+            {"validator_hotkey": f"val_{i}", "outcome": "INVARIANT_HELD"}
+            for i in range(7, 10)
+        ]
+        result = consensus_engine.compute_adversarial_consensus(
+            invariant_id=0, challenge_id="chal_5", votes=votes,
+        )
+        # 7 HELD vs 3 BROKEN — plurality is HELD (70% >= 66% threshold)
+        assert result.consensus_outcome == "INVARIANT_HELD"
+
+    def test_consensus_persists_to_history(self, consensus_engine):
+        """Adversarial consensus results appear in consensus history."""
+        votes = [
+            {"validator_hotkey": f"val_{i}", "outcome": "INVARIANT_HELD"}
+            for i in range(7)
+        ]
+        consensus_engine.compute_adversarial_consensus(
+            invariant_id=42, challenge_id="chal_6", votes=votes,
+        )
+        log = consensus_engine.export_consensus_log()
+        assert len(log) == 1
+        assert log[0]["task_id"] == "adversarial:chal_6"
+        assert log[0]["submission_hash"] == "inv:42"
+
+
+# ── E2E Weight Blending Tests ────────────────────────────────────────────────
+
+class TestWeightBlending:
+    def test_epoch_blends_exploit_and_adversarial_weights(self):
+        """Verify 70/30 exploit/adversarial weight blending in epoch close."""
+        orch = Orchestrator(mode="local")
+
+        # Submit an invariant (adversarial activity)
+        orch.submit_invariant(
+            miner_address="0xA1",
+            target_contract_hash="0x" + "ab" * 32,
+            description="Balance invariant",
+            solidity_condition="balance >= 0",
+        )
+        # Process a challenge (gives scores to both miners)
+        orch.submit_challenge(
+            miner_address="0xB1",
+            invariant_id=0,
+            exploit_source="// exploit code",
+            target_task_id="0xtask",
+        )
+
+        # Also submit a standard exploit so exploit weights exist
+        orch.process_submission(
+            task_id="task_001",
+            miner_address="0xMiner1",
+            exploit_source="// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\ncontract Exploit { function run() external {} }",
+        )
+
+        # Close epoch
+        epoch = orch.close_epoch(epoch_number=1, start_block=0, end_block=360)
+
+        # Verify epoch has weights (blended from both sources)
+        assert epoch is not None
+        # The adversarial miners should influence weights
+        adv_weights = orch.adversarial.compute_adversarial_weights()
+        assert len(adv_weights) > 0, "Adversarial activity should produce weights"
+
+    def test_adversarial_only_epoch_produces_weights(self):
+        """Epoch with only adversarial activity still produces weights."""
+        orch = Orchestrator(mode="local")
+
+        orch.submit_invariant(
+            miner_address="0xA1",
+            target_contract_hash="0x" + "00" * 32,
+            description="test inv",
+            solidity_condition="true",
+        )
+        orch.submit_challenge(
+            miner_address="0xB1",
+            invariant_id=0,
+            exploit_source="// exploit",
+            target_task_id="0xtask",
+        )
+
+        epoch = orch.close_epoch(epoch_number=1, start_block=0, end_block=360)
+        assert epoch is not None

@@ -76,8 +76,9 @@ def _cast_send(
         contract, sig, *args,
         "--rpc-url", rpc_url,
     ]
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=60,
+    from validator.utils.retry import retry_subprocess
+    result = retry_subprocess(
+        cmd, max_retries=3, timeout=60,
         env={**os.environ, "ETH_PRIVATE_KEY": private_key},
     )
     if result.returncode != 0:
@@ -109,18 +110,27 @@ def _cast_call(
 def _wallet_address(cast_bin: str, private_key: str) -> str:
     """Get the address corresponding to a private key.
 
-    Note: ``cast wallet address`` is a local CPU-only operation (no network
-    call). The key appears briefly in the process list but is not sent
-    anywhere.  For maximum caution, we could derive the address in Python,
-    but ``cast`` is the canonical Foundry tool.
+    Uses ``cast wallet address --private-key`` via stdin to avoid
+    exposing the key in the process argument list.
     """
-    result = subprocess.run(
-        [cast_bin, "wallet", "address", private_key],
-        capture_output=True, text=True, timeout=10,
+    proc = subprocess.Popen(
+        [cast_bin, "wallet", "address", "--private-key-stdin"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
-    if result.returncode != 0:
-        raise RuntimeError(f"cast wallet address failed: {result.stderr.strip()}")
-    return result.stdout.strip()
+    stdout, stderr = proc.communicate(input=private_key, timeout=10)
+    if proc.returncode != 0:
+        # Fallback: older cast versions may not support --private-key-stdin
+        result = subprocess.run(
+            [cast_bin, "wallet", "address", private_key],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"cast wallet address failed: {result.stderr.strip()}")
+        return result.stdout.strip()
+    return stdout.strip()
 
 
 # ── Key Rotation Operations ─────────────────────────────────────────────────

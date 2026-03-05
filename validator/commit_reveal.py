@@ -298,8 +298,9 @@ class CommitRevealClient:
             cmd.extend(["--from", self.miner_address, "--unlocked"])
 
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30, env=env,
+            from validator.utils.retry import retry_subprocess
+            result = retry_subprocess(
+                cmd, max_retries=3, timeout=30, env=env,
             )
             if result.returncode != 0:
                 return {"success": False, "error": result.stderr}

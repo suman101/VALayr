@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "./Ownable2Step.sol";
+import "./Pausable.sol";
 
 /// @title ProtocolRegistry — Opt-in registry for protocols submitting contracts to the exploit subnet.
 /// @notice Protocols register contract addresses, deposit bounty escrow, and enforce disclosure windows.
 /// @dev Only registered contracts are valid targets. This is the legal firewall.
-contract ProtocolRegistry is Ownable2Step {
+contract ProtocolRegistry is Pausable {
     // ── Reentrancy Guard ─────────────────────────────────────────────────
 
     uint256 private _locked = 1;
@@ -96,6 +96,7 @@ contract ProtocolRegistry is Ownable2Step {
     error InvalidValidator();
     error PaymentFailed();
     error TooManyClaims();
+    error ContractExpired();
 
     // ── Modifiers ────────────────────────────────────────────────────────
 
@@ -122,7 +123,7 @@ contract ProtocolRegistry is Ownable2Step {
     function registerContract(
         address target,
         uint256 expiresAt
-    ) external payable {
+    ) external payable whenNotPaused {
         if (target == address(0)) revert ZeroAddress();
         if (msg.value < MIN_BOUNTY) revert InsufficientBounty();
 
@@ -166,15 +167,24 @@ contract ProtocolRegistry is Ownable2Step {
     }
 
     /// @notice Withdraw remaining bounty from a deactivated contract (after disclosure windows).
+    /// @param contractHash The hash of the registered contract.
+    /// @param startIndex Starting index into the claims history for pagination.
+    ///        Call repeatedly with increasing startIndex until all claims are checked.
     function withdrawBounty(
-        bytes32 contractHash
+        bytes32 contractHash,
+        uint256 startIndex
     ) external onlyProtocol(contractHash) nonReentrant {
         RegisteredContract storage reg = registry[contractHash];
         if (reg.active) revert ContractInactive(); // Must deactivate first
 
         // Enforce: all existing claims must be paid or disclosure window expired
+        // Process up to MAX_CLAIMS_PER_WITHDRAWAL at a time to bound gas
+        uint256 maxPerCall = 20;
         bytes32[] storage history = exploitHistory[contractHash];
-        for (uint256 i = 0; i < history.length; i++) {
+        uint256 end = startIndex + maxPerCall;
+        if (end > history.length) end = history.length;
+
+        for (uint256 i = startIndex; i < end; i++) {
             ExploitClaim storage c = claims[contractHash][history[i]];
             if (c.miner != address(0) && !c.paid) {
                 if (block.timestamp < c.claimedAt + DISCLOSURE_WINDOW)
@@ -182,13 +192,16 @@ contract ProtocolRegistry is Ownable2Step {
             }
         }
 
-        uint256 amount = reg.bountyPool;
-        reg.bountyPool = 0;
+        // Only transfer if all claims verified (final page)
+        if (end >= history.length) {
+            uint256 amount = reg.bountyPool;
+            reg.bountyPool = 0;
 
-        (bool ok, ) = msg.sender.call{value: amount}("");
-        if (!ok) revert PaymentFailed();
+            (bool ok, ) = msg.sender.call{value: amount}("");
+            if (!ok) revert PaymentFailed();
 
-        emit BountyWithdrawn(contractHash, amount);
+            emit BountyWithdrawn(contractHash, amount);
+        }
     }
 
     // ── Validator Functions ──────────────────────────────────────────────
@@ -200,10 +213,12 @@ contract ProtocolRegistry is Ownable2Step {
         bytes32 exploitFingerprint,
         address miner,
         uint256 severityScore // 1e18 fixed-point (0 to 1e18)
-    ) external onlyValidator {
+    ) external onlyValidator whenNotPaused {
         if (miner == address(0)) revert ZeroAddress();
         RegisteredContract storage reg = registry[contractHash];
         if (!reg.active) revert ContractInactive();
+        if (reg.expiresAt != 0 && block.timestamp > reg.expiresAt)
+            revert ContractExpired();
         if (claims[contractHash][exploitFingerprint].miner != address(0))
             revert ExploitAlreadyClaimed();
         if (exploitHistory[contractHash].length >= MAX_CLAIMS_PER_CONTRACT)
@@ -234,7 +249,10 @@ contract ProtocolRegistry is Ownable2Step {
     function payExploitReward(
         bytes32 contractHash,
         bytes32 exploitFingerprint
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
+        RegisteredContract storage reg = registry[contractHash];
+        if (reg.expiresAt != 0 && block.timestamp > reg.expiresAt)
+            revert ContractExpired();
         ExploitClaim storage claim = claims[contractHash][exploitFingerprint];
         if (claim.paid) revert ExploitAlreadyClaimed();
         if (block.timestamp < claim.claimedAt + DISCLOSURE_WINDOW)
@@ -278,5 +296,11 @@ contract ProtocolRegistry is Ownable2Step {
             codeHash := extcodehash(target)
         }
         return keccak256(abi.encodePacked(target, codeHash));
+    }
+
+    function getRemainingBounty(
+        bytes32 contractHash
+    ) external view returns (uint256) {
+        return registry[contractHash].bountyPool;
     }
 }

@@ -599,3 +599,29 @@ A: Do NOT upgrade unless the project announces it. The pinned version (`nightly-
 
 **Q: How do I monitor validator health?**
 A: Hit `http://localhost:9946/health` for a readiness check and `/metrics` for full metrics. Set up Prometheus scraping for dashboards.
+
+---
+
+## Stage 3: Adversarial Validation
+
+Stage 3 adds the adversarial invariant challenge pipeline. Validators now process two types of submissions:
+
+### Challenge Processing
+
+When a Class B miner submits an exploit targeting a Class A invariant, the validator:
+
+1. Loads the invariant from `InvariantRegistry`
+2. Deploys the target contract in a sandboxed Anvil instance
+3. Executes the Class B exploit
+4. Evaluates whether the invariant holds or is broken
+5. Calls `AdversarialScoring.processChallenge()` to update scores on-chain
+
+### Validator Requirements for Stage 3
+
+- Your validator address must be registered via `setValidator()` on both `InvariantRegistry` and `AdversarialScoring`
+- The `Deploy.s.sol` script handles this automatically for fresh deployments
+- For existing deployments, the contract owner must call `setValidator(yourAddress, true)`
+
+### Emergency Pause
+
+All contracts support an emergency `pause()` mechanism callable by the contract owner. When paused, all state-changing functions revert. Use this for incident response. See `docs/runbooks/incident-response.md` for the full procedure.

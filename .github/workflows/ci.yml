@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: "0 6 * * 1" # Weekly Monday 06:00 UTC — security scans
 
 env:
   FOUNDRY_PROFILE: default
@@ -228,3 +230,105 @@ jobs:
 
       - name: Mypy type check
         run: mypy --ignore-missing-imports .
+
+  # ── Test Coverage ────────────────────────────────────────────────────────
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly-2024-12-01
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      - name: Create module symlinks
+        run: |
+          ln -sf task-generator task_generator
+          ln -sf subnet-adapter subnet_adapter
+
+      - name: Run tests with coverage
+        run: |
+          PYTHONHASHSEED=0 python -m pytest tests/ \
+            --cov=validator --cov=orchestrator --cov=miner \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing \
+            -v --timeout=120
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          fail_ci_if_error: false
+
+  # ── Security Scanning ────────────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit bandit
+
+      - name: Create module symlinks
+        run: |
+          ln -sf task-generator task_generator
+          ln -sf subnet-adapter subnet_adapter
+
+      - name: Dependency audit (pip-audit)
+        run: pip-audit --strict --desc on
+
+      - name: Static security analysis (bandit)
+        run: |
+          bandit -r validator/ miner/ neurons/ orchestrator.py \
+            -ll --format txt
+
+  # ── Container Security ───────────────────────────────────────────────────
+  container-security:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build validator image
+        run: docker build -t exploit-subnet/validator:scan -f docker/Dockerfile.validator .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: "exploit-subnet/validator:scan"
+          format: "table"
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "./Ownable2Step.sol";
+import "./Pausable.sol";
 
 /// @title CommitReveal — Prevents exploit theft via commit-reveal scheme.
 /// @notice Miners commit exploit hashes before revealing. Earliest valid commitment wins priority.
 /// @dev Commitments are per-task. Reveal window is enforced. No gray zones.
-contract CommitReveal is Ownable2Step {
+contract CommitReveal is Pausable {
     // ── Structs ──────────────────────────────────────────────────────────
 
     struct Commitment {
@@ -38,6 +38,14 @@ contract CommitReveal is Ownable2Step {
     mapping(bytes32 => uint256) public taskOpenTime;
     // taskId => is task open for commits
     mapping(bytes32 => bool) public taskOpen;
+    // taskId => artifactHash => earliest reveal cache
+    mapping(bytes32 => mapping(bytes32 => EarliestReveal))
+        private _earliestRevealCache;
+
+    struct EarliestReveal {
+        address miner;
+        uint256 committedAt;
+    }
 
     // ── Events ───────────────────────────────────────────────────────────
 
@@ -75,7 +83,7 @@ contract CommitReveal is Ownable2Step {
     // ── Task Management ──────────────────────────────────────────────────
 
     /// @notice Open a task for commit submissions.
-    function openTask(bytes32 taskId) external onlyOwner {
+    function openTask(bytes32 taskId) external onlyOwner whenNotPaused {
         if (taskOpen[taskId]) revert TaskAlreadyOpen();
         taskOpen[taskId] = true;
         taskOpenTime[taskId] = block.timestamp;
@@ -87,7 +95,7 @@ contract CommitReveal is Ownable2Step {
     /// @notice Submit a commitment hash. H = keccak(taskId || exploitArtifactHash || nonce)
     /// @param taskId The task being targeted.
     /// @param commitHash The blinded commitment hash.
-    function commit(bytes32 taskId, bytes32 commitHash) external {
+    function commit(bytes32 taskId, bytes32 commitHash) external whenNotPaused {
         if (!taskOpen[taskId]) revert TaskNotOpen();
         if (block.timestamp > taskOpenTime[taskId] + COMMIT_WINDOW)
             revert CommitWindowClosed();
@@ -146,6 +154,15 @@ contract CommitReveal is Ownable2Step {
         c.exploitArtifactHash = exploitArtifactHash;
         c.revealedAt = block.timestamp;
 
+        // Cache earliest reveal for O(1) lookup
+        EarliestReveal storage cached = _earliestRevealCache[taskId][
+            exploitArtifactHash
+        ];
+        if (cached.miner == address(0) || c.committedAt < cached.committedAt) {
+            cached.miner = msg.sender;
+            cached.committedAt = c.committedAt;
+        }
+
         emit ExploitRevealed(
             taskId,
             msg.sender,
@@ -157,27 +174,15 @@ contract CommitReveal is Ownable2Step {
     // ── View Functions ───────────────────────────────────────────────────
 
     /// @notice Get the earliest revealed commitment for a task that matches a given artifact hash.
+    /// @dev O(1) lookup from cache populated during reveal().
     function getEarliestReveal(
         bytes32 taskId,
         bytes32 exploitArtifactHash
     ) external view returns (address miner, uint256 committedAt) {
-        uint256 count = commitCount[taskId];
-        uint256 earliest = type(uint256).max;
-        address earliestMiner;
-
-        for (uint256 i = 0; i < count; i++) {
-            Commitment storage c = commitments[taskId][i];
-            if (
-                c.revealed &&
-                c.exploitArtifactHash == exploitArtifactHash &&
-                c.committedAt < earliest
-            ) {
-                earliest = c.committedAt;
-                earliestMiner = c.miner;
-            }
-        }
-
-        return (earliestMiner, earliest);
+        EarliestReveal storage cached = _earliestRevealCache[taskId][
+            exploitArtifactHash
+        ];
+        return (cached.miner, cached.committedAt);
     }
 
     /// @notice Check if reveal window is currently open for a task.

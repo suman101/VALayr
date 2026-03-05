@@ -121,7 +121,7 @@ class MinerNeuron:
 
     # ── Main Loop ─────────────────────────────────────────────────────────
 
-    def run(self):
+    def run(self) -> None:
         """Main miner loop."""
         logger.info("Exploit Subnet Miner — %s mode", self.mode.upper())
 
@@ -382,7 +382,7 @@ class MinerNeuron:
             return f
         return None
 
-    def prepare_exploit(self, task_id: str, exploit_source: str):
+    def prepare_exploit(self, task_id: str, exploit_source: str) -> None:
         """Save an exploit solution for later submission."""
         exploits_dir = PROJECT_ROOT / "data" / "miner" / "exploits"
         exploits_dir.mkdir(parents=True, exist_ok=True)
@@ -461,7 +461,7 @@ class MinerNeuron:
 
 # ── CLI Entry Point ──────────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Exploit Subnet Miner Neuron",
         formatter_class=argparse.RawDescriptionHelpFormatter,

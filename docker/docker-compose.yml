@@ -94,6 +94,14 @@ services:
       - NETUID=1
     volumes:
       - miner-data:/app/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "1"
+          memory: 2G
     restart: unless-stopped
 
   # ── Validation Sandbox (network-isolated for determinism) ───────────────

@@ -24,6 +24,7 @@ import os
 import signal
 import sys
 import time
+import threading
 import traceback
 from pathlib import Path
 from typing import Optional
@@ -75,9 +76,12 @@ class ValidatorNeuron:
         self.current_block = 0
         self.epoch_start_block = 0
         self.should_exit = False
+        self._submission_lock = threading.Lock()
         self.submissions_this_epoch: list[SubmissionResult] = []
         self._miner_submission_counts: dict[str, int] = {}  # hotkey → count
         self._last_closed_epoch: int = -1  # Epoch overlap guard
+        self._last_prune_epoch: int = 0  # Fingerprint DB pruning tracker
+        self._rotation_config = Path("data/pending_rotation.json")
 
         # Initialize orchestrator
         self.orchestrator = Orchestrator(
@@ -133,7 +137,7 @@ class ValidatorNeuron:
 
     # ── Main Loop ─────────────────────────────────────────────────────────
 
-    def run(self):
+    def run(self) -> None:
         """Main validator loop."""
         logger.info("Exploit Subnet Validator — %s mode", self.mode.upper())
 
@@ -203,8 +207,9 @@ class ValidatorNeuron:
                     self._close_current_epoch()
                     self.current_epoch = new_epoch
                     self.epoch_start_block = new_epoch * EPOCH_LENGTH
-                    self.submissions_this_epoch = []
-                    self._miner_submission_counts = {}
+                    with self._submission_lock:
+                        self.submissions_this_epoch = []
+                        self._miner_submission_counts = {}
 
                     # Refresh corpus periodically
                     if new_epoch - last_refresh_epoch >= TASK_REFRESH_EPOCHS:
@@ -213,6 +218,17 @@ class ValidatorNeuron:
                             seed=new_epoch,
                         )
                         last_refresh_epoch = new_epoch
+
+                    # Prune stale fingerprints every 24 epochs (~1 day)
+                    PRUNE_INTERVAL_EPOCHS = 24
+                    if new_epoch - self._last_prune_epoch >= PRUNE_INTERVAL_EPOCHS:
+                        pruned = self.orchestrator.fingerprinter.prune()
+                        if pruned > 0:
+                            logger.info("Pruned %d stale fingerprint records", pruned)
+                        self._last_prune_epoch = new_epoch
+
+                    # Check for pending key rotation
+                    self._check_key_rotation()
 
                 # Set weights periodically
                 if self.current_block - last_weight_block >= WEIGHT_SET_INTERVAL:
@@ -260,10 +276,11 @@ class ValidatorNeuron:
             miner_hotkey = synapse.dendrite.hotkey
 
             # Per-miner rate limiting
-            miner_count = self._miner_submission_counts.get(miner_hotkey, 0)
-            if miner_count >= MAX_SUBMISSIONS_PER_MINER_PER_EPOCH:
-                synapse.result = {"error": "Per-miner epoch submission limit reached"}
-                return synapse
+            with self._submission_lock:
+                miner_count = self._miner_submission_counts.get(miner_hotkey, 0)
+                if miner_count >= MAX_SUBMISSIONS_PER_MINER_PER_EPOCH:
+                    synapse.result = {"error": "Per-miner epoch submission limit reached"}
+                    return synapse
 
             # If commit-reveal is active and a commit_hash is provided,
             # route through the two-phase reveal_and_process pipeline
@@ -281,8 +298,9 @@ class ValidatorNeuron:
                     miner_address=miner_hotkey,
                 )
 
-            self.submissions_this_epoch.append(result)
-            self._miner_submission_counts[miner_hotkey] = miner_count + 1
+            with self._submission_lock:
+                self.submissions_this_epoch.append(result)
+                self._miner_submission_counts[miner_hotkey] = miner_count + 1
 
             synapse.result = result.to_dict()
             return synapse
@@ -323,6 +341,42 @@ class ValidatorNeuron:
             end_block=self.epoch_start_block + EPOCH_LENGTH,
         )
         return epoch_result
+
+    def _check_key_rotation(self):
+        """Check for a pending key rotation config and execute it."""
+        if not self._rotation_config.exists():
+            return
+        try:
+            config = json.loads(self._rotation_config.read_text())
+            contracts = config.get("contracts", [])
+            rpc_url = config.get("rpc_url", "")
+            owner_key = config.get("owner_key", "")
+            old_validator = config.get("old_validator", "")
+            new_validator = config.get("new_validator", "")
+
+            if not all([contracts, rpc_url, owner_key, old_validator, new_validator]):
+                logger.warning("Incomplete rotation config, skipping")
+                return
+
+            from validator.utils.key_rotation import batch_rotate_validators
+            results = batch_rotate_validators(
+                contracts=contracts,
+                rpc_url=rpc_url,
+                owner_key=owner_key,
+                old_validator=old_validator,
+                new_validator=new_validator,
+            )
+
+            successes = sum(1 for r in results if r.get("success"))
+            logger.info("Key rotation complete: %d/%d contracts rotated", successes, len(results))
+
+            # Archive the config so it doesn't re-run
+            done_path = self._rotation_config.with_suffix(".done")
+            self._rotation_config.rename(done_path)
+            logger.info("Rotation config archived to %s", done_path.name)
+
+        except Exception as e:
+            logger.error("Key rotation failed: %s", e, exc_info=True)
 
     def _set_weights(self):
         """Set miner weights on-chain via subtensor."""
@@ -393,7 +447,7 @@ class ValidatorNeuron:
 
 # ── CLI Entry Point ──────────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Exploit Subnet Validator Neuron",
         formatter_class=argparse.RawDescriptionHelpFormatter,

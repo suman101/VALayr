@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "forge-std/Test.sol";
 import "../src/ProtocolRegistry.sol";
 
 /// @title ProtocolRegistryTest — Foundry tests for the Protocol Registry.
-contract ProtocolRegistryTest {
+contract ProtocolRegistryTest is Test {
     ProtocolRegistry public registry;
 
     address constant PROTOCOL = address(0x1111);
@@ -76,6 +77,69 @@ contract ProtocolRegistryTest {
 
         registry.deactivateContract(contractHash);
         assert(!registry.isRegistered(contractHash));
+    }
+
+    // ── Expiry Tests ─────────────────────────────────────────────────────────────────
+
+    function test_recordExploit_after_expiry_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        uint256 expiry = block.timestamp + 1 hours;
+        registry.registerContract{value: 10 ether}(address(dummy), expiry);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        // Warp past expiry
+        vm.warp(expiry + 1);
+
+        bytes32 fingerprint = keccak256("exploit-1");
+        vm.expectRevert(ProtocolRegistry.ContractExpired.selector);
+        registry.recordExploit(contractHash, fingerprint, MINER, 0.5e18);
+    }
+
+    function test_recordExploit_before_expiry_succeeds() public {
+        DummyTarget dummy = new DummyTarget();
+        uint256 expiry = block.timestamp + 1 hours;
+        registry.registerContract{value: 10 ether}(address(dummy), expiry);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        // Still within expiry
+        vm.warp(expiry - 1);
+
+        bytes32 fingerprint = keccak256("exploit-1");
+        registry.recordExploit(contractHash, fingerprint, MINER, 0.5e18);
+        assertEq(registry.getExploitCount(contractHash), 1);
+    }
+
+    function test_recordExploit_no_expiry_always_succeeds() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 10 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        // Warp far into the future
+        vm.warp(block.timestamp + 365 days);
+
+        bytes32 fingerprint = keccak256("exploit-1");
+        registry.recordExploit(contractHash, fingerprint, MINER, 0.5e18);
+        assertEq(registry.getExploitCount(contractHash), 1);
+    }
+
+    function test_payExploitReward_after_expiry_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        uint256 expiry = block.timestamp + 2 hours;
+        registry.registerContract{value: 10 ether}(address(dummy), expiry);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        bytes32 fingerprint = keccak256("exploit-2");
+        registry.recordExploit(contractHash, fingerprint, MINER, 0.5e18);
+
+        // Warp past both disclosure window AND expiry
+        vm.warp(expiry + 1);
+
+        vm.expectRevert(ProtocolRegistry.ContractExpired.selector);
+        registry.payExploitReward(contractHash, fingerprint);
     }
 
     receive() external payable {}

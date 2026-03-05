@@ -15,10 +15,13 @@ This is the primary interface miners use to participate.
 import argparse
 import hashlib
 import json
+import logging
 import os
 import sys
 import time
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -31,6 +34,7 @@ from orchestrator import Orchestrator, SubmissionResult
 MINER_DATA_DIR = PROJECT_ROOT / "data" / "miner"
 SUBMISSIONS_DIR = MINER_DATA_DIR / "submissions"
 LOCAL_CONFIG = MINER_DATA_DIR / "config.json"
+MAX_EXPLOIT_SOURCE_BYTES = 512 * 1024  # 512 KB
 
 
 # ── Miner Client ─────────────────────────────────────────────────────────────
@@ -102,13 +106,21 @@ class MinerCLI:
         """Submit an exploit for validation."""
         exploit_path = Path(args.exploit)
         if not exploit_path.exists():
-            print(f"[!] Exploit file not found: {exploit_path}")
+            logger.error("Exploit file not found: %s", exploit_path)
+            return
+
+        file_size = exploit_path.stat().st_size
+        if file_size > MAX_EXPLOIT_SOURCE_BYTES:
+            logger.error(
+                "Exploit file too large (%d bytes, max %d)",
+                file_size,
+                MAX_EXPLOIT_SOURCE_BYTES,
+            )
             return
 
         exploit_source = exploit_path.read_text()
-        print(f"[*] Submitting exploit for task {args.task[:16]}...")
-        print(f"    File: {exploit_path.name} ({len(exploit_source)} bytes)")
-        print(f"    Miner: {self.miner_address}")
+        logger.info("Submitting exploit for task %s...", args.task[:16])
+        logger.info("File: %s (%d bytes), Miner: %s", exploit_path.name, len(exploit_source), self.miner_address)
 
         result = self.orch.process_submission(
             task_id=args.task,
@@ -133,7 +145,11 @@ class MinerCLI:
         print(f"\n{'#':>3s}  {'Task':20s}  {'Result':24s}  {'Severity':>8s}  {'Reward':>6s}")
         print("-" * 68)
         for i, f in enumerate(submissions[-20:], 1):  # Last 20
-            data = json.loads(f.read_text())
+            try:
+                data = json.loads(f.read_text())
+            except (json.JSONDecodeError, OSError):
+                logger.warning("Skipping corrupt submission file: %s", f.name)
+                continue
             tid = data.get("task_id", "?")[:18] + ".."
             result = data.get("validation_result", "?")
             severity = data.get("severity_score", 0)
@@ -153,7 +169,11 @@ class MinerCLI:
             print("[!] No epochs completed yet.")
             return
 
-        latest = json.loads(epoch_files[-1].read_text())
+        try:
+            latest = json.loads(epoch_files[-1].read_text())
+        except (json.JSONDecodeError, OSError):
+            logger.error("Failed to read epoch file: %s", epoch_files[-1].name)
+            return
         print(f"\nEpoch {latest['epoch_number']} (blocks {latest['start_block']}-{latest['end_block']})")
         print(f"Submissions: {latest['total_submissions']} total, {latest['total_valid']} valid\n")
 

@@ -20,6 +20,7 @@ Ambiguity creates governance wars. This engine has none.
 """
 
 import hashlib
+import threading
 try:
     import fcntl
 except ImportError:
@@ -125,6 +126,7 @@ class FingerprintEngine:
 
     def __init__(self, db_path: Path = FINGERPRINT_DB_PATH):
         self.db_path = db_path
+        self._lock = threading.Lock()
         self._db: dict[str, dict[str, FingerprintRecord]] = {}  # task_id -> fingerprint -> record
         self._load_db()
 
@@ -192,51 +194,54 @@ class FingerprintEngine:
           - First: 100% reward
           - Subsequent: 10% reward
         """
-        task_db = self._db.get(task_id, {})
+        with self._lock:
+            task_db = self._db.get(task_id, {})
 
-        if fingerprint in task_db:
-            record = task_db[fingerprint]
-            record.submission_count += 1
+            if fingerprint in task_db:
+                record = task_db[fingerprint]
+                record.submission_count += 1
+                self._save_db()
+
+                return DedupResult(
+                    fingerprint=fingerprint,
+                    is_duplicate=True,
+                    reward_multiplier=DUPLICATE_REWARD_MULTIPLIER,
+                    first_submission_miner=record.miner_address,
+                    first_submission_time=record.first_seen_at,
+                    submission_number=record.submission_count,
+                )
+
+            # First submission
+            record = FingerprintRecord(
+                fingerprint=fingerprint,
+                task_id=task_id,
+                miner_address=miner_address,
+                first_seen_at=time.time(),
+            )
+
+            if task_id not in self._db:
+                self._db[task_id] = {}
+            self._db[task_id][fingerprint] = record
             self._save_db()
 
             return DedupResult(
                 fingerprint=fingerprint,
-                is_duplicate=True,
-                reward_multiplier=DUPLICATE_REWARD_MULTIPLIER,
-                first_submission_miner=record.miner_address,
+                is_duplicate=False,
+                reward_multiplier=FULL_REWARD_MULTIPLIER,
+                first_submission_miner=miner_address,
                 first_submission_time=record.first_seen_at,
-                submission_number=record.submission_count,
-            )
-
-        # First submission
-        record = FingerprintRecord(
-            fingerprint=fingerprint,
-            task_id=task_id,
-            miner_address=miner_address,
-            first_seen_at=time.time(),
-        )
-
-        if task_id not in self._db:
-            self._db[task_id] = {}
-        self._db[task_id][fingerprint] = record
-        self._save_db()
-
-        return DedupResult(
-            fingerprint=fingerprint,
-            is_duplicate=False,
-            reward_multiplier=FULL_REWARD_MULTIPLIER,
-            first_submission_miner=miner_address,
-            first_submission_time=record.first_seen_at,
-            submission_number=1,
+                submission_number=1,
         )
 
     def get_task_fingerprints(self, task_id: str) -> list[str]:
         """List all unique fingerprints for a task."""
-        return list(self._db.get(task_id, {}).keys())
+        with self._lock:
+            return list(self._db.get(task_id, {}).keys())
 
     def get_fingerprint_count(self, task_id: str) -> int:
         """Count unique fingerprints for a task."""
-        return len(self._db.get(task_id, {}))
+        with self._lock:
+            return len(self._db.get(task_id, {}))
 
     # ── Persistence (concurrency-safe) ──────────────────────────────────
 
@@ -312,9 +317,10 @@ class FingerprintEngine:
 
     def reset_db(self):
         """Clear all stored fingerprints. For testing only."""
-        self._db = {}
-        if self.db_path.exists():
-            self.db_path.unlink()
+        with self._lock:
+            self._db = {}
+            if self.db_path.exists():
+                self.db_path.unlink()
 
     def prune(self, max_age_seconds: float = 30 * 24 * 3600) -> int:
         """Remove fingerprint records older than *max_age_seconds*.
@@ -322,25 +328,26 @@ class FingerprintEngine:
         Returns the number of pruned records.  Default retention is 30 days.
         This prevents the JSON DB from growing unboundedly.
         """
-        cutoff = time.time() - max_age_seconds
-        pruned = 0
-        empty_tasks: list[str] = []
+        with self._lock:
+            cutoff = time.time() - max_age_seconds
+            pruned = 0
+            empty_tasks: list[str] = []
 
-        for task_id, fps in self._db.items():
-            stale_keys = [
-                fp for fp, rec in fps.items()
-                if rec.first_seen_at < cutoff
-            ]
-            for fp in stale_keys:
-                del fps[fp]
-                pruned += 1
-            if not fps:
-                empty_tasks.append(task_id)
+            for task_id, fps in self._db.items():
+                stale_keys = [
+                    fp for fp, rec in fps.items()
+                    if rec.first_seen_at < cutoff
+                ]
+                for fp in stale_keys:
+                    del fps[fp]
+                    pruned += 1
+                if not fps:
+                    empty_tasks.append(task_id)
 
-        for task_id in empty_tasks:
-            del self._db[task_id]
+            for task_id in empty_tasks:
+                del self._db[task_id]
 
-        if pruned:
-            self._save_db()
+            if pruned:
+                self._save_db()
 
-        return pruned
+            return pruned

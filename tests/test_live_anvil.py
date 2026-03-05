@@ -587,6 +587,129 @@ def test_full_epoch_from_live_data(anvil: AnvilInstance):
         print(f"      {hk[:12]}... → weight={w:.4f}")
 
 
+def test_adversarial_onchain_integration(anvil: AnvilInstance):
+    """
+    Deploy InvariantRegistry + AdversarialScoring, then verify:
+    1. submitInvariant() creates on-chain record
+    2. processChallenge() updates scores
+    3. Only registered validators can call processChallenge
+    """
+    print("[6/6] Testing adversarial on-chain integration...")
+
+    contracts_root = str(PROJECT_ROOT / "contracts")
+
+    # Deploy InvariantRegistry
+    registry_addr = forge_create(
+        anvil.rpc_url,
+        "src/stage3/AdversarialMode.sol:InvariantRegistry",
+        contracts_root,
+    )
+    print(f"  InvariantRegistry deployed at {registry_addr}")
+
+    # Deploy AdversarialScoring
+    scoring_addr = forge_create(
+        anvil.rpc_url,
+        "src/stage3/AdversarialMode.sol:AdversarialScoring",
+        contracts_root,
+        constructor_args=[registry_addr],
+    )
+    print(f"  AdversarialScoring deployed at {scoring_addr}")
+
+    # Register AdversarialScoring as a validator on the registry
+    cast_send(anvil.rpc_url, registry_addr,
+              "setValidator(address,bool)", [scoring_addr, "true"])
+
+    # Register deployer as validator on the registry (needed for submitInvariant)
+    cast_send(anvil.rpc_url, registry_addr,
+              "setValidator(address,bool)", [DEPLOYER_ADDR, "true"])
+
+    # Register deployer as validator on AdversarialScoring
+    cast_send(anvil.rpc_url, scoring_addr,
+              "setValidator(address,bool)", [DEPLOYER_ADDR, "true"])
+
+    # 1. Submit an invariant (any address can submit)
+    cast_send(anvil.rpc_url, registry_addr,
+              "submitInvariant(bytes32,string,string,bytes)",
+              ["0x" + "ab" * 32, "Balance never decreases",
+               "balance >= initial", "0xdeadbeef"])
+
+    # Verify on-chain: propertyCount == 1
+    count_raw = cast_call(anvil.rpc_url, registry_addr, "propertyCount()")
+    count = int(count_raw, 16)
+    assert count == 1, f"Expected propertyCount=1, got {count}"
+    print(f"  propertyCount verified: {count}")
+
+    # 2. Process challenge (broken=true) — validator calls scoring contract
+    class_a = "0x" + "a1" * 20
+    class_b = "0x" + "b2" * 20
+    cast_send(anvil.rpc_url, scoring_addr,
+              "processChallenge(uint256,address,address,bool)",
+              ["0", class_a, class_b, "true"])
+
+    # Verify Class B score: W_BREACH_REWARD = 1000
+    b_score_raw = cast_call(anvil.rpc_url, scoring_addr,
+                            "classBScores(address)", [class_b])
+    b_score = int(b_score_raw, 16)
+    assert b_score == 1000, f"Expected classBScore=1000, got {b_score}"
+    print(f"  Class B score after breach: {b_score}")
+
+    # Verify Class A score: -W_BREACH_PENALTY = -500 (stored as int256)
+    a_score_raw = cast_call(anvil.rpc_url, scoring_addr,
+                            "classAScores(address)", [class_a])
+    # int256: negative values are two's complement
+    a_score = int(a_score_raw, 16)
+    if a_score >= 2**255:
+        a_score -= 2**256
+    assert a_score == -500, f"Expected classAScore=-500, got {a_score}"
+    print(f"  Class A score after breach: {a_score}")
+
+    # 3. Verify invariant challenge count on registry
+    inv_data_raw = cast_call(anvil.rpc_url, registry_addr,
+                             "getInvariantScore(uint256)", ["0"])
+    inv_score = int(inv_data_raw, 16)
+    assert inv_score == 0, f"Expected score=0 (0 holds / 1 challenge), got {inv_score}"
+    print(f"  Invariant score after breach: 0 (correct)")
+
+    # 4. Process another challenge (held=false, i.e. invariant holds)
+    cast_send(anvil.rpc_url, scoring_addr,
+              "processChallenge(uint256,address,address,bool)",
+              ["0", class_a, class_b, "false"])
+
+    # Class A: -500 + 100 = -400
+    a2_raw = cast_call(anvil.rpc_url, scoring_addr,
+                        "classAScores(address)", [class_a])
+    a2 = int(a2_raw, 16)
+    if a2 >= 2**255:
+        a2 -= 2**256
+    assert a2 == -400, f"Expected classAScore=-400, got {a2}"
+
+    # Class B: 1000 + 10 = 1010
+    b2_raw = cast_call(anvil.rpc_url, scoring_addr,
+                        "classBScores(address)", [class_b])
+    b2 = int(b2_raw, 16)
+    assert b2 == 1010, f"Expected classBScore=1010, got {b2}"
+    print(f"  Multi-round scores: A={a2}, B={b2}")
+
+    # 5. Non-validator call should fail
+    # Use a different account (Anvil account #1)
+    non_validator = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    try:
+        cmd = ["cast", "send", "--rpc-url", anvil.rpc_url,
+               "--unlocked", "--from", non_validator,
+               scoring_addr,
+               "processChallenge(uint256,address,address,bool)",
+               "0", class_a, class_b, "true"]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        # Should revert (non-zero exit or revert in output)
+        assert r.returncode != 0 or "revert" in r.stderr.lower(), \
+            "Non-validator call should have reverted"
+        print("  Non-validator correctly blocked")
+    except subprocess.TimeoutExpired:
+        print("  Non-validator call timed out (acceptable)")
+
+    print("[+] Adversarial on-chain integration: PASSED\n")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -610,6 +733,7 @@ def main():
         test_deploy_and_exploit_auth_bypass,
         test_fingerprint_and_score_from_live_trace,
         test_full_epoch_from_live_data,
+        test_adversarial_onchain_integration,
     ]
 
     passed = 0

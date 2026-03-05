@@ -35,9 +35,11 @@ contract Deploy is Script {
             address(invariantRegistry)
         );
 
-        // Wire up: set deployer as validator on both registries
+        // Wire up: set deployer as validator on all registries
         registry.setValidator(deployer, true);
         exploitRegistry.setValidator(deployer, true);
+        invariantRegistry.setValidator(deployer, true);
+        adversarialScoring.setValidator(deployer, true);
 
         vm.stopBroadcast();
 

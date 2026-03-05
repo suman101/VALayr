@@ -160,10 +160,36 @@ echo "$DEPLOY_OUTPUT" | grep "Deployed\|== Logs ==" | head -10
 echo ""
 echo "[*] Parsing deployed addresses..."
 
-parse_address() {
+# Try JSON broadcast artifacts first (most reliable), fall back to log grep
+BROADCAST_JSON="$CONTRACTS_DIR/broadcast/Deploy.s.sol/$CHAIN_ID/run-latest.json"
+
+parse_address_json() {
+    # Parse from forge broadcast JSON artifacts using jq
+    local label="$1"
+    local addr=""
+    if [[ -f "$BROADCAST_JSON" ]] && command -v jq &>/dev/null; then
+        addr=$(jq -r --arg name "$label" \
+            '.transactions[] | select(.contractName == $name and .transactionType == "CREATE") | .contractAddress' \
+            "$BROADCAST_JSON" 2>/dev/null | head -1)
+    fi
+    echo "$addr"
+}
+
+parse_address_grep() {
+    # Fallback: parse from forge log output via grep
     local label="$1"
     local addr
     addr=$(echo "$DEPLOY_OUTPUT" | grep -i "$label" | grep -oE '0x[0-9a-fA-F]{40}' | head -1 || echo "")
+    echo "$addr"
+}
+
+parse_address() {
+    local label="$1"
+    local addr
+    addr=$(parse_address_json "$label")
+    if [[ -z "$addr" || "$addr" == "null" ]]; then
+        addr=$(parse_address_grep "$label")
+    fi
     echo "$addr"
 }
 

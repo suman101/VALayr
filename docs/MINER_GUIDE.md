@@ -558,3 +558,41 @@ python3 -m miner.cli scores
 ---
 
 _For developer documentation (contributing code to VALayr itself), see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)._
+
+---
+
+## Stage 3: Adversarial Invariant Discovery
+
+Stage 3 introduces a two-class miner system. Miners can participate as **Class A** (invariant writers) or **Class B** (exploit writers).
+
+### Class A — Invariant Writers
+
+Class A miners write safety invariants for target contracts. An invariant is a property that should always hold (e.g., "total supply never decreases"). Invariants are submitted on-chain via `InvariantRegistry.submitInvariant()`.
+
+**Scoring:**
+
+- If your invariant **holds** against a Class B challenge: **+100 points** (W_HOLD_REWARD)
+- If your invariant is **broken**: **-500 points** (W_BREACH_PENALTY)
+- Score has a floor of `MIN_SCORE` to prevent unbounded negatives
+
+**Strategy:** Write invariants that are true and hard to break. Trivially true invariants (e.g., "1 == 1") earn zero challenges and no score.
+
+### Class B — Exploit Writers (Traditional)
+
+Class B miners write exploits targeting submitted invariants. The goal is to break as many invariants as possible.
+
+**Scoring:**
+
+- Breaking an invariant: **+1000 points** (W_BREACH_REWARD)
+- Failed challenge (invariant holds): **+10 points** (W_FAILED_CHALLENGE) — small consolation
+
+### Workflow
+
+1. Class A submits an invariant via `InvariantRegistry.submitInvariant()`
+2. Class B submits an exploit targeting that invariant
+3. Validator runs `AdversarialScoring.processChallenge()`:
+   - Deploys the target contract in a sandboxed Anvil instance
+   - Executes the Class B exploit
+   - Checks if the invariant holds or is broken
+   - Updates scores for both miners
+4. Both classes earn TAO based on their accumulated scores

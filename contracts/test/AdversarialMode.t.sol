@@ -21,10 +21,16 @@ contract AdversarialModeTest is Test {
         registry = new InvariantRegistry();
         scoring = new AdversarialScoring(address(registry));
 
-        // Register the AdversarialScoring contract as a validator
+        // Register the AdversarialScoring contract as a validator on the registry
         // (required for processChallenge → recordChallenge to succeed)
         registry.setValidator(address(scoring), true);
         registry.setValidator(validator1, true);
+        registry.setValidator(classA, true); // Class A submits invariants
+
+        // Register test contract as a validator on scoring
+        // (processChallenge now requires onlyValidator, not onlyOwner)
+        scoring.setValidator(address(this), true);
+        scoring.setValidator(validator1, true);
     }
 
     // ── InvariantRegistry ───────────────────────────────────────────────
@@ -125,6 +131,13 @@ contract AdversarialModeTest is Test {
         registry.setValidator(address(0x123), true);
     }
 
+    function test_submitInvariant_nonValidator_reverts() public {
+        address nobody = address(0x999);
+        vm.prank(nobody);
+        vm.expectRevert(Ownable2Step.Unauthorized.selector);
+        registry.submitInvariant(TARGET_HASH, "inv", "cond", hex"");
+    }
+
     function test_transferOwnership_zeroAddress_reverts() public {
         vm.expectRevert(Ownable2Step.ZeroAddress.selector);
         registry.transferOwnership(address(0));
@@ -183,7 +196,7 @@ contract AdversarialModeTest is Test {
         assertEq(scoring.classBScores(classB), 10); // W_FAILED_CHALLENGE
     }
 
-    function test_processChallenge_nonOwner_reverts() public {
+    function test_processChallenge_nonValidator_reverts() public {
         vm.prank(classA);
         uint256 id = registry.submitInvariant(
             TARGET_HASH,
@@ -195,6 +208,67 @@ contract AdversarialModeTest is Test {
         vm.prank(address(0xBEEF));
         vm.expectRevert(Ownable2Step.Unauthorized.selector);
         scoring.processChallenge(id, classA, classB, true);
+    }
+
+    function test_processChallenge_owner_without_validator_role_reverts()
+        public
+    {
+        // Deploy fresh scoring without registering owner as validator
+        AdversarialScoring freshScoring = new AdversarialScoring(
+            address(registry)
+        );
+        registry.setValidator(address(freshScoring), true);
+
+        vm.prank(classA);
+        uint256 id = registry.submitInvariant(
+            TARGET_HASH,
+            "inv",
+            "cond",
+            hex""
+        );
+
+        // Owner is address(this) but NOT a validator on freshScoring
+        vm.expectRevert(Ownable2Step.Unauthorized.selector);
+        freshScoring.processChallenge(id, classA, classB, true);
+    }
+
+    function test_processChallenge_succeeds_for_registered_validator() public {
+        vm.prank(classA);
+        uint256 id = registry.submitInvariant(
+            TARGET_HASH,
+            "inv",
+            "cond",
+            hex""
+        );
+
+        vm.prank(validator1);
+        scoring.processChallenge(id, classA, classB, true);
+
+        assertEq(scoring.classBScores(classB), 1000);
+        assertEq(scoring.classAScores(classA), -500);
+    }
+
+    function test_scoring_setValidator_nonOwner_reverts() public {
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(Ownable2Step.Unauthorized.selector);
+        scoring.setValidator(address(0x123), true);
+    }
+
+    function test_scoring_removeValidator_blocks_processChallenge() public {
+        vm.prank(classA);
+        uint256 id = registry.submitInvariant(
+            TARGET_HASH,
+            "inv",
+            "cond",
+            hex""
+        );
+
+        // Remove validator1
+        scoring.setValidator(validator1, false);
+
+        vm.prank(validator1);
+        vm.expectRevert(Ownable2Step.Unauthorized.selector);
+        scoring.processChallenge(id, classA, classB, false);
     }
 
     function test_scoring_transferOwnership_zeroAddress_reverts() public {
@@ -227,5 +301,25 @@ contract AdversarialModeTest is Test {
         uint256 invScore = registry.getInvariantScore(id);
         uint256 expected = (uint256(2) * 1e18) / uint256(3);
         assertEq(invScore, expected);
+    }
+
+    function test_scoreFloor_classA() public {
+        vm.prank(classA);
+        uint256 id = registry.submitInvariant(
+            TARGET_HASH,
+            "inv",
+            "cond",
+            hex""
+        );
+
+        int256 minScore = scoring.MIN_SCORE();
+
+        // Repeatedly penalize classA to drive score very low
+        for (uint256 i = 0; i < 500; i++) {
+            scoring.processChallenge(id, classA, classB, true);
+        }
+
+        // Score should be clamped at MIN_SCORE, not lower
+        assertGe(scoring.classAScores(classA), minScore);
     }
 }

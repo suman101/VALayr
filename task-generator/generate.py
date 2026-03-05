@@ -162,6 +162,15 @@ VULNERABILITY_TEMPLATES: dict[str, list[str]] = {
     "flash-loan": [
         "flash_loan_price_manipulation.sol",
     ],
+    "token-race": [
+        "erc20_approve_race.sol",
+    ],
+    "signature-replay": [
+        "signature_replay.sol",
+    ],
+    "create2-frontrun": [
+        "create2_frontrun.sol",
+    ],
     # ── Stage 2: Multi-contract systems ──────────────────────────────────
     "flash-loan-system": [
         "stage2/flash_loan_system.sol",

@@ -102,6 +102,19 @@ class SlashEvent:
     evidence_hashes: list[str] = field(default_factory=list)
 
 
+@dataclass
+class AdversarialConsensusResult:
+    """Result of adversarial consensus for a challenge submission."""
+    invariant_id: int
+    challenge_id: str
+    consensus_outcome: str = ""  # "INVARIANT_HELD" or "INVARIANT_BROKEN"
+    agreement_ratio: float = 0.0
+    quorum_size: int = 0
+    agreeing_validators: list[str] = field(default_factory=list)
+    diverging_validators: list[str] = field(default_factory=list)
+    votes: list[dict] = field(default_factory=list)
+
+
 # ── Anti-Collusion Engine ────────────────────────────────────────────────────
 
 class AntiCollusionEngine:
@@ -295,6 +308,102 @@ class AntiCollusionEngine:
 
         self.consensus_history.append(result)
         # Prune history to prevent unbounded memory growth
+        _MAX_HISTORY = 10_000
+        if len(self.consensus_history) > _MAX_HISTORY:
+            self.consensus_history = self.consensus_history[-_MAX_HISTORY:]
+        self._save_state()
+
+        return result
+
+    # ── Adversarial Challenge Consensus ─────────────────────────────────
+
+    def compute_adversarial_consensus(
+        self, invariant_id: int, challenge_id: str, votes: list[dict]
+    ) -> AdversarialConsensusResult:
+        """
+        Compute multi-validator consensus for an adversarial challenge.
+
+        Each vote: {validator_hotkey, outcome}
+        where outcome is "INVARIANT_HELD" or "INVARIANT_BROKEN".
+
+        Uses the same quorum, threshold, and divergence tracking as exploit
+        consensus, but with adversarial-specific vote types.
+        """
+        result = AdversarialConsensusResult(
+            invariant_id=invariant_id,
+            challenge_id=challenge_id,
+            quorum_size=len(votes),
+        )
+
+        if len(votes) < MIN_QUORUM:
+            result.consensus_outcome = "NO_QUORUM"
+            return result
+
+        # Tally outcomes
+        outcome_tally: dict[str, list[str]] = {}
+        for vote in votes:
+            hotkey = vote["validator_hotkey"]
+            outcome = vote["outcome"]
+            outcome_tally.setdefault(outcome, []).append(hotkey)
+            result.votes.append(vote)
+
+        # Find majority at consensus threshold
+        total_votes = len(votes)
+        majority_outcome = None
+        majority_validators: list[str] = []
+
+        for outcome, validators in outcome_tally.items():
+            ratio = len(validators) / total_votes
+            if ratio >= CONSENSUS_THRESHOLD:
+                majority_outcome = outcome
+                majority_validators = validators
+                result.agreement_ratio = ratio
+                break
+
+        if majority_outcome is None:
+            # No consensus — use plurality
+            majority_outcome = max(outcome_tally, key=lambda o: len(outcome_tally[o]))
+            majority_validators = outcome_tally[majority_outcome]
+            result.agreement_ratio = len(majority_validators) / total_votes
+
+        result.consensus_outcome = majority_outcome
+        result.agreeing_validators = majority_validators
+
+        all_voters = {v["validator_hotkey"] for v in votes}
+        result.diverging_validators = list(all_voters - set(majority_validators))
+
+        # Update validator divergence tracking (shared with exploit consensus)
+        for hotkey in result.agreeing_validators:
+            if hotkey in self.validators:
+                v = self.validators[hotkey]
+                v.total_validations += 1
+                v.agreements += 1
+                v.recent_results.append(True)
+                v.recent_results = v.recent_results[-DIVERGENCE_WINDOW:]
+                v.last_active = time.time()
+
+        for hotkey in result.diverging_validators:
+            if hotkey in self.validators:
+                v = self.validators[hotkey]
+                v.total_validations += 1
+                v.divergences += 1
+                v.recent_results.append(False)
+                v.recent_results = v.recent_results[-DIVERGENCE_WINDOW:]
+                v.last_active = time.time()
+
+        self._check_slashing()
+
+        self.consensus_history.append(ConsensusResult(
+            task_id=f"adversarial:{challenge_id}",
+            submission_hash=f"inv:{invariant_id}",
+            consensus_result=majority_outcome,
+            agreement_ratio=result.agreement_ratio,
+            quorum_size=result.quorum_size,
+            agreeing_validators=result.agreeing_validators,
+            diverging_validators=result.diverging_validators,
+            votes=result.votes,
+        ))
+
         _MAX_HISTORY = 10_000
         if len(self.consensus_history) > _MAX_HISTORY:
             self.consensus_history = self.consensus_history[-_MAX_HISTORY:]

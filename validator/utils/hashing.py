@@ -11,7 +11,13 @@ hashes match Solidity's `keccak256()` exactly.
 
 from __future__ import annotations
 
+import logging
 import subprocess
+
+logger = logging.getLogger(__name__)
+
+# Known test vector: keccak256(b"hello")
+_KNOWN_HELLO_HASH = "0x1c8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8"
 
 
 def keccak256(data: bytes) -> str:
@@ -47,3 +53,22 @@ def keccak256(data: bytes) -> str:
         "Cannot compute Ethereum keccak256: install pycryptodome "
         "(pip install pycryptodome) or ensure `cast` is on PATH"
     )
+
+
+def _validate_backend() -> None:
+    """Verify the active keccak256 backend produces correct results."""
+    result = keccak256(b"hello")
+    if result != _KNOWN_HELLO_HASH:
+        raise RuntimeError(
+            f"keccak256 backend produces incorrect hash for b'hello': "
+            f"got {result}, expected {_KNOWN_HELLO_HASH}"
+        )
+    # Log which backend is active
+    try:
+        from Crypto.Hash import keccak as _keccak  # noqa: F401
+        logger.info("keccak256 backend: pycryptodome (preferred)")
+    except ImportError:
+        logger.info("keccak256 backend: cast CLI (fallback)")
+
+
+_validate_backend()

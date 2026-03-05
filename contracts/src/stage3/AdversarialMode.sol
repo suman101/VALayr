@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "../Ownable2Step.sol";
+import "../Pausable.sol";
 
 /// @title AdversarialMode — Stage 3 invariant writer vs. breaker system.
 /// @dev Month 5-6. Two miner classes compete:
@@ -14,7 +14,7 @@ import "../Ownable2Step.sol";
 /// This is the actual moat. Evolutionary pressure.
 
 /// ── Invariant Registry ──────────────────────────────────────────────────────
-contract InvariantRegistry is Ownable2Step {
+contract InvariantRegistry is Pausable {
     struct Invariant {
         address submitter; // Class A miner
         bytes32 targetContractHash; // Which contract this invariant covers
@@ -61,7 +61,7 @@ contract InvariantRegistry is Ownable2Step {
         string calldata description,
         string calldata solidityCondition,
         bytes calldata compiledCheck
-    ) external returns (uint256 id) {
+    ) external onlyValidator whenNotPaused returns (uint256 id) {
         id = propertyCount++;
         properties[id] = Invariant({
             submitter: msg.sender,
@@ -80,7 +80,10 @@ contract InvariantRegistry is Ownable2Step {
 
     /// @notice Record challenge result (from validator consensus).
     /// @param broken True if exploit broke the invariant (Class B wins).
-    function recordChallenge(uint256 id, bool broken) external onlyValidator {
+    function recordChallenge(
+        uint256 id,
+        bool broken
+    ) external onlyValidator whenNotPaused {
         Invariant storage inv = properties[id];
         if (!inv.active) revert InvariantInactive();
 
@@ -118,7 +121,7 @@ contract InvariantRegistry is Ownable2Step {
 
 /// ── Adversarial Scoring ─────────────────────────────────────────────────────
 /// @dev Computes rewards for both miner classes.
-contract AdversarialScoring is Ownable2Step {
+contract AdversarialScoring is Pausable {
     InvariantRegistry public registry;
 
     // Scoring weights for Class A (invariant writers)
@@ -129,13 +132,29 @@ contract AdversarialScoring is Ownable2Step {
     int256 public constant W_BREACH_REWARD = 1000; // Points per successful breach
     int256 public constant W_FAILED_CHALLENGE = 10; // Small consolation for trying
 
+    // Score floor to prevent unbounded negatives (overflow-safe)
+    int256 public constant MIN_SCORE = type(int256).min / 2;
+
     mapping(address => int256) public classAScores;
     mapping(address => int256) public classBScores;
+    mapping(address => bool) public validators;
 
     event ScoreUpdated(address indexed miner, string class_, int256 newScore);
+    event ValidatorUpdated(address indexed validator, bool status);
 
     constructor(address _registry) Ownable2Step() {
         registry = InvariantRegistry(_registry);
+    }
+
+    modifier onlyValidator() {
+        if (!validators[msg.sender]) revert Unauthorized();
+        _;
+    }
+
+    /// @notice Add or remove a validator address.
+    function setValidator(address v, bool status) external onlyOwner {
+        validators[v] = status;
+        emit ValidatorUpdated(v, status);
     }
 
     /// @notice Update scores after a challenge round.
@@ -144,7 +163,7 @@ contract AdversarialScoring is Ownable2Step {
         address classAMiner, // Invariant submitter
         address classBMiner, // Exploit submitter
         bool broken
-    ) external onlyOwner {
+    ) external onlyValidator whenNotPaused {
         // Record challenge result in the invariant registry
         registry.recordChallenge(invariantId, broken);
 
@@ -152,6 +171,8 @@ contract AdversarialScoring is Ownable2Step {
             // Class B wins: exploit broke the invariant
             classBScores[classBMiner] += W_BREACH_REWARD;
             classAScores[classAMiner] -= W_BREACH_PENALTY;
+            if (classAScores[classAMiner] < MIN_SCORE)
+                classAScores[classAMiner] = MIN_SCORE;
             emit ScoreUpdated(classBMiner, "B", classBScores[classBMiner]);
             emit ScoreUpdated(classAMiner, "A", classAScores[classAMiner]);
         } else {
@@ -161,5 +182,13 @@ contract AdversarialScoring is Ownable2Step {
             emit ScoreUpdated(classAMiner, "A", classAScores[classAMiner]);
             emit ScoreUpdated(classBMiner, "B", classBScores[classBMiner]);
         }
+    }
+
+    function getClassAScore(address miner) external view returns (int256) {
+        return classAScores[miner];
+    }
+
+    function getClassBScore(address miner) external view returns (int256) {
+        return classBScores[miner];
     }
 }

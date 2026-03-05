@@ -80,8 +80,10 @@ class _MetricsStore:
                 if buf:
                     sorted_buf = sorted(buf)
                     n = len(sorted_buf)
+                    total = sum(sorted_buf)
                     snap[f"{name}_count"] = n
-                    snap[f"{name}_mean"] = round(sum(sorted_buf) / n, 2)
+                    snap[f"{name}_sum"] = round(total, 2)
+                    snap[f"{name}_mean"] = round(total / n, 2)
                     snap[f"{name}_p50"] = sorted_buf[(n - 1) // 2]
                     snap[f"{name}_p99"] = sorted_buf[min(n - 1, int(n * 0.99))]
             snap["uptime_seconds"] = round(time.monotonic() - self._start_time, 1)

@@ -487,12 +487,44 @@ Zero-dependency HTTP server on port 9946.
 
 ### 6.2 Contract Interactions
 
-| Contract             | Access Control                                                                                            | Key Invariants                                                                                |
-| -------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **CommitReveal**     | `owner` opens tasks; anyone commits/reveals                                                               | Hash must match on reveal; time windows enforced by `block.timestamp`                         |
-| **ExploitRegistry**  | `onlyValidator` records exploits                                                                          | Minimum quorum of 5 validators; duplicate detection via fingerprint                           |
-| **ProtocolRegistry** | Protocols register with bounty; `onlyValidator` records exploits; anyone triggers payout after disclosure | 72-hour disclosure window; 90% max reward cap; bounty withdrawal blocked during active claims |
-| **AdversarialMode**  | `onlyOwner` (Stage 3)                                                                                     | Invariant writers vs. breakers — evolutionary pressure design                                 |
+| Contract             | Access Control                                                                                            | Key Invariants                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **CommitReveal**     | `owner` opens tasks; anyone commits/reveals                                                               | Hash must match on reveal; time windows enforced by `block.timestamp`                                   |
+| **ExploitRegistry**  | `onlyValidator` records exploits                                                                          | Minimum quorum of 5 validators; duplicate detection via fingerprint                                     |
+| **ProtocolRegistry** | Protocols register with bounty; `onlyValidator` records exploits; anyone triggers payout after disclosure | 72-hour disclosure window; 90% max reward cap; bounty withdrawal blocked during active claims           |
+| **AdversarialMode**  | `onlyValidator` on InvariantRegistry + AdversarialScoring; `onlyOwner` for admin                          | Invariant writers vs. breakers — evolutionary pressure; score floor at MIN_SCORE; Pausable in emergency |
+
+### 6.3 Stage 3 Pipeline — Adversarial Invariant Discovery
+
+Stage 3 introduces a two-class miner system where Class A miners write invariants and Class B miners try to break them.
+
+```
+┌────────────────────┐         ┌─────────────────────────┐
+│  Class A Miner     │         │  Class B Miner          │
+│  (Invariant Writer)│         │  (Exploit Writer)       │
+│                    │         │                         │
+│  submitInvariant() │         │  Submits exploit that   │
+│  → InvariantRegistry        │  targets invariant      │
+└────────┬───────────┘         └──────────┬──────────────┘
+         │                                │
+         ▼                                ▼
+┌─────────────────────────────────────────────────────────┐
+│               Validator (processChallenge)               │
+│                                                          │
+│  1. Deploys target contract in Anvil sandbox             │
+│  2. Executes Class B exploit against invariant           │
+│  3. Checks if invariant holds or is broken               │
+│  4. Calls AdversarialScoring.processChallenge()          │
+│     which updates scores and records on InvariantRegistry│
+└─────────────────────────────────────────────────────────┘
+
+Scoring Constants (AdversarialScoring):
+  W_HOLD_REWARD      = 100    Class A reward when invariant holds
+  W_BREACH_PENALTY   = 500    Class A penalty when invariant is broken
+  W_BREACH_REWARD    = 1000   Class B reward for breaking invariant
+  W_FAILED_CHALLENGE = 10     Class B consolation for trying
+  MIN_SCORE = type(int256).min / 2   Floor to prevent overflow
+```
 
 ---
 

@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import time
+import threading
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
@@ -178,6 +179,7 @@ class Orchestrator:
 
         # Epoch overlap guard
         self._last_closed_epoch: int = -1
+        self._epoch_lock = threading.Lock()
 
     # ── Task Corpus ───────────────────────────────────────────────────────
 
@@ -641,7 +643,28 @@ class Orchestrator:
         Close current epoch and compute weights.
 
         Called periodically (e.g., every ~1 hour on Bittensor).
+        Uses a lock to prevent concurrent epoch processing.
         """
+        if not self._epoch_lock.acquire(blocking=False):
+            logger.warning(
+                "Epoch %d blocked — another epoch is still being processed",
+                epoch_number,
+            )
+            return EpochResult(
+                epoch_number=epoch_number,
+                start_block=start_block,
+                end_block=end_block,
+                total_submissions=0,
+                total_valid=0,
+                weights={},
+            )
+        try:
+            return self._close_epoch_inner(epoch_number, start_block, end_block)
+        finally:
+            self._epoch_lock.release()
+
+    def _close_epoch_inner(self, epoch_number: int, start_block: int, end_block: int) -> EpochResult:
+        """Internal epoch close logic, called under lock."""
         if epoch_number <= self._last_closed_epoch:
             logger.warning(
                 "Epoch %d already closed (last=%d) — skipping",
@@ -703,7 +726,7 @@ class Orchestrator:
         report_path = self.reports_dir / f"{result.task_id[:16]}_{result.miner_address[:8]}_{time.time_ns()}.json"
         report_path.write_text(json.dumps(result.to_dict(), indent=2))
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset all state. For testing only."""
         self.fingerprinter.reset_db()
         self.incentive = SubnetIncentiveAdapter()
@@ -719,7 +742,7 @@ class Orchestrator:
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
