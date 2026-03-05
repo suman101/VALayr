@@ -253,14 +253,14 @@ MINER                        VALIDATOR                         EVM CHAIN
 
 ## 9. Residual Risks & Recommendations
 
-| #   | Residual Risk                                                                                         | Recommendation                                                     | Priority |
-| --- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------- |
-| R-1 | **Reentrancy in `payExploitReward` / `withdrawBounty`** — uses `call{value}` without reentrancy guard | Add OpenZeppelin `ReentrancyGuard` or move to pull-payment pattern | High — _open_ |
+| #   | Residual Risk                                                                                         | Recommendation                                                                                                  | Priority                     |
+| --- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| R-1 | **Reentrancy in `payExploitReward` / `withdrawBounty`** — uses `call{value}` without reentrancy guard | Add OpenZeppelin `ReentrancyGuard` or move to pull-payment pattern                                              | High — _open_                |
 | R-2 | **Centralised ownership** — all contracts have a single `owner`                                       | Migrate to multi-sig or governance timelock before mainnet. Multi-sig deploy script added (`scripts/deploy.sh`) | High — _partially mitigated_ |
-| R-3 | ~~**Solidity compiler pinning**~~ — `solc_version = "0.8.28"` now pinned in `foundry.toml`            | ~~Pin `solc_version`~~ | ✅ Resolved |
-| R-4 | ~~**Validator key rotation**~~ — key rotation runbook added (`docs/runbooks/key-rotation.md`)         | ~~Implement key rotation~~ | ✅ Resolved |
-| R-5 | ~~**Fingerprint DB pruning**~~ — time-based pruning implemented in `FingerprintEngine.prune()`        | ~~Implement pruning~~ | ✅ Resolved |
-| R-6 | ~~**Epoch overlap race**~~ — epoch overlap guard added in `orchestrator.py` and `validator.py`         | ~~Add overlap guard~~ | ✅ Resolved |
+| R-3 | ~~**Solidity compiler pinning**~~ — `solc_version = "0.8.28"` now pinned in `foundry.toml`            | ~~Pin `solc_version`~~                                                                                          | ✅ Resolved                  |
+| R-4 | ~~**Validator key rotation**~~ — key rotation runbook added (`docs/runbooks/key-rotation.md`)         | ~~Implement key rotation~~                                                                                      | ✅ Resolved                  |
+| R-5 | ~~**Fingerprint DB pruning**~~ — time-based pruning implemented in `FingerprintEngine.prune()`        | ~~Implement pruning~~                                                                                           | ✅ Resolved                  |
+| R-6 | ~~**Epoch overlap race**~~ — epoch overlap guard added in `orchestrator.py` and `validator.py`        | ~~Add overlap guard~~                                                                                           | ✅ Resolved                  |
 
 ---
 

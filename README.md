@@ -27,13 +27,13 @@ VALayr incentivises miners to discover vulnerabilities in opt-in smart contracts
 
 ## Getting Started
 
-| I want to…                  | Start here                                        |
-| --------------------------- | ------------------------------------------------- |
-| **Mine** (find exploits)    | [Miner Guide](docs/MINER_GUIDE.md)               |
-| **Validate** (run a node)   | [Validator Guide](docs/VALIDATOR_GUIDE.md)        |
-| **Develop** (contribute)    | [Developer Guide](docs/DEVELOPER_GUIDE.md)        |
-| **Deploy** (production)     | [Deployment Guide](docs/DEPLOYMENT.md)            |
-| **Audit** (security review) | [Threat Model](docs/THREAT_MODEL.md)              |
+| I want to…                  | Start here                                 |
+| --------------------------- | ------------------------------------------ |
+| **Mine** (find exploits)    | [Miner Guide](docs/MINER_GUIDE.md)         |
+| **Validate** (run a node)   | [Validator Guide](docs/VALIDATOR_GUIDE.md) |
+| **Develop** (contribute)    | [Developer Guide](docs/DEVELOPER_GUIDE.md) |
+| **Deploy** (production)     | [Deployment Guide](docs/DEPLOYMENT.md)     |
+| **Audit** (security review) | [Threat Model](docs/THREAT_MODEL.md)       |
 
 ## Documentation
 

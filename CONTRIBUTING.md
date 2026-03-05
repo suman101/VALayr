@@ -17,12 +17,12 @@ Thank you for your interest in contributing to VALayr! This guide covers the dev
 
 ### Prerequisites
 
-| Tool    | Version            | Install                                                     |
-| ------- | ------------------ | ----------------------------------------------------------- |
-| Python  | ≥ 3.10             | [python.org](https://www.python.org/)                       |
+| Tool    | Version            | Install                                                                                  |
+| ------- | ------------------ | ---------------------------------------------------------------------------------------- |
+| Python  | ≥ 3.10             | [python.org](https://www.python.org/)                                                    |
 | Foundry | nightly-2024-12-01 | `curl -L https://foundry.paradigm.xyz \| bash && foundryup --version nightly-2024-12-01` |
-| Docker  | ≥ 24.0             | [docker.com](https://www.docker.com/)                       |
-| Git     | ≥ 2.30             | System package manager                                      |
+| Docker  | ≥ 24.0             | [docker.com](https://www.docker.com/)                                                    |
+| Git     | ≥ 2.30             | System package manager                                                                   |
 
 ### Quick Start
 

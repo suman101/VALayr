@@ -5,6 +5,21 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# ── Alertmanager Configuration ───────────────────────────────────────────────
+# SECURITY: Use HTTPS with TLS for alertmanager webhooks in production.
+# Configure alertmanager_config with:
+#   tls_config:
+#     cert_file: /etc/ssl/certs/alertmanager.crt
+#     key_file: /etc/ssl/private/alertmanager.key
+#     insecure_skip_verify: false
+# alerting:
+#   alertmanagers:
+#     - scheme: https
+#       tls_config:
+#         ca_file: /etc/ssl/certs/ca.crt
+#       static_configs:
+#         - targets: ["alertmanager:9093"]
+
 # ── Alert Rules ──────────────────────────────────────────────────────────────
 rule_files:
   - "alerts.yml"

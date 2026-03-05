@@ -685,9 +685,9 @@ _For security-related concerns, see [SECURITY.md](../SECURITY.md) and [THREAT_MO
 
 For incident response and operational procedures, see:
 
-| Runbook                                           | When to Use                                        |
-| ------------------------------------------------- | -------------------------------------------------- |
-| [Key Rotation](runbooks/key-rotation.md)          | Compromised or expired validator/deployer keys     |
-| [Epoch Stall](runbooks/epoch-stall.md)            | Epoch fails to close or weight-setting stalls      |
-| [Consensus Failure](runbooks/consensus-failure.md)| Validators cannot reach quorum on submissions      |
-| [Validator Drift](runbooks/validator-drift.md)    | Determinism check fails or validators give different results |
+| Runbook                                            | When to Use                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| [Key Rotation](runbooks/key-rotation.md)           | Compromised or expired validator/deployer keys               |
+| [Epoch Stall](runbooks/epoch-stall.md)             | Epoch fails to close or weight-setting stalls                |
+| [Consensus Failure](runbooks/consensus-failure.md) | Validators cannot reach quorum on submissions                |
+| [Validator Drift](runbooks/validator-drift.md)     | Determinism check fails or validators give different results |

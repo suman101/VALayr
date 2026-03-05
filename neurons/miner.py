@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import signal
+import subprocess
 import sys
 import time
 import traceback
@@ -226,14 +227,16 @@ class MinerNeuron:
 
                         # Save for tracking
                         self.prepare_exploit(task_id, adapted)
-                    except Exception as e:
+                    except (OSError, subprocess.SubprocessError, json.JSONDecodeError,
+                            ValueError, KeyError) as e:
                         logger.warning("    Submission failed: %s", e)
 
                     time.sleep(SUBMISSION_COOLDOWN)
 
             except KeyboardInterrupt:
                 break
-            except Exception as e:
+            except (OSError, subprocess.SubprocessError, json.JSONDecodeError,
+                    ValueError, KeyError) as e:
                 logger.error("Auto-mine error: %s", e, exc_info=True)
                 time.sleep(15)
 

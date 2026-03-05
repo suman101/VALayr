@@ -319,3 +319,63 @@ class TestMinerNeuronLifecycle:
         from neurons.miner import MinerNeuron
         neuron = MinerNeuron(mode="bittensor")
         assert neuron.mode == "local"
+
+
+class TestRetrySubprocess:
+    """Failure-path tests for validator.utils.retry.retry_subprocess."""
+
+    def test_timeout_raises_after_retries(self):
+        from validator.utils.retry import retry_subprocess
+
+        with pytest.raises(subprocess.TimeoutExpired):
+            retry_subprocess(
+                ["sleep", "60"],
+                max_retries=2,
+                backoff_base=0.01,
+                timeout=1,
+            )
+
+    def test_max_retries_exceeded(self):
+        from validator.utils.retry import retry_subprocess
+
+        with pytest.raises(RuntimeError, match="exit"):
+            retry_subprocess(
+                ["python3", "-c", "import sys; sys.exit(1)"],
+                max_retries=2,
+                backoff_base=0.01,
+                timeout=5,
+            )
+
+    def test_file_not_found_fails_fast(self):
+        from validator.utils.retry import retry_subprocess
+
+        with pytest.raises(FileNotFoundError):
+            retry_subprocess(
+                ["__nonexistent_binary_xyz__"],
+                max_retries=3,
+                backoff_base=0.01,
+                timeout=5,
+            )
+
+    def test_success_on_first_try(self):
+        from validator.utils.retry import retry_subprocess
+
+        result = retry_subprocess(
+            ["echo", "hello"],
+            max_retries=3,
+            backoff_base=0.01,
+            timeout=5,
+        )
+        assert result.returncode == 0
+        assert "hello" in result.stdout
+
+    def test_captures_stderr_on_failure(self):
+        from validator.utils.retry import retry_subprocess
+
+        with pytest.raises(RuntimeError, match="boom"):
+            retry_subprocess(
+                ["python3", "-c", "import sys; sys.stderr.write('boom'); sys.exit(1)"],
+                max_retries=1,
+                backoff_base=0.01,
+                timeout=5,
+            )

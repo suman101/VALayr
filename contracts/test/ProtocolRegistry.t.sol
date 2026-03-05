@@ -181,6 +181,40 @@ contract ProtocolRegistryTest is Test {
         registry.recordExploit(contractHash, fingerprint, MINER, 2e18);
     }
 
+    // ── Expiry Validation Tests ──────────────────────────────────────────
+
+    function test_registerContract_pastExpiry_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        // Warp to a realistic timestamp first
+        vm.warp(1700000000);
+        // expiresAt in the past
+        uint256 pastExpiry = block.timestamp - 1;
+        vm.expectRevert(ProtocolRegistry.InvalidExpiry.selector);
+        registry.registerContract{value: 0.01 ether}(address(dummy), pastExpiry);
+    }
+
+    function test_registerContract_currentTimestampExpiry_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        // expiresAt == block.timestamp (not strictly in the future)
+        vm.expectRevert(ProtocolRegistry.InvalidExpiry.selector);
+        registry.registerContract{value: 0.01 ether}(address(dummy), block.timestamp);
+    }
+
+    // ── Double Deactivation Tests ────────────────────────────────────────
+
+    function test_deactivateContract_twice_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 0.01 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+
+        // First deactivation succeeds
+        registry.deactivateContract(contractHash);
+
+        // Second deactivation reverts
+        vm.expectRevert(ProtocolRegistry.ContractNotActive.selector);
+        registry.deactivateContract(contractHash);
+    }
+
     function test_recordExploit_maxSeverity_succeeds() public {
         DummyTarget dummy = new DummyTarget();
         registry.registerContract{value: 10 ether}(address(dummy), 0);
@@ -191,6 +225,76 @@ contract ProtocolRegistryTest is Test {
         // Exactly 1e18 should succeed
         registry.recordExploit(contractHash, fingerprint, MINER, 1e18);
         assertEq(registry.getExploitCount(contractHash), 1);
+    }
+
+    // ── withdrawBounty Pagination Bypass Regression ─────────────────────
+
+    function test_withdrawBounty_startAtHistoryLength_reverts() public {
+        // Regression: startIndex == history.length must NOT bypass disclosure checks
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 10 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        // Record an exploit to create history entries
+        bytes32 fp = keccak256("exploit-bypass");
+        registry.recordExploit(contractHash, fp, MINER, 0.5e18);
+
+        // Deactivate
+        registry.deactivateContract(contractHash);
+
+        // Try to bypass by passing startIndex == history.length (1)
+        vm.expectRevert(ProtocolRegistry.InvalidStartIndex.selector);
+        registry.withdrawBounty(contractHash, 1);
+    }
+
+    function test_withdrawBounty_noClaims_succeeds() public {
+        // No claims — should withdraw immediately with startIndex=0
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 1 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+
+        registry.deactivateContract(contractHash);
+
+        uint256 balBefore = address(this).balance;
+        registry.withdrawBounty(contractHash, 0);
+        assertGt(address(this).balance, balBefore);
+    }
+
+    function test_withdrawBounty_noClaims_nonzeroStart_reverts() public {
+        // No claims + non-zero startIndex should fail
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 1 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+
+        registry.deactivateContract(contractHash);
+
+        vm.expectRevert(ProtocolRegistry.InvalidStartIndex.selector);
+        registry.withdrawBounty(contractHash, 1);
+    }
+
+    function testFuzz_withdrawBounty_startIndex(uint256 startIndex) public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 10 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        // Record 3 exploits
+        for (uint256 i = 0; i < 3; i++) {
+            bytes32 fp = keccak256(abi.encodePacked("fuzz-exploit-", i));
+            registry.recordExploit(contractHash, fp, MINER, 0.1e18);
+        }
+
+        registry.deactivateContract(contractHash);
+
+        // Warp past disclosure window
+        vm.warp(block.timestamp + 73 hours);
+
+        // Valid startIndex: 0, 1, 2; invalid: >= 3
+        if (startIndex >= 3) {
+            vm.expectRevert(ProtocolRegistry.InvalidStartIndex.selector);
+        }
+        registry.withdrawBounty(contractHash, startIndex);
     }
 
     receive() external payable {}

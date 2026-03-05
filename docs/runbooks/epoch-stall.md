@@ -30,12 +30,12 @@ btcli subnet metagraph --netuid <NETUID>
 
 ## Root Causes
 
-| Cause                        | Indicator                          | Fix                              |
-| ---------------------------- | ---------------------------------- | -------------------------------- |
-| Subtensor RPC timeout        | `ConnectionError` in logs          | Restart validator, check network |
-| Epoch overlap guard tripped  | "Epoch overlap" warning in logs    | Wait for previous epoch to close |
-| No submissions in epoch      | `total_submissions: 0` in metrics  | Normal — epoch closes with zero weights |
-| Fingerprint DB lock held     | `LOCK_EX` timeout in logs          | Kill orphaned processes, restart |
+| Cause                       | Indicator                         | Fix                                     |
+| --------------------------- | --------------------------------- | --------------------------------------- |
+| Subtensor RPC timeout       | `ConnectionError` in logs         | Restart validator, check network        |
+| Epoch overlap guard tripped | "Epoch overlap" warning in logs   | Wait for previous epoch to close        |
+| No submissions in epoch     | `total_submissions: 0` in metrics | Normal — epoch closes with zero weights |
+| Fingerprint DB lock held    | `LOCK_EX` timeout in logs         | Kill orphaned processes, restart        |
 
 ## Recovery Steps
 

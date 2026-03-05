@@ -47,6 +47,7 @@ contract InvariantRegistry is Pausable {
 
     error InvariantNotFound();
     error InvariantInactive();
+    error InvalidPropertyId();
 
     constructor() Ownable2Step() {}
 
@@ -84,6 +85,7 @@ contract InvariantRegistry is Pausable {
         uint256 id,
         bool broken
     ) external onlyValidator whenNotPaused {
+        if (id >= propertyCount) revert InvalidPropertyId();
         Invariant storage inv = properties[id];
         if (!inv.active) revert InvariantInactive();
 
@@ -102,6 +104,7 @@ contract InvariantRegistry is Pausable {
     function getInvariantScore(
         uint256 id
     ) external view returns (uint256 score) {
+        if (id >= propertyCount) revert InvalidPropertyId();
         Invariant storage inv = properties[id];
         if (inv.challengeCount == 0) return 1e18; // Untested = neutral
         return (inv.holdCount * 1e18) / inv.challengeCount;
@@ -109,6 +112,7 @@ contract InvariantRegistry is Pausable {
 
     /// @notice Deactivate an invariant (e.g., if proven trivially true).
     function deactivateInvariant(uint256 id) external onlyValidator {
+        if (id >= propertyCount) revert InvalidPropertyId();
         properties[id].active = false;
         emit InvariantDeactivated(id);
     }

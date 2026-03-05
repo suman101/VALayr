@@ -161,7 +161,7 @@ This document describes the JSON schemas for all persistent state files used by 
   "reward_multiplier": 1.0,
   "execution_trace": {
     "gas_used": 150000,
-    "storage_diffs": {"0x0": {"before": "0x0", "after": "0x1"}},
+    "storage_diffs": { "0x0": { "before": "0x0", "after": "0x1" } },
     "balance_delta": "-1000000000000000000",
     "events": [],
     "call_graph_hash": "0x..."
@@ -171,13 +171,13 @@ This document describes the JSON schemas for all persistent state files used by 
 }
 ```
 
-| Field              | Type   | Description                                                  |
-| ------------------ | ------ | ------------------------------------------------------------ |
-| `result`           | string | One of: `VALID`, `REJECT_REVERT`, `REJECT_NO_STATE_CHANGE`, `REJECT_TIMEOUT`, `REJECT_COMPILE_FAIL`, `REJECT_BELOW_GAS_THRESHOLD`, `REJECT_INVALID_FORMAT`, `REJECT_FINGERPRINT_ERROR` |
-| `severity_score`   | float  | Score in [0, 1] computed by `SeverityScorer`                 |
-| `is_duplicate`     | bool   | Whether the fingerprint was seen before for this task        |
-| `reward_multiplier`| float  | 1.0 for unique, 0.1 for duplicate, 0.0 for invalid          |
-| `execution_trace`  | object | Full execution trace (storage diffs, balances, events, gas)  |
+| Field               | Type   | Description                                                                                                                                                                            |
+| ------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `result`            | string | One of: `VALID`, `REJECT_REVERT`, `REJECT_NO_STATE_CHANGE`, `REJECT_TIMEOUT`, `REJECT_COMPILE_FAIL`, `REJECT_BELOW_GAS_THRESHOLD`, `REJECT_INVALID_FORMAT`, `REJECT_FINGERPRINT_ERROR` |
+| `severity_score`    | float  | Score in [0, 1] computed by `SeverityScorer`                                                                                                                                           |
+| `is_duplicate`      | bool   | Whether the fingerprint was seen before for this task                                                                                                                                  |
+| `reward_multiplier` | float  | 1.0 for unique, 0.1 for duplicate, 0.0 for invalid                                                                                                                                     |
+| `execution_trace`   | object | Full execution trace (storage diffs, balances, events, gas)                                                                                                                            |
 
 ---
 

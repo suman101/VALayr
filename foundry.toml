@@ -35,3 +35,22 @@ solc_version = "0.8.28"
 evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
+
+# Production profile — higher fuzz depth, stricter gas limits
+[profile.prod]
+src = "contracts/src"
+out = "contracts/out"
+libs = ["contracts/lib"]
+test = "contracts/test"
+script = "contracts/script"
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 10000
+via_ir = true
+bytecode_hash = "ipfs"
+cbor_metadata = true
+
+[profile.prod.fuzz]
+runs = 1024
+seed = "0x000000000000000000000000000000000000000000000000000000000000002a"

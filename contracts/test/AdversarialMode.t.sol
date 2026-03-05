@@ -322,4 +322,35 @@ contract AdversarialModeTest is Test {
         // Score should be clamped at MIN_SCORE, not lower
         assertGe(scoring.classAScores(classA), minScore);
     }
+
+    // ── Bounds Check Tests ──────────────────────────────────────────────
+
+    function test_recordChallenge_invalidId_reverts() public {
+        vm.prank(validator1);
+        vm.expectRevert(InvariantRegistry.InvalidPropertyId.selector);
+        registry.recordChallenge(999, false);
+    }
+
+    function test_getInvariantScore_invalidId_reverts() public {
+        vm.expectRevert(InvariantRegistry.InvalidPropertyId.selector);
+        registry.getInvariantScore(0); // No invariants submitted yet
+    }
+
+    function test_deactivateInvariant_invalidId_reverts() public {
+        vm.prank(validator1);
+        vm.expectRevert(InvariantRegistry.InvalidPropertyId.selector);
+        registry.deactivateInvariant(42);
+    }
+
+    function testFuzz_recordChallenge_outOfBounds(uint256 id) public {
+        // Submit one invariant so propertyCount == 1
+        vm.prank(classA);
+        registry.submitInvariant(TARGET_HASH, "inv", "cond", hex"");
+
+        if (id >= 1) {
+            vm.prank(validator1);
+            vm.expectRevert(InvariantRegistry.InvalidPropertyId.selector);
+            registry.recordChallenge(id, false);
+        }
+    }
 }

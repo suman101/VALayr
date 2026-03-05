@@ -38,6 +38,7 @@ logger = get_logger(__name__)
 
 from orchestrator import Orchestrator, SubmissionResult
 from neurons.protocol import ExploitSubmissionSynapse, ExploitQuerySynapse
+from validator.utils.schemas import validate_submission, ValidationError
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -274,6 +275,16 @@ class ValidatorNeuron:
             task_id = synapse.task_id
             exploit_source = synapse.exploit_source
             miner_hotkey = synapse.dendrite.hotkey
+
+            # Schema validation at system boundary
+            try:
+                validate_submission({
+                    "task_id": task_id,
+                    "exploit_source": exploit_source,
+                })
+            except ValidationError as ve:
+                synapse.result = {"error": f"Invalid submission format: {ve.message}"}
+                return synapse
 
             # Per-miner rate limiting
             with self._submission_lock:

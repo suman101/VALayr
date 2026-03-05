@@ -21,9 +21,9 @@ Complete guide for running and operating a VALayr validator node.
 11. [Docker Deployment](#docker-deployment)
 12. [Determinism Requirements](#determinism-requirements)
 13. [Validator Onboarding Checklist](#validator-onboarding-checklist)
-13. [Security Hardening](#security-hardening)
-14. [Troubleshooting](#troubleshooting)
-15. [FAQ](#faq)
+14. [Security Hardening](#security-hardening)
+15. [Troubleshooting](#troubleshooting)
+16. [FAQ](#faq)
 
 ---
 
@@ -674,18 +674,18 @@ Use this checklist to ensure your validator is correctly configured before going
 
 ## Cross-References
 
-| Document                                             | Relevance                               |
-| ---------------------------------------------------- | --------------------------------------- |
-| [ARCHITECTURE.md](ARCHITECTURE.md)                   | Full system architecture and data flow  |
-| [DEPLOYMENT.md](DEPLOYMENT.md)                       | Docker deployment and monitoring setup  |
-| [TESTING.md](TESTING.md)                             | Test suites and determinism checks      |
-| [THREAT_MODEL.md](THREAT_MODEL.md)                   | Security controls and risk mitigations  |
-| [CONTRACT_REFERENCE.md](CONTRACT_REFERENCE.md)       | Smart contract ABI reference            |
-| [DATA_SCHEMA.md](DATA_SCHEMA.md)                     | JSON schemas for state files            |
-| [Runbook: Epoch Stall](runbooks/epoch-stall.md)      | Recovering from stalled epochs          |
-| [Runbook: Consensus Failure](runbooks/consensus-failure.md) | Handling consensus failures       |
-| [Runbook: Validator Drift](runbooks/validator-drift.md)     | Diagnosing determinism drift      |
-| [Runbook: Key Rotation](runbooks/key-rotation.md)    | Rotating compromised validator keys     |
+| Document                                                    | Relevance                              |
+| ----------------------------------------------------------- | -------------------------------------- |
+| [ARCHITECTURE.md](ARCHITECTURE.md)                          | Full system architecture and data flow |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                              | Docker deployment and monitoring setup |
+| [TESTING.md](TESTING.md)                                    | Test suites and determinism checks     |
+| [THREAT_MODEL.md](THREAT_MODEL.md)                          | Security controls and risk mitigations |
+| [CONTRACT_REFERENCE.md](CONTRACT_REFERENCE.md)              | Smart contract ABI reference           |
+| [DATA_SCHEMA.md](DATA_SCHEMA.md)                            | JSON schemas for state files           |
+| [Runbook: Epoch Stall](runbooks/epoch-stall.md)             | Recovering from stalled epochs         |
+| [Runbook: Consensus Failure](runbooks/consensus-failure.md) | Handling consensus failures            |
+| [Runbook: Validator Drift](runbooks/validator-drift.md)     | Diagnosing determinism drift           |
+| [Runbook: Key Rotation](runbooks/key-rotation.md)           | Rotating compromised validator keys    |
 
 ### Emergency Pause
 

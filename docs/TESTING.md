@@ -72,10 +72,10 @@ The CI pipeline and `tests/conftest.py` handle this automatically.
 
 | File                     | Tests | Description                                                     |
 | ------------------------ | ----- | --------------------------------------------------------------- |
-| `CommitReveal.t.sol`     | 7     | Commit/reveal lifecycle, window enforcement, nonce validation   |
-| `ExploitRegistry.t.sol`  | 5     | Exploit recording, deduplication, quorum, severity, rewards     |
-| `ProtocolRegistry.t.sol` | 5     | Contract registration, bounties, exploit claims, deactivation   |
-| `AdversarialMode.t.sol`  | 11    | Invariant registry, adversarial scoring, multi-round challenges |
+| `CommitReveal.t.sol`     | 9     | Commit/reveal lifecycle, window enforcement, nonce validation   |
+| `ExploitRegistry.t.sol`  | 7     | Exploit recording, deduplication, quorum, severity, rewards     |
+| `ProtocolRegistry.t.sol` | 20    | Registration, bounties, claims, expiry, deactivation, fuzz      |
+| `AdversarialMode.t.sol`  | 24    | Invariant registry, adversarial scoring, bounds checks, fuzz    |
 
 ### Example Exploits (`exploits/`)
 
@@ -90,12 +90,15 @@ The CI pipeline and `tests/conftest.py` handle this automatically.
 
 ### Python Tests (`tests/`)
 
-| File                  | Scope            | Timeout | Description                                            |
-| --------------------- | ---------------- | ------- | ------------------------------------------------------ |
-| `test_integration.py` | Unit/Integration | 120 s   | Core pipeline components without live blockchain       |
-| `test_pipeline.py`    | End-to-end       | 120 s   | Full task → exploit → validation pipeline              |
-| `test_live_anvil.py`  | Live chain       | 120 s   | Against running Anvil instance                         |
-| `test_extended.py`    | Extended         | 60 s    | Edge cases, mutator verification, additional scenarios |
+| File                    | Tests | Scope            | Timeout | Description                                                |
+| ----------------------- | ----- | ---------------- | ------- | ---------------------------------------------------------- |
+| `test_integration.py`   | 19    | Unit/Integration | 120 s   | Core pipeline components without live blockchain           |
+| `test_pipeline.py`      | 8     | End-to-end       | 120 s   | Full task → exploit → validation pipeline                  |
+| `test_live_anvil.py`    | 6     | Live chain       | 120 s   | Against running Anvil instance                             |
+| `test_extended.py`      | 72    | Extended         | 60 s    | Edge cases, mutator, consensus, race conditions, epochs    |
+| `test_round2.py`        | 37    | Round 2          | 120 s   | Deploy pipeline, auto-mine, key rotation, retry, lifecycle |
+| `test_adversarial.py`   | 43    | Adversarial      | 120 s   | Stage 3 adversarial engine, invariant challenges           |
+| `test_e2e_pipeline.py`  | 30    | E2E              | 120 s   | Full end-to-end pipeline with weight blending              |
 
 ---
 

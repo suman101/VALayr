@@ -19,14 +19,14 @@ Expected output: all 6 categories PASS.
 
 ### 2. Identify the Failing Category
 
-| Category                | Common Cause                    | Fix                                       |
-| ----------------------- | ------------------------------- | ----------------------------------------- |
-| Compiler Versions       | `solc` auto-updated             | `foundryup --version nightly-2024-12-01`  |
-| Python Determinism      | PYTHONHASHSEED not 0            | `export PYTHONHASHSEED=0`                 |
-| Anvil Configuration     | Env vars not set                | Set all `ANVIL_*` variables               |
-| Bytecode Reproducibility| Cache corruption                | `forge clean && forge build --force`      |
-| Task Corpus Determinism | Mutator or template changed     | Regenerate with `seed=42`                 |
-| Docker Image            | Running outdated image          | Pull latest tagged image                  |
+| Category                 | Common Cause                | Fix                                      |
+| ------------------------ | --------------------------- | ---------------------------------------- |
+| Compiler Versions        | `solc` auto-updated         | `foundryup --version nightly-2024-12-01` |
+| Python Determinism       | PYTHONHASHSEED not 0        | `export PYTHONHASHSEED=0`                |
+| Anvil Configuration      | Env vars not set            | Set all `ANVIL_*` variables              |
+| Bytecode Reproducibility | Cache corruption            | `forge clean && forge build --force`     |
+| Task Corpus Determinism  | Mutator or template changed | Regenerate with `seed=42`                |
+| Docker Image             | Running outdated image      | Pull latest tagged image                 |
 
 ### 3. Check for Orphaned State
 

@@ -100,6 +100,8 @@ contract ProtocolRegistry is Pausable {
     error TooManyClaims();
     error ContractExpired();
     error InvalidStartIndex();
+    error InvalidExpiry();
+    error ContractNotActive();
 
     // ── Modifiers ────────────────────────────────────────────────────────
 
@@ -129,6 +131,8 @@ contract ProtocolRegistry is Pausable {
     ) external payable whenNotPaused {
         if (target == address(0)) revert ZeroAddress();
         if (msg.value < MIN_BOUNTY) revert InsufficientBounty();
+        if (expiresAt != 0 && expiresAt <= block.timestamp)
+            revert InvalidExpiry();
 
         bytes32 codeHash;
         assembly {
@@ -165,6 +169,7 @@ contract ProtocolRegistry is Pausable {
     function deactivateContract(
         bytes32 contractHash
     ) external onlyProtocol(contractHash) {
+        if (!registry[contractHash].active) revert ContractNotActive();
         registry[contractHash].active = false;
         emit ContractDeactivated(contractHash);
     }
@@ -184,7 +189,12 @@ contract ProtocolRegistry is Pausable {
         // Process up to MAX_CLAIMS_PER_WITHDRAWAL at a time to bound gas
         uint256 maxPerCall = 20;
         bytes32[] storage history = exploitHistory[contractHash];
-        if (startIndex > history.length) revert InvalidStartIndex();
+
+        // When there are claims, startIndex must be within bounds
+        if (history.length > 0 && startIndex >= history.length) revert InvalidStartIndex();
+        // When there are no claims, startIndex must be 0
+        if (history.length == 0 && startIndex != 0) revert InvalidStartIndex();
+
         uint256 end = startIndex + maxPerCall;
         if (end > history.length) end = history.length;
 

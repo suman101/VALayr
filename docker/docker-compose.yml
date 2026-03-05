@@ -16,16 +16,16 @@ services:
     # NOTE: Validator neuron needs network to communicate with Bittensor,
     # miners, and consensus relay. The validation sandbox is isolated separately.
     environment:
-      - ANVIL_BLOCK_TIMESTAMP=1700000000
-      - ANVIL_BLOCK_NUMBER=18000000
-      - ANVIL_GAS_LIMIT=30000000
-      - ANVIL_CHAIN_ID=31337
+      - ANVIL_BLOCK_TIMESTAMP=${ANVIL_BLOCK_TIMESTAMP:-1700000000}
+      - ANVIL_BLOCK_NUMBER=${ANVIL_BLOCK_NUMBER:-18000000}
+      - ANVIL_GAS_LIMIT=${ANVIL_GAS_LIMIT:-30000000}
+      - ANVIL_CHAIN_ID=${ANVIL_CHAIN_ID:-31337}
       - PYTHONHASHSEED=0
-      - VALIDATOR_ID=validator-0
-      - BITTENSOR_NETWORK=finney
-      - WALLET_NAME=default
-      - WALLET_HOTKEY=default
-      - NETUID=1
+      - VALIDATOR_ID=${VALIDATOR_ID:-validator-0}
+      - BITTENSOR_NETWORK=${BITTENSOR_NETWORK:-finney}
+      - WALLET_NAME=${WALLET_NAME:-default}
+      - WALLET_HOTKEY=${WALLET_HOTKEY:-default}
+      - NETUID=${NETUID:-1}
     volumes:
       - validator-data:/app/data
       - task-corpus:/app/contracts/corpus:ro
@@ -37,6 +37,11 @@ services:
         reservations:
           cpus: "2"
           memory: 4G
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+        delay: 30s
+        window: 120s
     restart: unless-stopped
     healthcheck:
       test:
@@ -66,12 +71,18 @@ services:
         "0.0.0.0",
       ]
     environment:
-      - VALIDATOR_ID=validator-0
-      - BITTENSOR_NETWORK=finney
+      - VALIDATOR_ID=${VALIDATOR_ID:-validator-0}
+      - BITTENSOR_NETWORK=${BITTENSOR_NETWORK:-finney}
     volumes:
       - validator-data:/app/data
     ports:
-      - "9946:9946" # Health/metrics + consensus relay
+      - "127.0.0.1:9946:9946" # Health/metrics — localhost only, no external access
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+        delay: 10s
+        window: 60s
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1:9946/health"]
@@ -88,10 +99,10 @@ services:
     container_name: exploit-miner
     environment:
       - PYTHONHASHSEED=0
-      - BITTENSOR_NETWORK=finney
-      - WALLET_NAME=default
-      - WALLET_HOTKEY=default
-      - NETUID=1
+      - BITTENSOR_NETWORK=${BITTENSOR_NETWORK:-finney}
+      - WALLET_NAME=${WALLET_NAME:-default}
+      - WALLET_HOTKEY=${WALLET_HOTKEY:-default}
+      - NETUID=${NETUID:-1}
     volumes:
       - miner-data:/app/data
     deploy:
@@ -102,6 +113,11 @@ services:
         reservations:
           cpus: "1"
           memory: 2G
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+        delay: 30s
+        window: 120s
     restart: unless-stopped
 
   # ── Validation Sandbox (network-isolated for determinism) ───────────────
@@ -115,10 +131,10 @@ services:
     container_name: exploit-sandbox
     network_mode: "none" # CRITICAL: No internet during exploit execution
     environment:
-      - ANVIL_BLOCK_TIMESTAMP=1700000000
-      - ANVIL_BLOCK_NUMBER=18000000
-      - ANVIL_GAS_LIMIT=30000000
-      - ANVIL_CHAIN_ID=31337
+      - ANVIL_BLOCK_TIMESTAMP=${ANVIL_BLOCK_TIMESTAMP:-1700000000}
+      - ANVIL_BLOCK_NUMBER=${ANVIL_BLOCK_NUMBER:-18000000}
+      - ANVIL_GAS_LIMIT=${ANVIL_GAS_LIMIT:-30000000}
+      - ANVIL_CHAIN_ID=${ANVIL_CHAIN_ID:-31337}
       - PYTHONHASHSEED=0
     volumes:
       - validator-data:/app/data:ro

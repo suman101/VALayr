@@ -785,6 +785,7 @@ def keccak256(data: bytes | str) -> str
 Returns `0x`-prefixed 64-char hex string.
 
 **Backend resolution order:**
+
 1. `pycryptodome` (`Crypto.Hash.keccak`) — primary, fast
 2. `pysha3` (`sha3.keccak_256`) — fallback if pycryptodome unavailable
 3. `cast keccak` (Foundry CLI) — last resort, subprocess-based

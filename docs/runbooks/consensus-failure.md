@@ -34,14 +34,14 @@ All 6 checks must PASS and produce identical hashes across all validators.
 
 ## Root Causes
 
-| Cause                         | Indicator                                    | Fix                                     |
-| ----------------------------- | -------------------------------------------- | --------------------------------------- |
-| Foundry version mismatch      | Different bytecode hashes                    | Pin to `nightly-2024-12-01`             |
-| PYTHONHASHSEED not set        | Different fingerprint hashes                 | Set `PYTHONHASHSEED=0`                  |
-| Anvil config mismatch         | Different execution traces                   | Standardize Anvil parameters            |
-| Fewer than 5 validators       | `quorum not reached` in logs                 | Wait for more validators to join        |
-| Network partition              | Some validators unreachable                  | Check connectivity between validators   |
-| solc version drift            | Compiler output differs                      | Pin `solc_version = "0.8.28"` in foundry.toml |
+| Cause                    | Indicator                    | Fix                                           |
+| ------------------------ | ---------------------------- | --------------------------------------------- |
+| Foundry version mismatch | Different bytecode hashes    | Pin to `nightly-2024-12-01`                   |
+| PYTHONHASHSEED not set   | Different fingerprint hashes | Set `PYTHONHASHSEED=0`                        |
+| Anvil config mismatch    | Different execution traces   | Standardize Anvil parameters                  |
+| Fewer than 5 validators  | `quorum not reached` in logs | Wait for more validators to join              |
+| Network partition        | Some validators unreachable  | Check connectivity between validators         |
+| solc version drift       | Compiler output differs      | Pin `solc_version = "0.8.28"` in foundry.toml |
 
 ## Recovery Steps
 

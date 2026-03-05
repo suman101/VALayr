@@ -617,6 +617,7 @@ Use this checklist to verify your setup before your first submission:
 - [ ] **Can submit** — `python3 -m miner.cli submit --task <TASK_ID> --exploit Exploit.sol`
 
 **Common gotchas:**
+
 - Use `pragma solidity ^0.8.28;` — other versions will fail compilation
 - Only `forge-std` is available — no OpenZeppelin or other imports
 - Maximum exploit size is 64 KB

@@ -666,6 +666,7 @@ contract ExploitTest is Test {{
                     "-vvvv",  # Maximum verbosity for trace
                     "--json",
                     "--gas-report",
+                    "--gas-limit", str(MAX_GAS_EXPLOIT),
                 ],
                 capture_output=True, text=True,
                 timeout=VALIDATION_TIMEOUT,

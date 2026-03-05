@@ -93,7 +93,7 @@ class AnvilInstance:
         try:
             resp = self.rpc_call("eth_blockNumber", [])
             return "result" in resp
-        except Exception:
+        except (OSError, ConnectionError, ValueError):
             return False
 
     def rpc_call(self, method: str, params: list) -> dict:

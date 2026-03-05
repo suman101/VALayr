@@ -604,7 +604,8 @@ class AdversarialEngine:
 
         except subprocess.TimeoutExpired:
             return False, "sim_error: timeout"
-        except Exception as e:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError,
+                OSError, json.JSONDecodeError, ValueError) as e:
             logger.debug("Challenge simulation error: %s", e, exc_info=True)
             return False, f"sim_error: {type(e).__name__}: {e}"
         finally:

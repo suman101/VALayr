@@ -368,6 +368,50 @@ class TestMinerCLI:
         # Should print "No submissions found" or a table
         assert "no submissions" in captured.out.lower() or "#" in captured.out or captured.out == ""
 
+    def test_cmd_scores_no_epochs(self, capsys):
+        from miner.cli import MinerCLI
+
+        cli = MinerCLI(miner_address="0xTEST")
+        cli.cmd_scores(MagicMock())
+        captured = capsys.readouterr()
+        # Should print epoch info, "no epochs" message, or nothing
+        assert ("epoch" in captured.out.lower() or
+                "no epoch" in captured.out.lower() or
+                captured.out == "")
+
+    def test_cmd_submit_missing_file(self, capsys):
+        from miner.cli import MinerCLI
+
+        cli = MinerCLI(miner_address="0xTEST")
+        args = MagicMock()
+        args.exploit = "/tmp/__nonexistent_exploit__.sol"
+        args.task = "0xfake_task"
+        cli.cmd_submit(args)
+        # Should log error about missing file, no crash
+
+    def test_cmd_scaffold_unknown_task(self, capsys):
+        from miner.cli import MinerCLI
+
+        cli = MinerCLI(miner_address="0xTEST")
+        args = MagicMock()
+        args.task = "0x_nonexistent_task_id"
+        args.output = None
+        cli.cmd_scaffold(args)
+        captured = capsys.readouterr()
+        assert "not found" in captured.out.lower() or captured.out == ""
+
+    def test_cmd_submit_oversized_file(self, tmp_path, capsys):
+        from miner.cli import MinerCLI
+
+        cli = MinerCLI(miner_address="0xTEST")
+        big_file = tmp_path / "huge.sol"
+        big_file.write_text("x" * (512 * 1024 + 1))
+        args = MagicMock()
+        args.exploit = str(big_file)
+        args.task = "0xfake"
+        cli.cmd_submit(args)
+        # Should reject oversized file, no crash
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Input Sanitization Tests
@@ -1032,6 +1076,123 @@ class TestLargeScaleConsensus:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Concurrent Submission & Race Condition Tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestConcurrentSubmissions:
+    """Verify the orchestrator handles concurrent submissions safely."""
+
+    def _make_orch(self, tmp_path):
+        from orchestrator import Orchestrator
+        return Orchestrator(
+            mode="local",
+            corpus_dir=tmp_path / "corpus",
+            data_dir=tmp_path / "data",
+        )
+
+    def test_concurrent_process_submissions(self, tmp_path):
+        """Multiple threads submitting simultaneously should not crash."""
+        orch = self._make_orch(tmp_path)
+        errors = []
+        source = "contract X { function test_run() public {} }"
+
+        def submit(idx):
+            try:
+                orch.process_submission(
+                    task_id=f"0xtask_{idx:04d}",
+                    exploit_source=source,
+                    miner_address=f"0xminer_{idx:04d}",
+                )
+            except Exception as e:
+                errors.append((idx, str(e)))
+
+        threads = [threading.Thread(target=submit, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        # No thread should crash; rejected submissions are fine
+        assert len(errors) == 0, f"Threads crashed: {errors}"
+
+    def test_epoch_lock_prevents_concurrent_close(self, tmp_path):
+        """Concurrent close_epoch calls should be serialized by the lock."""
+        orch = self._make_orch(tmp_path)
+        results = []
+
+        def close(epoch_num):
+            r = orch.close_epoch(epoch_num, start_block=0, end_block=100)
+            results.append(r)
+
+        t1 = threading.Thread(target=close, args=(1,))
+        t2 = threading.Thread(target=close, args=(1,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
+
+        # Both should return without error
+        assert len(results) == 2
+
+    def test_duplicate_epoch_close_skipped(self, tmp_path):
+        """Closing the same epoch twice returns empty result on second call."""
+        orch = self._make_orch(tmp_path)
+        r1 = orch.close_epoch(1, start_block=0, end_block=100)
+        r2 = orch.close_epoch(1, start_block=0, end_block=100)
+        # Second close should be skipped (stale epoch guard)
+        assert r2.total_submissions == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Epoch Stall / Recovery Tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestEpochStallRecovery:
+    """Test epoch close with zero activity and recovery scenarios."""
+
+    def _make_orch(self, tmp_path):
+        from orchestrator import Orchestrator
+        return Orchestrator(
+            mode="local",
+            corpus_dir=tmp_path / "corpus",
+            data_dir=tmp_path / "data",
+        )
+
+    def test_close_epoch_no_submissions(self, tmp_path):
+        """Closing an epoch with zero submissions should not fail."""
+        orch = self._make_orch(tmp_path)
+        result = orch.close_epoch(1, start_block=0, end_block=100)
+        assert result.epoch_number == 1
+        assert result.total_submissions == 0
+
+    def test_close_epoch_monotonic_order(self, tmp_path):
+        """Epoch numbers must increase monotonically."""
+        orch = self._make_orch(tmp_path)
+        r1 = orch.close_epoch(1, start_block=0, end_block=100)
+        r2 = orch.close_epoch(2, start_block=100, end_block=200)
+        r3 = orch.close_epoch(3, start_block=200, end_block=300)
+        assert r1.epoch_number == 1
+        assert r2.epoch_number == 2
+        assert r3.epoch_number == 3
+
+    def test_epoch_result_persisted(self, tmp_path):
+        """Epoch results are saved to disk."""
+        orch = self._make_orch(tmp_path)
+        orch.close_epoch(1, start_block=0, end_block=50)
+        epoch_file = tmp_path / "data" / "epochs" / "epoch_1.json"
+        assert epoch_file.exists()
+        data = json.loads(epoch_file.read_text())
+        assert data["epoch_number"] == 1
+
+    def test_backward_epoch_rejected(self, tmp_path):
+        """A backward epoch number should return empty/skipped result."""
+        orch = self._make_orch(tmp_path)
+        orch.close_epoch(5, start_block=0, end_block=500)
+        result = orch.close_epoch(3, start_block=0, end_block=300)
+        assert result.total_submissions == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1042,6 +1203,7 @@ if __name__ == "__main__":
         TestMetrics,
         TestValidatorNeuron,
         TestMinerNeuron,
+        TestMinerCLI,
         TestInputSanitization,
         TestConsensusExtended,
         TestCommitReveal,
@@ -1049,6 +1211,8 @@ if __name__ == "__main__":
         TestEdgeCases,
         TestBoundaryConditions,
         TestLargeScaleConsensus,
+        TestConcurrentSubmissions,
+        TestEpochStallRecovery,
     ]
 
     passed = 0

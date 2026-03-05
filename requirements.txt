@@ -6,6 +6,7 @@
 
 # Core dependencies
 pycryptodome==3.21.0
+jsonschema==4.23.0
 
 # Dev / test dependencies
 pytest==8.3.4
