@@ -70,12 +70,11 @@ The CI pipeline and `tests/conftest.py` handle this automatically.
 
 ### Solidity Tests (`contracts/test/`)
 
-| File                     | Tests | Description                                                     |
-| ------------------------ | ----- | --------------------------------------------------------------- |
-| `CommitReveal.t.sol`     | 9     | Commit/reveal lifecycle, window enforcement, nonce validation   |
-| `ExploitRegistry.t.sol`  | 7     | Exploit recording, deduplication, quorum, severity, rewards     |
-| `ProtocolRegistry.t.sol` | 20    | Registration, bounties, claims, expiry, deactivation, fuzz      |
-| `AdversarialMode.t.sol`  | 24    | Invariant registry, adversarial scoring, bounds checks, fuzz    |
+| File                     | Tests | Description                                                   |
+| ------------------------ | ----- | ------------------------------------------------------------- |
+| `ExploitRegistry.t.sol`  | 7     | Exploit recording, deduplication, quorum, severity, rewards   |
+| `ProtocolRegistry.t.sol` | 20    | Registration, bounties, claims, expiry, deactivation, fuzz    |
+| `AdversarialMode.t.sol`  | 24    | Invariant registry, adversarial scoring, bounds checks, fuzz  |
 
 ### Example Exploits (`exploits/`)
 
@@ -90,15 +89,15 @@ The CI pipeline and `tests/conftest.py` handle this automatically.
 
 ### Python Tests (`tests/`)
 
-| File                    | Tests | Scope            | Timeout | Description                                                |
-| ----------------------- | ----- | ---------------- | ------- | ---------------------------------------------------------- |
-| `test_integration.py`   | 19    | Unit/Integration | 120 s   | Core pipeline components without live blockchain           |
-| `test_pipeline.py`      | 8     | End-to-end       | 120 s   | Full task → exploit → validation pipeline                  |
-| `test_live_anvil.py`    | 6     | Live chain       | 120 s   | Against running Anvil instance                             |
-| `test_extended.py`      | 72    | Extended         | 60 s    | Edge cases, mutator, consensus, race conditions, epochs    |
-| `test_round2.py`        | 37    | Round 2          | 120 s   | Deploy pipeline, auto-mine, key rotation, retry, lifecycle |
-| `test_adversarial.py`   | 43    | Adversarial      | 120 s   | Stage 3 adversarial engine, invariant challenges           |
-| `test_e2e_pipeline.py`  | 30    | E2E              | 120 s   | Full end-to-end pipeline with weight blending              |
+| File                   | Tests | Scope            | Timeout | Description                                                |
+| ---------------------- | ----- | ---------------- | ------- | ---------------------------------------------------------- |
+| `test_integration.py`  | 19    | Unit/Integration | 120 s   | Core pipeline components without live blockchain           |
+| `test_pipeline.py`     | 8     | End-to-end       | 120 s   | Full task → exploit → validation pipeline                  |
+| `test_live_anvil.py`   | 6     | Live chain       | 120 s   | Against running Anvil instance                             |
+| `test_extended.py`     | 72    | Extended         | 60 s    | Edge cases, mutator, consensus, race conditions, epochs    |
+| `test_round2.py`       | 37    | Round 2          | 120 s   | Deploy pipeline, auto-mine, key rotation, retry, lifecycle |
+| `test_adversarial.py`  | 43    | Adversarial      | 120 s   | Stage 3 adversarial engine, invariant challenges           |
+| `test_e2e_pipeline.py` | 30    | E2E              | 120 s   | Full end-to-end pipeline with weight blending              |
 
 ---
 
@@ -121,7 +120,7 @@ forge test -vvv
 FOUNDRY_PROFILE=exploits forge test -vvv
 
 # Specific test file
-forge test --match-path contracts/test/CommitReveal.t.sol -vvv
+forge test --match-path contracts/test/ExploitRegistry.t.sol -vvv
 
 # Specific test function
 forge test --match-test test_revealAfterCommitWindow -vvv
@@ -202,20 +201,6 @@ contract YourContractTest is Test {
 | `vm.expectRevert(selector)` | Assert next call reverts            | `vm.expectRevert(Contract.Error.selector)` |
 | `vm.startPrank(addr)`       | Set `msg.sender` for multiple calls | Multi-step attack sequences                |
 | `makeAddr(name)`            | Create labeled address              | `address attacker = makeAddr("attacker")`  |
-
-### CommitReveal Tests
-
-Tests the full commit-reveal lifecycle:
-
-- **`test_openTask`** — Task opens, commit window active
-- **`test_commit`** — Hash committed, state updated
-- **`test_doubleCommit_reverts`** — One commit per miner per task
-- **`test_commitWithoutTask_reverts`** — Must open task first
-- **`test_revealAfterCommitWindow`** — Successful reveal in correct window
-- **`test_revealBeforeCommitWindowEnds_reverts`** — Cannot reveal early
-- **`test_revealAfterRevealWindowCloses_reverts`** — Cannot reveal late
-- **`test_revealWithWrongNonce_reverts`** — Invalid nonce rejected
-- **`test_doubleReveal_reverts`** — Cannot reveal twice
 
 ### ExploitRegistry Tests
 
@@ -487,7 +472,7 @@ forge coverage
 
 Generates a coverage report for all Solidity tests. Focus areas:
 
-- All public/external functions in `CommitReveal.sol`, `ExploitRegistry.sol`, `ProtocolRegistry.sol`
+- All public/external functions in `ExploitRegistry.sol`, `ProtocolRegistry.sol`
 - All error paths (custom errors)
 - All modifier guards (onlyOwner, onlyValidator)
 - Edge cases in time-window logic

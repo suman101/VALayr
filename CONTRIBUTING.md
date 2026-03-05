@@ -67,7 +67,7 @@ export PYTHONHASHSEED=0              # Required for deterministic builds
 │   ├── fingerprint/        #   Fingerprint + dedup engine
 │   ├── anticollusion/      #   Multi-validator consensus
 │   ├── scoring/            #   Severity scoring
-│   ├── commit_reveal.py    #   On-chain commit-reveal client
+
 │   ├── metrics.py          #   Health/metrics HTTP server
 │   └── utils/              #   Logging, helpers
 ├── neurons/                # Bittensor neuron wrappers

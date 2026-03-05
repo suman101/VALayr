@@ -50,7 +50,6 @@ This document describes the system's **threat actors**, **trust boundaries**, **
            ▼  (on-chain tx)
 ┌─────────────────────┐
 │  EVM CHAIN          │
-│  CommitReveal.sol   │
 │  ExploitRegistry.sol│
 │  ProtocolRegistry.sol│
 └─────────────────────┘
@@ -61,11 +60,10 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 | #   | Boundary                    | From → To                                   | Enforcement                                                                                   |
 | --- | --------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | B-1 | **Miner → Validator**       | Untrusted Solidity enters validator process | Size limit (64 KB), path-traversal sanitiser, sandbox (Docker `--network=none`, ephemeral fs) |
-| B-2 | **Off-chain → On-chain**    | Validation results written to EVM contracts | `onlyValidator` modifier on `recordExploit()`, commit-reveal prevents front-running           |
+| B-2 | **Off-chain → On-chain**    | Validation results written to EVM contracts | `onlyValidator` modifier on `recordExploit()`                                                 |
 | B-3 | **Docker isolation**        | Validator container has zero internet       | `network_mode: "none"` + entrypoint guard (`curl 1.1.1.1 → fatal exit`)                       |
-| B-4 | **Commit → Reveal window**  | Time-locked secret disclosure               | 2-hour commit window, 4-hour reveal window enforced by `block.timestamp`                      |
-| B-5 | **Protocol owner → Subnet** | External protocols opt-in with bounties     | `MIN_BOUNTY = 0.01 ETH`, `extcodehash` verification, 72-hour disclosure window                |
-| B-6 | **Validator ↔ Validator**   | Multi-validator consensus                   | ≥ 5 quorum, ≥ 66 % agreement threshold, divergence tracking with auto-slashing                |
+| B-4 | **Protocol owner → Subnet** | External protocols opt-in with bounties     | `MIN_BOUNTY = 0.01 ETH`, `extcodehash` verification, 72-hour disclosure window                |
+| B-5 | **Validator ↔ Validator**   | Multi-validator consensus                   | ≥ 5 quorum, ≥ 66 % agreement threshold, divergence tracking with auto-slashing                |
 
 ---
 
@@ -75,8 +73,6 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 | Function                                | Access                | Threat                         | Mitigation                                                                  |
 | --------------------------------------- | --------------------- | ------------------------------ | --------------------------------------------------------------------------- |
-| `CommitReveal.commit()`                 | Any sender            | Spam commits (DoS)             | `MAX_COMMITS_PER_TASK = 256`                                                |
-| `CommitReveal.reveal()`                 | Committed miners only | Hash pre-image race            | Time window enforced on-chain; nonce generated with `secrets.token_hex(32)` |
 | `ExploitRegistry.recordExploit()`       | `onlyValidator`       | Fake exploit injection         | Validator whitelist + multi-quorum check (`MIN_QUORUM = 5`)                 |
 | `ProtocolRegistry.registerContract()`   | Any (with ETH)        | Registration spam              | Minimum bounty requirement (0.01 ETH), `extcodehash` check                  |
 | `ProtocolRegistry.recordExploit()`      | `onlyValidator`       | False claim to drain bounty    | Validator whitelist, 90 % max reward cap (`MAX_REWARD_BPS = 9000`)          |
@@ -99,7 +95,6 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 | --------------------------------------------- | --- | ------------------------------------------ | --------------------------------------------------- |
 | `data/fingerprints.json`                      | R/W | Dedup corruption → duplicate rewards       | `fcntl.LOCK_EX` + atomic `os.replace`               |
 | `data/anticollusion/anticollusion_state.json` | R/W | False slashing decisions                   | Bounded history (10 K entries), periodic pruning    |
-| `data/commit-reveal/commit_*.json`            | R/W | Loss = can't reveal; theft = front-running | File-system ACLs, `chmod 0600`                      |
 | `data/reports/*.json`                         | W   | Exploit IP leakage                         | Written inside secure validator container           |
 | `data/miner/exploits/*.sol`                   | R/W | Pre-disclosure vulnerability details       | Miner-local, never transmitted after validation     |
 | `/tmp/exploit-val-*`                          | R/W | Sandbox escape artefacts                   | Auto-cleaned in `finally` block; `tempfile.mkdtemp` |
@@ -121,14 +116,13 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 | Asset                   | Location                                | CIA Impact                                 |
 | ----------------------- | --------------------------------------- | ------------------------------------------ |
 | Exploit source code     | Synapse payloads, `data/reports/*.json` | Pre-disclosure leakage to competitors      |
-| Commit nonces           | `data/commit-reveal/commit_*.json`      | Theft = front-running; loss = can't reveal |
 | Vulnerability templates | `task-generator/templates/*.sol`        | Low — public after generation              |
 
 ### 5.3 Cryptographic Material
 
 | Asset                 | Location                | CIA Impact                                     |
 | --------------------- | ----------------------- | ---------------------------------------------- |
-| `ETH_PRIVATE_KEY`     | Runtime env var, memory | On-chain tx signing (commit-reveal, recording) |
+| `ETH_PRIVATE_KEY`     | Runtime env var, memory | On-chain tx signing (exploit recording)        |
 | Bittensor wallet keys | `bt.wallet()` keystore  | Staking, weight-setting authority              |
 | Anvil deployer key    | Hardcoded (`0xac09…`)   | LOW — well-known test key, sandbox only        |
 
@@ -140,7 +134,7 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 | Threat                                    | Impact                   | Mitigation                                                                        |
 | ----------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| Miner impersonates another miner's hotkey | Steal credit for exploit | Bittensor cryptographic identity (hotkey/coldkey); commit-reveal on-chain binding |
+| Miner impersonates another miner's hotkey | Steal credit for exploit | Bittensor cryptographic identity (hotkey/coldkey)                          |
 | Fake validator records exploit            | Drain bounty pool        | `onlyValidator` modifier; validators added only by contract owner                 |
 
 ### 6.2 Tampering
@@ -155,14 +149,14 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 | Threat                             | Impact                        | Mitigation                                                                             |
 | ---------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
-| Validator denies validation result | Dispute resolution impossible | On-chain commit-reveal provides immutable audit trail; consensus relay logs exportable |
+| Validator denies validation result | Dispute resolution impossible | On-chain exploit registry provides immutable audit trail; consensus relay logs exportable |
 | Miner denies submission            | Weight disputes               | Bittensor synapse provides signed message trail                                        |
 
 ### 6.4 Information Disclosure
 
 | Threat                                       | Impact                    | Mitigation                                                                               |
 | -------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
-| Exploit code leaked before disclosure window | Front-running by attacker | Commit-reveal: hash published on-chain first, code revealed only after window            |
+| Exploit code leaked before disclosure window | Front-running by attacker | Bittensor time-locked commitments; validator sandbox isolation                            |
 | Private key in process listing               | Key theft                 | `ETH_PRIVATE_KEY` passed via env var (not CLI args); `del _pk` after use in miner neuron |
 | Metrics endpoint leaks sensitive data        | Operational intelligence  | Read-only JSON; no exploit data; bind `127.0.0.1` outside Docker                         |
 
@@ -190,21 +184,11 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 ```
 MINER                        VALIDATOR                         EVM CHAIN
   │                              │                                │
-  │  1. prepare_commit()         │                                │
-  │     keccak256(task+hash+nonce)│                               │
-  │                              │                                │
-  │  2. submit_commit(hash) ─────────────────────────────────────▶ CommitReveal
-  │                              │                                │  .commit()
-  │     [2-hour commit window]   │                                │
-  │                              │                                │
-  │  3. ExploitSubmissionSynapse ▶ _handle_submission()           │
-  │     (task_id, source,        │  ├─ blacklist_check            │
-  │      commit_hash, nonce)     │  ├─ rate_limit_check           │
+  │  1. ExploitSubmissionSynapse ▶ _handle_submission()           │
+  │     (task_id, source)        │  ├─ blacklist_check            │
+  │                              │  ├─ rate_limit_check           │
   │                              │  │                             │
-  │                              │  4. reveal_and_process()       │
-  │                              │     ├─ reveal() ──────────────▶ CommitReveal
-  │                              │     │                          │  .reveal()
-  │                              │  5. process_submission()       │
+  │                              │  2. process_submission()       │
   │                              │     ├─ sanitize_source()       │
   │                              │     ├─ ValidationEngine        │
   │                              │     │  ├─ forge build          │
@@ -240,11 +224,11 @@ MINER                        VALIDATOR                         EVM CHAIN
 | ---- | ------------------------------------ | ---------- | -------- | ---------- | --------------------------------------------------------------------------- |
 | T-1  | Sandbox escape via Solidity imports  | Low        | Critical | **High**   | Mitigated (path sanitiser + Docker `--network=none`)                        |
 | T-2  | Validator collusion (< 5 validators) | Medium     | High     | **High**   | Mitigated (quorum ≥ 5, consensus ≥ 66 %, divergence slashing)               |
-| T-3  | Front-running exploit submissions    | Medium     | High     | **High**   | Mitigated (on-chain commit-reveal, 2 h commit window)                       |
+| T-3  | Front-running exploit submissions    | Medium     | High     | **High**   | Mitigated (Bittensor time-locked knowledge commitments)                     |
 | T-4  | Bounty pool drain via fake exploit   | Low        | Critical | **High**   | Mitigated (`onlyValidator`, disclosure window, 90 % reward cap)             |
 | T-5  | Fingerprint DB corruption            | Low        | Medium   | **Medium** | Mitigated (file locking, atomic writes, on-chain mirror)                    |
 | T-6  | Private key leakage                  | Low        | Critical | **Medium** | Mitigated (env-var only, `del _pk`, never in CLI args/ps)                   |
-| T-7  | Exploit IP leaked before disclosure  | Medium     | Medium   | **Medium** | Mitigated (commit-reveal, validator sandbox isolation)                      |
+| T-7  | Exploit IP leaked before disclosure  | Medium     | Medium   | **Medium** | Mitigated (validator sandbox isolation, Bittensor commitments)              |
 | T-8  | DoS via submission flood             | Medium     | Low      | **Low**    | Mitigated (rate limits, size limits, gas costs)                             |
 | T-9  | Ownership transfer to zero address   | Low        | Medium   | **Low**    | Mitigated (`ZeroAddress` custom error on all contracts)                     |
 | T-10 | Supply-chain compromise (tooling)    | Low        | Critical | **Medium** | Partially mitigated (pinned Foundry nightly, solc version, Docker base SHA) |
@@ -268,7 +252,6 @@ MINER                        VALIDATOR                         EVM CHAIN
 
 | Control                            | Type                   | Location                                         |
 | ---------------------------------- | ---------------------- | ------------------------------------------------ |
-| Commit-reveal scheme               | Preventive             | `CommitReveal.sol`, `validator/commit_reveal.py` |
 | Docker network isolation           | Preventive             | `docker-compose.yml`, `entrypoint.sh`            |
 | Path-traversal sanitiser           | Preventive             | `validator/engine/validate.py`                   |
 | Multi-validator consensus          | Detective + Corrective | `validator/anticollusion/consensus.py`           |
@@ -276,7 +259,7 @@ MINER                        VALIDATOR                         EVM CHAIN
 | Rate limiting (per-miner + global) | Preventive             | `neurons/validator.py`                           |
 | Disclosure window enforcement      | Preventive             | `ProtocolRegistry.sol`                           |
 | Divergence-based slashing          | Corrective             | `validator/anticollusion/consensus.py`           |
-| Private key hygiene                | Preventive             | `neurons/miner.py`, `validator/commit_reveal.py` |
+| Private key hygiene                | Preventive             | `neurons/miner.py`                               |
 | Deterministic build toolchain      | Preventive             | Dockerfiles, CI, `PYTHONHASHSEED=0`              |
 | Non-root container user            | Preventive             | `Dockerfile.validator`, `Dockerfile.miner`       |
 | OwnershipTransferred events        | Detective              | All four contracts                               |

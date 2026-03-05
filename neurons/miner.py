@@ -4,7 +4,7 @@ Bittensor Miner Neuron — Wrapper for exploit miners on the subnet.
 This module connects a miner to the Bittensor network:
   1. Register on subnet via subtensor
   2. Receive tasks from validators
-  3. Submit exploit solutions (commit-reveal flow)
+  3. Submit exploit solutions
   4. Accumulate TAO rewards based on exploit quality
 
 Usage:
@@ -34,7 +34,6 @@ from validator.utils.logging import get_logger
 logger = get_logger(__name__)
 
 from miner.cli import MinerCLI
-from validator.commit_reveal import CommitRevealClient, CommitRevealSimulator, CommitRecord
 from neurons.protocol import ExploitSubmissionSynapse, ExploitQuerySynapse
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -141,7 +140,7 @@ class MinerNeuron:
         logger.info("Usage:")
         logger.info("  1. Place exploit .sol files in data/miner/exploits/<task_prefix>.sol")
         logger.info("  2. Use orchestrator CLI to submit them")
-        logger.info("  3. Or call neuron.submit_with_commit_reveal() programmatically")
+        logger.info("  3. Or call neuron.submit_exploit() programmatically")
         logger.info("")
         logger.info("Miner is ready. Press Ctrl+C to exit.")
 
@@ -393,57 +392,6 @@ class MinerNeuron:
         filename = f"{task_id[:16]}.sol"
         (exploits_dir / filename).write_text(exploit_source)
         logger.info("Exploit saved: %s", exploits_dir / filename)
-
-    def submit_with_commit_reveal(
-        self,
-        task_id: str,
-        exploit_source: str,
-        commit_reveal_address: str = "",
-        rpc_url: str = "http://127.0.0.1:8545",
-    ) -> dict:
-        """
-        Full commit-reveal submission flow:
-        1. Commit exploit hash
-        2. Wait for reveal window
-        3. Reveal and submit
-        """
-        if commit_reveal_address:
-            # Extract private key from wallet — pass directly, don't store
-            _pk = ""
-            if self.wallet is not None:
-                try:
-                    _pk = self.wallet.hotkey.private_key.hex()
-                    if not _pk.startswith("0x"):
-                        _pk = "0x" + _pk
-                except (AttributeError, ValueError, TypeError):
-                    pass
-            cr = CommitRevealClient(
-                contract_address=commit_reveal_address,
-                rpc_url=rpc_url,
-                private_key=_pk,
-                miner_address=self.miner_address,
-            )
-            del _pk  # Clear reference as soon as possible
-        else:
-            cr = CommitRevealSimulator()
-            cr.open_task(task_id)
-
-        # Phase 1: Commit
-        if isinstance(cr, CommitRevealSimulator):
-            record = cr.commit(task_id, self.miner_address, exploit_source)
-        else:
-            record = cr.prepare_commit(task_id, exploit_source)
-            record = cr.submit_commit(record)
-
-        logger.info("Committed: hash=%s...", record.commit_hash[:20])
-        logger.info("Nonce saved locally (DO NOT LOSE — needed for reveal)")
-
-        return {
-            "phase": "committed",
-            "commit_hash": record.commit_hash,
-            "task_id": task_id,
-            "nonce": record.nonce,
-        }
 
     # ── Status ────────────────────────────────────────────────────────────
 

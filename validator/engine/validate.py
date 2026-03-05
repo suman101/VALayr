@@ -105,6 +105,8 @@ class ExecutionTrace:
     reverted: bool = False
     revert_reason: str = ""
     function_selectors: list[str] = field(default_factory=list)
+    # Multi-tx support: per-function results when exploit has multiple test_* functions
+    test_results: dict[str, dict] = field(default_factory=dict)  # {name: {gas, status, reason}}
 
 
 @dataclass
@@ -720,20 +722,35 @@ contract ExploitTest is Test {{
         if trace.reverted:
             trace.revert_reason = exec_result.get("stderr", "")[:500]
 
-        # Parse gas usage from forge output
+        # Parse gas usage from forge output (aggregate across all test_* functions)
         stdout = exec_result.get("stdout", "")
         try:
             if stdout.strip().startswith("{"):
                 result_json = json.loads(stdout)
+                total_gas = 0
+                any_failure = False
+                failure_reasons = []
                 # Navigate forge test JSON output
                 for suite in result_json.values():
                     if isinstance(suite, dict) and "test_results" in suite:
                         for test_name, test_result in suite["test_results"].items():
                             if isinstance(test_result, dict):
-                                trace.gas_used = test_result.get("gas_used", 0)
-                                if test_result.get("status") == "Failure":
-                                    trace.reverted = True
-                                    trace.revert_reason = test_result.get("reason", "")
+                                gas = test_result.get("gas_used", 0)
+                                total_gas += gas
+                                status = test_result.get("status", "")
+                                reason = test_result.get("reason", "")
+                                trace.test_results[test_name] = {
+                                    "gas_used": gas,
+                                    "status": status,
+                                    "reason": reason,
+                                }
+                                if status == "Failure":
+                                    any_failure = True
+                                    failure_reasons.append(f"{test_name}: {reason}")
+                trace.gas_used = total_gas
+                if any_failure:
+                    trace.reverted = True
+                    trace.revert_reason = "; ".join(failure_reasons)[:500]
         except (json.JSONDecodeError, KeyError, TypeError):
             # Estimate gas from state changes
             trace.gas_used = 21_000 + len(trace.storage_diffs) * 5_000

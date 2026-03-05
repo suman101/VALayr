@@ -295,21 +295,11 @@ class ValidatorNeuron:
                 # Increment count atomically with check to prevent race condition
                 self._miner_submission_counts[miner_hotkey] = miner_count + 1
 
-            # If commit-reveal is active and a commit_hash is provided,
-            # route through the two-phase reveal_and_process pipeline
-            if synapse.commit_hash and self.orchestrator.commit_reveal_live:
-                result = self.orchestrator.reveal_and_process(
-                    task_id=task_id,
-                    exploit_source=exploit_source,
-                    miner_address=miner_hotkey,
-                )
-            else:
-                # Direct validation (local mode or no commit phase)
-                result = self.orchestrator.process_submission(
-                    task_id=task_id,
-                    exploit_source=exploit_source,
-                    miner_address=miner_hotkey,
-                )
+            result = self.orchestrator.process_submission(
+                task_id=task_id,
+                exploit_source=exploit_source,
+                miner_address=miner_hotkey,
+            )
 
             with self._submission_lock:
                 self.submissions_this_epoch.append(result)

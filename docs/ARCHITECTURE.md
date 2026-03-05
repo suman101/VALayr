@@ -34,8 +34,8 @@ The system is designed around three hard constraints:
 │                                                             │                    │
 │                                                             ▼                    │
 │  ┌─────────────────┐     ┌──────────────────┐     ┌────────────────────────┐    │
-│  │ EVM Chain        │◀────│ Commit-Reveal     │     │ Anti-Collusion         │    │
-│  │ (Contracts)      │     │ (On-chain)        │     │ Consensus Engine       │    │
+│  │ EVM Chain        │◀────│ Anti-Collusion    │     │ Anti-Collusion         │    │
+│  │ (Contracts)      │     │ Consensus Engine  │     │ Consensus Engine       │    │
 │  └─────────────────┘     └──────────────────┘     └────────────────────────┘    │
 │                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────┘
@@ -67,8 +67,8 @@ The system is designed around three hard constraints:
 │  storage.py   │  │   severity.py │                 │     neurons       │
 │  balance.py   │  │ anticollusion/│                 │                   │
 │  deadcode.py  │  │   consensus.py│◄────────────────│ validator.py      │
-│ templates/    │  │ commit_reveal │                 │ miner.py          │
-└───────────────┘  │   .py         │                 │ protocol.py       │
+│ templates/    │  │ metrics.py    │                 │ miner.py          │
+└───────────────┘  │ utils/        │                 │ protocol.py       │
                    │ metrics.py    │                 └───────────────────┘
                    │ utils/        │
                    │   logging.py  │                 ┌───────────────────┐
@@ -77,7 +77,6 @@ The system is designed around three hard constraints:
                                                      └───────────────────┘
                    ┌───────────────┐
                    │  contracts/   │
-                   │ CommitReveal  │
                    │ ExploitReg    │
                    │ ProtocolReg   │
                    │ stage3/       │
@@ -96,13 +95,9 @@ The system is designed around three hard constraints:
 | **Fingerprint Engine**    | `validator/fingerprint/`     | Computes state-impact fingerprints and deduplicates submissions; first submitter gets full reward                                          |
 | **Severity Scorer**       | `validator/scoring/`         | Algorithmic severity scoring (funds drained, privilege escalation, invariant breakage, permanent lock)                                     |
 | **Anti-Collusion Engine** | `validator/anticollusion/`   | Multi-validator consensus with quorum, agreement thresholds, divergence tracking, and slashing                                             |
-| **Commit-Reveal**         | `validator/commit_reveal.py` | Two-phase anti-front-running: hash commitment on-chain → timed reveal window                                                               |
-| **Metrics Server**        | `validator/metrics.py`       | Lightweight HTTP `/health` + `/metrics` endpoint for monitoring                                                                            |
-| **Subnet Adapter**        | `subnet-adapter/`            | Translates validation results into Bittensor-compatible weight vectors                                                                     |
-| **Validator Neuron**      | `neurons/validator.py`       | Bridges Orchestrator ↔ Bittensor network (axon, metagraph, weight setting)                                                                 |
-| **Miner Neuron**          | `neurons/miner.py`           | Receives task queries, manages exploit preparation and commit-reveal submission                                                            |
+| **Miner Neuron**          | `neurons/miner.py`           | Receives task queries, manages exploit preparation and submission                                                             |
 | **Miner CLI**             | `miner/cli.py`               | Interactive command-line workflow: list tasks → scaffold → submit → check scores                                                           |
-| **Smart Contracts**       | `contracts/src/`             | On-chain state: commit-reveal registry, exploit registry, protocol bounty registry, adversarial scoring                                    |
+| **Smart Contracts**       | `contracts/src/`             | On-chain state: exploit registry, protocol bounty registry, adversarial scoring                                    |
 
 ---
 
@@ -118,19 +113,10 @@ The system is designed around three hard constraints:
           │  ─── 1. List tasks (ExploitQuerySynapse) ──▶
           │  ◀── Task corpus list ─────────────────────│
           │                    │                       │
-          │  ─── 2. prepare_commit() ──────────────────│
-          │       keccak256(task + exploit + nonce)     │
+          │  ─── 2. ExploitSubmissionSynapse ─────────▶│
+          │       (task_id, source)                    │
           │                    │                       │
-          │  ─── 3. submit_commit(hash) ───────────────────────▶ CommitReveal.commit()
-          │                    │                       │
-          │     [2-hour commit window elapses]         │
-          │                    │                       │
-          │  ─── 4. ExploitSubmissionSynapse ─────────▶│
-          │       (task_id, source, hash, nonce)       │
-          │                    │                       │
-          │                    │── 5. reveal() ────────────────▶ CommitReveal.reveal()
-          │                    │                       │
-          │                    │── 6. Validate in sandbox ─┐   │
+          │                    │── 3. Validate in sandbox ─┐   │
           │                    │   ├─ forge build           │   │
           │                    │   ├─ start Anvil           │   │
           │                    │   ├─ deploy + execute      │   │
@@ -138,18 +124,18 @@ The system is designed around three hard constraints:
           │                    │   └─ compute fingerprint   │   │
           │                    │                       ◀───┘   │
           │                    │                       │
-          │                    │── 7. Score severity           │
-          │                    │── 8. Check duplicates         │
-          │                    │── 9. Anti-collusion vote      │
-          │                    │── 10. Record metrics          │
+          │                    │── 4. Score severity           │
+          │                    │── 5. Check duplicates         │
+          │                    │── 6. Anti-collusion vote      │
+          │                    │── 7. Record metrics           │
           │                    │                       │
           │  ◀── SubmissionResult ─────────────────────│
           │                    │                       │
-          │                    │── 11. close_epoch()           │
+          │                    │── 8. close_epoch()            │
           │                    │   ├─ compute_weights()        │
           │                    │   └─ set_weights() ──────────▶ Bittensor subtensor
           │                    │                       │
-          │                    │── 12. (optional) ─────────────▶ ExploitRegistry
+          │                    │── 9. (optional) ─────────────▶ ExploitRegistry
           │                    │       recordExploit() ────────▶ ProtocolRegistry
           │                    │                       │
           │                    │   [72-hour disclosure]        │
@@ -250,12 +236,10 @@ The orchestrator is the central integration point. It initialises every sub-comp
 | --------------------------------------------------------- | --------------------------------------------------------- |
 | `generate_corpus(count_per_class, seed)`                  | Generate or refresh the task corpus via `CorpusGenerator` |
 | `load_task(task_id)`                                      | Load task by ID or unambiguous prefix                     |
-| `commit_exploit(task_id, source, miner, nonce)`           | Phase 1 of commit-reveal                                  |
-| `reveal_and_process(task_id, source, miner, hash, nonce)` | Phase 2 + full validation pipeline                        |
-| `process_submission(task_id, source, miner)`              | Direct validation (bypasses commit-reveal)                |
+| `process_submission(task_id, source, miner)`              | Full validation pipeline                                  |
 | `close_epoch(epoch, start_block, end_block)`              | Compute weights, prune state, persist results             |
 
-**Output:** `SubmissionResult` dataclass containing validation result, fingerprint, duplicate status, severity score, reward multiplier, timing, and commit hash.
+**Output:** `SubmissionResult` dataclass containing validation result, fingerprint, duplicate status, severity score, reward multiplier, and timing.
 
 ### 5.2 Task Generator (`task-generator/`)
 
@@ -394,28 +378,7 @@ validator divergence > 20% over last 100 validations
    Auto-recovery when rate improves below threshold
 ```
 
-### 5.7 Commit-Reveal (`validator/commit_reveal.py`)
-
-Prevents exploit front-running — miners prove knowledge before revealing code.
-
-**Protocol:**
-
-```
-Phase 1 — Commit (2-hour window)
-   hash = keccak256(abi.encodePacked(taskId, artifactHash, nonce))
-   CommitReveal.commit(taskId, hash) → on-chain
-
-Phase 2 — Reveal (4-hour window, after commit closes)
-   CommitReveal.reveal(taskId, artifactHash, nonce)
-   Contract verifies: keccak256(taskId, artifactHash, nonce) == stored hash
-```
-
-**Dual-Mode Implementation:**
-
-- `CommitRevealClient` — on-chain via `cast send`/`cast call`; private key via `ETH_PRIVATE_KEY` env var (never CLI)
-- `CommitRevealSimulator` — in-memory Python mirror for local development/testing
-
-### 5.8 Subnet Incentive Adapter (`subnet-adapter/incentive.py`)
+### 5.7 Subnet Incentive Adapter (`subnet-adapter/incentive.py`)
 
 Translates validation results into Bittensor weight vectors.
 
@@ -427,7 +390,7 @@ Where $\overline{S}$ is the average severity of a miner's submissions.
 
 **Weight Normalisation:** Raw scores are normalised to sum to 1.0 across all miners in the epoch. Miners with zero raw score receive equal share (prevents starvation).
 
-### 5.9 Metrics & Health (`validator/metrics.py`)
+### 5.8 Metrics & Health (`validator/metrics.py`)
 
 Zero-dependency HTTP server on port 9946.
 
@@ -457,29 +420,19 @@ Zero-dependency HTTP server on port 9946.
 ┌─────────────────────────────────────────────────────────┐
 │                    EVM Chain (L1 / L2)                   │
 │                                                          │
-│  ┌──────────────────┐     ┌────────────────────────┐    │
-│  │  CommitReveal.sol │     │ ExploitRegistry.sol     │    │
-│  │                   │     │                         │    │
-│  │  openTask()       │     │ recordExploit()         │    │
-│  │  commit()         │     │ getExploitRecord()      │    │
-│  │  reveal()         │     │ getEffectiveReward()    │    │
-│  │  getEarliest      │     │                         │    │
-│  │    Reveal()       │     │ FULL_REWARD = 1e18      │    │
-│  │                   │     │ DUPLICATE = 1e17        │    │
-│  │  COMMIT_WINDOW=2h │     │ MIN_QUORUM = 5          │    │
-│  │  REVEAL_WINDOW=4h │     └────────────────────────┘    │
-│  │  MAX_COMMITS=256  │                                    │
-│  └──────────────────┘     ┌────────────────────────┐    │
-│                            │ ProtocolRegistry.sol    │    │
-│  ┌──────────────────┐     │                         │    │
-│  │ stage3/           │     │ registerContract()      │    │
-│  │ AdversarialMode   │     │ recordExploit()         │    │
-│  │  .sol             │     │ payExploitReward()      │    │
-│  │                   │     │ withdrawBounty()        │    │
-│  │ InvariantRegistry │     │                         │    │
-│  │ AdversarialScoring│     │ DISCLOSURE_WINDOW=72h   │    │
-│  └──────────────────┘     │ MAX_REWARD_BPS=9000     │    │
-│                            │ MIN_BOUNTY=0.01 ETH     │    │
+│  ┌────────────────────────┐     ┌────────────────────────┐    │
+│  │ ExploitRegistry.sol     │     │ ProtocolRegistry.sol    │    │
+│  │                         │     │                         │    │
+│  │ recordExploit()         │     │ registerContract()      │    │
+│  │ getExploitRecord()      │     │ recordExploit()         │    │
+│  │ getEffectiveReward()    │     │ payExploitReward()      │    │
+│  │                         │     │ withdrawBounty()        │    │
+│  │ FULL_REWARD = 1e18      │     │                         │    │
+│  │ DUPLICATE = 1e17        │     │ DISCLOSURE_WINDOW=72h   │    │
+│  │ MIN_QUORUM = 5          │     │ MAX_REWARD_BPS=9000     │    │
+│  └────────────────────────┘     │ MIN_BOUNTY=0.01 ETH     │    │
+│                                  └────────────────────────┘    │
+│  ┌──────────────────┐                                    │
 │                            └────────────────────────┘    │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
@@ -489,7 +442,6 @@ Zero-dependency HTTP server on port 9946.
 
 | Contract             | Access Control                                                                                            | Key Invariants                                                                                          |
 | -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **CommitReveal**     | `owner` opens tasks; anyone commits/reveals                                                               | Hash must match on reveal; time windows enforced by `block.timestamp`                                   |
 | **ExploitRegistry**  | `onlyValidator` records exploits                                                                          | Minimum quorum of 5 validators; duplicate detection via fingerprint                                     |
 | **ProtocolRegistry** | Protocols register with bounty; `onlyValidator` records exploits; anyone triggers payout after disclosure | 72-hour disclosure window; 90% max reward cap; bounty withdrawal blocked during active claims           |
 | **AdversarialMode**  | `onlyValidator` on InvariantRegistry + AdversarialScoring; `onlyOwner` for admin                          | Invariant writers vs. breakers — evolutionary pressure; score floor at MIN_SCORE; Pausable in emergency |
@@ -556,7 +508,6 @@ Scoring Constants (AdversarialScoring):
             ▼ (on-chain tx)
 ┌──────────────────────┐
 │      EVM CHAIN       │
-│  CommitReveal.sol    │
 │  ExploitRegistry.sol │
 │  ProtocolRegistry.sol│
 └──────────────────────┘
@@ -569,7 +520,6 @@ Scoring Constants (AdversarialScoring):
 | **Input Validation**          | 64 KB size limit, path sanitisation                  | Oversized payloads, path traversal   |
 | **Sandbox Isolation**         | Docker `--network=none`, ephemeral workspace         | Sandbox escape, network exfiltration |
 | **Deterministic Execution**   | Pinned Anvil config, pinned solc, `PYTHONHASHSEED=0` | Non-reproducible validation          |
-| **Commit-Reveal**             | On-chain hash commitment + timed reveal              | Front-running, exploit theft         |
 | **Multi-Validator Consensus** | ≥5 quorum, ≥66% agreement                            | Single-validator manipulation        |
 | **Divergence Slashing**       | 20% threshold, 5% stake slash                        | Systematic dishonest validation      |
 | **Rate Limiting**             | 50/miner/epoch, 1000/epoch global                    | Submission flooding                  |

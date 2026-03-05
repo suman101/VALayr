@@ -6,7 +6,7 @@ pragma solidity ^0.8.28;
 ///         explicitly accept. Optional `TRANSFER_DELAY` adds a timelock for
 ///         production deployments.
 /// @dev Inherit this instead of raw `owner` patterns. All subnet contracts
-///      (ExploitRegistry, ProtocolRegistry, CommitReveal, InvariantRegistry,
+///      (ExploitRegistry, ProtocolRegistry, InvariantRegistry,
 ///      AdversarialScoring) should use this as their ownership primitive.
 abstract contract Ownable2Step {
     address public owner;

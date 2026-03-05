@@ -190,14 +190,20 @@ contract ProtocolRegistryTest is Test {
         // expiresAt in the past
         uint256 pastExpiry = block.timestamp - 1;
         vm.expectRevert(ProtocolRegistry.InvalidExpiry.selector);
-        registry.registerContract{value: 0.01 ether}(address(dummy), pastExpiry);
+        registry.registerContract{value: 0.01 ether}(
+            address(dummy),
+            pastExpiry
+        );
     }
 
     function test_registerContract_currentTimestampExpiry_reverts() public {
         DummyTarget dummy = new DummyTarget();
         // expiresAt == block.timestamp (not strictly in the future)
         vm.expectRevert(ProtocolRegistry.InvalidExpiry.selector);
-        registry.registerContract{value: 0.01 ether}(address(dummy), block.timestamp);
+        registry.registerContract{value: 0.01 ether}(
+            address(dummy),
+            block.timestamp
+        );
     }
 
     // ── Double Deactivation Tests ────────────────────────────────────────

@@ -48,10 +48,6 @@ class ExploitSubmissionSynapse(_SynapseBase):
       - task_id:          bytes32 hex task identifier
       - exploit_source:   raw Solidity source of the exploit
 
-    Optional fields:
-      - commit_hash:      commit-reveal hash (if commit phase was used)
-      - nonce:            commit-reveal nonce (for reveal phase)
-
     Response fields (set by validator in forward_fn):
       - result:           dict with validation outcome
     """
@@ -59,8 +55,6 @@ class ExploitSubmissionSynapse(_SynapseBase):
     # --- Miner-set request fields ---
     task_id: str = ""
     exploit_source: str = ""
-    commit_hash: str = ""
-    nonce: str = ""
 
     # --- Validator-set response fields ---
     result: Optional[Dict[str, Any]] = None

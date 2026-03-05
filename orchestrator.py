@@ -46,12 +46,6 @@ from subnet_adapter.incentive import (
     ValidatorVote,
     EpochResult,
 )
-from validator.commit_reveal import (
-    CommitRevealClient,
-    CommitRevealSimulator,
-    CommitRecord,
-    RevealResult,
-)
 from validator.anticollusion.consensus import AntiCollusionEngine
 from validator.engine.adversarial import (
     AdversarialEngine,
@@ -100,7 +94,6 @@ class SubmissionResult:
     severity_score: float = 0.0
     severity_detail: str = ""
     validation_time_ms: int = 0
-    commit_hash: str = ""         # Commit-reveal: hash submitted on-chain
     error: str = ""
 
     def to_dict(self) -> dict:
@@ -123,7 +116,6 @@ class Orchestrator:
         anvil_port: int = 18545,
         corpus_dir: Optional[Path] = None,
         data_dir: Optional[Path] = None,
-        commit_reveal_address: str = "",
         rpc_url: str = "http://127.0.0.1:8545",
         registry_address: str = "",
         scoring_address: str = "",
@@ -160,17 +152,6 @@ class Orchestrator:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         self.corpus_dir.mkdir(parents=True, exist_ok=True)
-
-        # Commit-Reveal: live client or in-memory simulator
-        if commit_reveal_address:
-            self.commit_reveal = CommitRevealClient(
-                contract_address=commit_reveal_address,
-                rpc_url=rpc_url,
-                data_dir=self.data_dir / "commit-reveal",
-            )
-        else:
-            self.commit_reveal = CommitRevealSimulator()
-        self.commit_reveal_live = bool(commit_reveal_address)
 
         # Anti-Collusion Engine for multi-validator consensus
         self.anticollusion = AntiCollusionEngine(
@@ -246,93 +227,6 @@ class Orchestrator:
             )
             return None  # Ambiguous
         return None  # Not found
-
-    # ── Commit-Reveal Flow ───────────────────────────────────────────────
-
-    def commit_exploit(
-        self,
-        task_id: str,
-        exploit_source: str,
-        miner_address: str,
-    ) -> CommitRecord:
-        """
-        Phase 1: Commit an exploit hash on-chain (or in simulator).
-
-        The miner calls this FIRST, then waits for the reveal window to open.
-        Returns a CommitRecord with nonce — MUST be saved locally for reveal.
-        """
-        # Input validation — fail fast before any on-chain call
-        for name, val, limit in [
-            ("task_id", task_id, MAX_TASK_ID_LEN),
-            ("miner_address", miner_address, MAX_MINER_ADDRESS_LEN),
-        ]:
-            err = _validate_str(name, val, limit)
-            if err:
-                raise ValueError(err)
-        if not isinstance(exploit_source, str) or not exploit_source.strip():
-            raise ValueError("exploit_source must be a non-empty string")
-        if len(exploit_source.encode()) > MAX_EXPLOIT_SOURCE_BYTES:
-            raise ValueError(f"exploit_source exceeds {MAX_EXPLOIT_SOURCE_BYTES} bytes")
-
-        if self.commit_reveal_live:
-            record = self.commit_reveal.prepare_commit(task_id, exploit_source)
-            record = self.commit_reveal.submit_commit(record)
-        else:
-            # Simulator mode — auto-open the task if not already open
-            if task_id not in self.commit_reveal.tasks:
-                self.commit_reveal.open_task(task_id)
-            record = self.commit_reveal.commit(
-                task_id=task_id,
-                miner=miner_address,
-                exploit_source=exploit_source,
-            )
-        return record
-
-    def reveal_and_process(
-        self,
-        task_id: str,
-        exploit_source: str,
-        miner_address: str,
-        commit_record: Optional[CommitRecord] = None,
-    ) -> SubmissionResult:
-        """
-        Phase 2: Reveal the exploit and run the full validation pipeline.
-
-        This is called AFTER the commit window closes and reveal window opens.
-        If commit_record is provided, it's used for reveal; otherwise loaded from disk.
-        """
-        result = SubmissionResult(
-            task_id=task_id,
-            miner_address=miner_address,
-            validation_result="",
-        )
-
-        # Reveal on-chain
-        if self.commit_reveal_live:
-            reveal_result = self.commit_reveal.reveal(task_id)
-            if not reveal_result.success:
-                result.validation_result = "REJECT_REVEAL_FAILED"
-                result.error = reveal_result.error
-                return result
-            result.commit_hash = commit_record.commit_hash if commit_record else ""
-        elif commit_record:
-            reveal_result = self.commit_reveal.reveal(
-                task_id=task_id,
-                miner=miner_address,
-                record=commit_record,
-            )
-            if not reveal_result.success:
-                result.validation_result = "REJECT_REVEAL_FAILED"
-                result.error = reveal_result.error
-                return result
-            result.commit_hash = commit_record.commit_hash
-
-        # Now run the standard validation pipeline
-        pipeline_result = self.process_submission(task_id, exploit_source, miner_address)
-        # Propagate commit_hash from the reveal phase into the pipeline result
-        if result.commit_hash:
-            pipeline_result.commit_hash = result.commit_hash
-        return pipeline_result
 
     # ── Full Pipeline ─────────────────────────────────────────────────────
 

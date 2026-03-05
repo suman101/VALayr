@@ -35,8 +35,6 @@ from subnet_adapter.incentive import (
     SubnetIncentiveAdapter, ValidatorVote, EpochResult, MinerScore,
 )
 from orchestrator import Orchestrator, SubmissionResult
-from validator.commit_reveal import CommitRevealSimulator, CommitRecord, RevealResult
-
 
 def test_corpus_generation():
     """Test deterministic task corpus generation."""
@@ -347,63 +345,6 @@ def test_determinism_across_runs():
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-def test_commit_reveal_flow():
-    """Test the two-phase commit-reveal anti-theft mechanism."""
-    print("[8/8] Testing commit-reveal flow...")
-
-    sim = CommitRevealSimulator()
-    task_id = "0x" + "ab" * 32
-    miner_a = "0xAAAA"
-    miner_b = "0xBBBB"
-    exploit_a = "contract Exploit { function attack() external {} }"
-    exploit_b = "contract Exploit { function attack() external { /* different */ } }"
-
-    # Open a task
-    base_time = 1700000000.0
-    sim.open_task(task_id, timestamp=base_time)
-
-    # Phase 1: Both miners commit during commit window
-    commit_a = sim.commit(task_id, miner_a, exploit_a, timestamp=base_time + 100)
-    commit_b = sim.commit(task_id, miner_b, exploit_b, timestamp=base_time + 200)
-    assert commit_a.commit_hash, "Should have a commit hash"
-    assert commit_a.commit_hash != commit_b.commit_hash, "Different exploits → different hashes"
-
-    # Attempt: commit after window closes should fail
-    try:
-        sim.commit(task_id, "0xCCCC", "late exploit", timestamp=base_time + 3 * 3600)
-        assert False, "Should reject late commit"
-    except ValueError as e:
-        assert "window" in str(e).lower()
-
-    # Attempt: reveal before reveal window opens should fail
-    reveal_early = sim.reveal(task_id, miner_a, commit_a, timestamp=base_time + 100)
-    assert not reveal_early.success, "Should reject early reveal"
-
-    # Phase 2: Reveal during reveal window (after commit window = 2h)
-    reveal_time = base_time + 2 * 3600 + 60  # 2 hours + 1 minute
-    reveal_a = sim.reveal(task_id, miner_a, commit_a, timestamp=reveal_time)
-    assert reveal_a.success, f"Reveal A should succeed: {reveal_a.error}"
-
-    reveal_b = sim.reveal(task_id, miner_b, commit_b, timestamp=reveal_time + 60)
-    assert reveal_b.success, f"Reveal B should succeed: {reveal_b.error}"
-
-    # Double reveal should fail
-    reveal_dup = sim.reveal(task_id, miner_a, commit_a, timestamp=reveal_time + 120)
-    assert not reveal_dup.success, "Double reveal should fail"
-    assert "already" in reveal_dup.error.lower()
-
-    # Earliest reveal query
-    earliest, ts = sim.get_earliest_reveal(task_id, commit_a.exploit_artifact_hash)
-    assert earliest == miner_a, f"Miner A should be earliest: got {earliest}"
-
-    # Late reveal (after reveal window = commit_window + reveal_window = 6h) should fail
-    reveal_late = sim.reveal(task_id, "0xDDDD", commit_a, timestamp=base_time + 7 * 3600)
-    assert not reveal_late.success, "Late reveal should fail"
-
-    print("  [+] Commit-reveal: 2-phase flow validated (commit → wait → reveal)")
-    print("      Anti-theft: duplicate commits rejected, windows enforced")
-
-
 def main():
     print("=" * 60)
     print("  Exploit Subnet — Full Pipeline Integration Test")
@@ -417,7 +358,6 @@ def main():
         test_incentive_adapter,
         test_orchestrator_unit,
         test_determinism_across_runs,
-        test_commit_reveal_flow,
     ]
 
     passed = 0

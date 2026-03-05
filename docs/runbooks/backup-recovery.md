@@ -7,7 +7,6 @@
 | Fingerprint DB       | `data/fingerprints.json`        | Every epoch      | File copy       |
 | Anti-collusion state | `data/anticollusion_state.json` | Every epoch      | File copy       |
 | Epoch history        | `data/epochs/epoch_*.json`      | After each epoch | File copy       |
-| Commit-reveal state  | `data/commit-reveal/`           | Every epoch      | Directory copy  |
 | Deployment addresses | `deployments/*.json`            | After deploy     | Git + off-site  |
 | Validator config     | Environment variables / config  | On change        | Encrypted vault |
 
@@ -22,7 +21,6 @@ mkdir -p "$BACKUP_DIR"
 cp data/fingerprints.json "$BACKUP_DIR/"
 cp data/anticollusion_state.json "$BACKUP_DIR/"
 cp -r data/epochs/ "$BACKUP_DIR/epochs/"
-cp -r data/commit-reveal/ "$BACKUP_DIR/commit-reveal/"
 cp -r deployments/ "$BACKUP_DIR/deployments/"
 
 # Compress

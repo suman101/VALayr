@@ -191,7 +191,8 @@ contract ProtocolRegistry is Pausable {
         bytes32[] storage history = exploitHistory[contractHash];
 
         // When there are claims, startIndex must be within bounds
-        if (history.length > 0 && startIndex >= history.length) revert InvalidStartIndex();
+        if (history.length > 0 && startIndex >= history.length)
+            revert InvalidStartIndex();
         // When there are no claims, startIndex must be 0
         if (history.length == 0 && startIndex != 0) revert InvalidStartIndex();
 

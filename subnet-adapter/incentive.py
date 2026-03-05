@@ -26,7 +26,6 @@ from typing import Optional
 BASE_REWARD_PER_TASK = 1.0           # Normalized TAO units
 DUPLICATE_PENALTY = 0.90             # 90% penalty for duplicate fingerprints
 INVALID_SUBMISSION_PENALTY = 0.0     # Zero reward
-COMMIT_REVEAL_BONUS = 0.05           # 5% bonus for earliest commit
 
 # Validator consensus parameters
 MIN_VALIDATOR_QUORUM = 5
@@ -49,7 +48,6 @@ class MinerScore:
     unique_fingerprints: int = 0
     duplicate_fingerprints: int = 0
     total_severity: float = 0.0
-    earliest_commits: int = 0
     raw_score: float = 0.0
     normalized_score: float = 0.0    # [0, 1] after normalization across all miners
 
@@ -159,9 +157,6 @@ class SubnetIncentiveAdapter:
                     score.unique_fingerprints += 1
                 else:
                     score.duplicate_fingerprints += 1
-
-                if consensus.get("earliest_commit", False):
-                    score.earliest_commits += 1
             else:
                 score.invalid_submissions += 1
 
@@ -277,7 +272,6 @@ class SubnetIncentiveAdapter:
 
         Formula:
           raw = (unique_exploits * severity) + (duplicate_exploits * severity * 0.1)
-                + (earliest_commits * COMMIT_REVEAL_BONUS)
                 - (invalid_submissions * 0.05)
         """
         unique_weight = score.unique_fingerprints * (
@@ -286,10 +280,9 @@ class SubnetIncentiveAdapter:
         duplicate_weight = score.duplicate_fingerprints * (
             score.total_severity / max(score.valid_exploits, 1) * (1 - DUPLICATE_PENALTY)
         )
-        commit_bonus = score.earliest_commits * COMMIT_REVEAL_BONUS
         spam_penalty = score.invalid_submissions * 0.05
 
-        raw = unique_weight + duplicate_weight + commit_bonus - spam_penalty
+        raw = unique_weight + duplicate_weight - spam_penalty
         return max(0.0, raw)
 
     def _normalize_weights(self, scores: dict[str, MinerScore]) -> dict[str, float]:

@@ -22,10 +22,8 @@
 ## Post-Deploy Verification
 
 - [ ] `cast call <ProtocolRegistry> "owner()"` returns multi-sig address
-- [ ] `cast call <CommitReveal> "owner()"` returns multi-sig address
 - [ ] `cast call <ExploitRegistry> "owner()"` returns multi-sig address
 - [ ] All `validators()` mappings return true for registered validators
-- [ ] Test a full commit-reveal cycle on mainnet (small bounty)
 
 ## Monitoring Setup
 

@@ -10,14 +10,13 @@ Complete reference for all Solidity contracts in the VALayr exploit subnet.
 
 1. [Overview](#overview)
 2. [Deployment](#deployment)
-3. [CommitReveal](#commitreveal)
-4. [ExploitRegistry](#exploitregistry)
-5. [ProtocolRegistry](#protocolregistry)
-6. [InvariantRegistry (Stage 3)](#invariantregistry-stage-3)
-7. [AdversarialScoring (Stage 3)](#adversarialscoring-stage-3)
-8. [Custom Errors Reference](#custom-errors-reference)
-9. [Build & Test](#build--test)
-10. [Foundry Configuration](#foundry-configuration)
+3. [ExploitRegistry](#exploitregistry)
+4. [ProtocolRegistry](#protocolregistry)
+5. [InvariantRegistry (Stage 3)](#invariantregistry-stage-3)
+6. [AdversarialScoring (Stage 3)](#adversarialscoring-stage-3)
+7. [Custom Errors Reference](#custom-errors-reference)
+8. [Build & Test](#build--test)
+9. [Foundry Configuration](#foundry-configuration)
 
 ---
 
@@ -25,7 +24,6 @@ Complete reference for all Solidity contracts in the VALayr exploit subnet.
 
 | Contract           | File                                       | Purpose                           | Stage   |
 | ------------------ | ------------------------------------------ | --------------------------------- | ------- |
-| CommitReveal       | `contracts/src/CommitReveal.sol`           | Anti-theft commit-reveal scheme   | v1      |
 | ExploitRegistry    | `contracts/src/ExploitRegistry.sol`        | On-chain exploit records + dedup  | v1      |
 | ProtocolRegistry   | `contracts/src/ProtocolRegistry.sol`       | Protocol opt-in + bounty escrow   | v1      |
 | InvariantRegistry  | `contracts/src/stage3/AdversarialMode.sol` | Invariant submission + challenges | Stage 3 |
@@ -59,12 +57,11 @@ forge script contracts/script/Deploy.s.sol \
 
 ### Deploy.s.sol Output
 
-The deploy script deploys all 5 contracts and wires them together:
+The deploy script deploys all contracts and wires them together:
 
 ```
 === Deployed Addresses ===
 ProtocolRegistry:    0x...
-CommitReveal:        0x...
 ExploitRegistry:     0x...
 InvariantRegistry:   0x...
 AdversarialScoring:  0x...
@@ -72,107 +69,6 @@ Deployer/Validator:  0x...
 ```
 
 The deployer is automatically registered as a validator on both `ProtocolRegistry` and `ExploitRegistry`.
-
----
-
-## CommitReveal
-
-**File:** `contracts/src/CommitReveal.sol`
-
-Prevents exploit theft by forcing miners to commit a hash before revealing the exploit. Earliest valid commitment wins priority.
-
-### Constants
-
-| Name                   | Value   | Description                                |
-| ---------------------- | ------- | ------------------------------------------ |
-| `COMMIT_WINDOW`        | 2 hours | Duration for submitting commit hashes      |
-| `REVEAL_WINDOW`        | 4 hours | Duration for revealing after commit closes |
-| `MAX_COMMITS_PER_TASK` | 256     | Maximum commitments per task               |
-
-### Timeline
-
-```
-[openTask] ─── 2 hours ──→ [commit window closes] ─── 4 hours ──→ [reveal window closes]
-```
-
-### Structs
-
-#### Commitment
-
-```solidity
-struct Commitment {
-    address miner;
-    bytes32 commitHash;          // keccak256(taskId || exploitArtifactHash || nonce)
-    uint256 committedAt;         // block.timestamp
-    bool revealed;
-    bytes32 exploitArtifactHash; // Filled on reveal
-    uint256 revealedAt;
-}
-```
-
-### Functions
-
-#### `openTask(bytes32 taskId)` — Owner only
-
-Opens a task for commit submissions. Emits `TaskOpened`.
-
-```solidity
-function openTask(bytes32 taskId) external onlyOwner
-```
-
-| Error             | Condition               |
-| ----------------- | ----------------------- |
-| `Unauthorized`    | Caller is not owner     |
-| `TaskAlreadyOpen` | Task was already opened |
-
-#### `commit(bytes32 taskId, bytes32 commitHash)` — Any miner
-
-Submit a blinded commitment hash. The hash must equal `keccak256(abi.encodePacked(taskId, exploitArtifactHash, nonce))`.
-
-```solidity
-function commit(bytes32 taskId, bytes32 commitHash) external
-```
-
-| Error                | Condition                             |
-| -------------------- | ------------------------------------- |
-| `TaskNotOpen`        | Task has not been opened              |
-| `CommitWindowClosed` | Past the 2-hour commit window         |
-| `AlreadyCommitted`   | Miner already committed for this task |
-| `MaxCommitsReached`  | 256 commitments already               |
-
-#### `reveal(bytes32 taskId, bytes32 exploitArtifactHash, bytes32 nonce)` — Committed miners
-
-Reveal the exploit artifact hash and nonce. Must match the prior commitment.
-
-```solidity
-function reveal(bytes32 taskId, bytes32 exploitArtifactHash, bytes32 nonce) external
-```
-
-| Error                 | Condition                     |
-| --------------------- | ----------------------------- |
-| `NoCommitment`        | Caller never committed        |
-| `RevealWindowNotOpen` | Still in commit window        |
-| `RevealWindowClosed`  | Past the 4-hour reveal window |
-| `AlreadyRevealed`     | Already revealed              |
-| `InvalidReveal`       | Hash doesn't match commitment |
-
-#### View Functions
-
-```solidity
-function getEarliestReveal(bytes32 taskId, bytes32 exploitArtifactHash)
-    external view returns (address miner, uint256 committedAt)
-
-function isRevealWindowOpen(bytes32 taskId) external view returns (bool)
-function isCommitWindowOpen(bytes32 taskId) external view returns (bool)
-```
-
-### Events
-
-```solidity
-event TaskOpened(bytes32 indexed taskId, uint256 openTime);
-event CommitSubmitted(bytes32 indexed taskId, address indexed miner, uint256 index, uint256 timestamp);
-event ExploitRevealed(bytes32 indexed taskId, address indexed miner, bytes32 exploitArtifactHash, uint256 timestamp);
-```
 
 ---
 
@@ -490,7 +386,7 @@ forge build --sizes    # Show contract sizes
 forge test -vvv
 
 # Specific test file
-forge test --match-path contracts/test/CommitReveal.t.sol -vvv
+forge test --match-path contracts/test/ExploitRegistry.t.sol -vvv
 
 # Example exploits
 FOUNDRY_PROFILE=exploits forge test -vvv
@@ -567,7 +463,7 @@ All contracts inherit from `Pausable.sol` which provides:
 | `unpause()` | `onlyOwner` | Resumes normal operation                                   |
 | `paused()`  | `view`      | Returns current pause state                                |
 
-Critical state-changing functions (`commit`, `reveal`, `openTask`, `recordExploit`, `submitInvariant`, `processChallenge`, `registerContract`, `payExploitReward`) are guarded by `whenNotPaused`.
+Critical state-changing functions (`recordExploit`, `submitInvariant`, `processChallenge`, `registerContract`, `payExploitReward`) are guarded by `whenNotPaused`.
 
 Administrative functions (`transferOwnership`, `acceptOwnership`, `setValidator`, `pause`, `unpause`) remain callable when paused.
 
@@ -594,21 +490,14 @@ All contracts use custom errors (gas-efficient) instead of `require()` strings.
 
 | Error                   | Contract(s)                           | Trigger                                                     |
 | ----------------------- | ------------------------------------- | ----------------------------------------------------------- |
-| `ZeroAddress()`         | All five contracts                    | Null address passed for miner, owner, or validator          |
-| `NotOwner()`            | All five contracts                    | Caller is not `owner`                                       |
+| `ZeroAddress()`         | All contracts                         | Null address passed for miner, owner, or validator          |
+| `NotOwner()`            | All contracts                         | Caller is not `owner`                                       |
 | `NotValidator()`        | InvariantRegistry, AdversarialScoring | Caller is not a registered validator                        |
-| `TaskNotOpen()`         | CommitReveal                          | Attempting commit/reveal on a non-open task                 |
-| `CommitWindowClosed()`  | CommitReveal                          | Commit submitted after the 2-hour window                    |
-| `RevealWindowClosed()`  | CommitReveal                          | Reveal submitted after the 4-hour window                    |
-| `RevealTooEarly()`      | CommitReveal                          | Reveal attempted during commit window                       |
-| `InvalidHash()`         | CommitReveal                          | Revealed hash doesn't match committed hash                  |
-| `AlreadyCommitted()`    | CommitReveal                          | Same miner committed twice for same task                    |
-| `AlreadyRevealed()`     | CommitReveal                          | Same miner revealed twice for same task                     |
 | `ContractStillActive()` | ProtocolRegistry                      | Attempting to close a contract that still has active claims |
 | `ContractInactive()`    | ProtocolRegistry                      | Attempting operations on an inactive contract               |
 | `InvalidSeverity()`     | ProtocolRegistry                      | Severity score > 1e18 (must be in [0, 1e18])                |
 | `InvalidStartIndex()`   | ProtocolRegistry                      | `withdrawBounty()` called with startIndex > history length  |
-| `ContractPaused()`      | All five contracts                    | Function called while contract is paused                    |
+| `ContractPaused()`      | All contracts                         | Function called while contract is paused                    |
 
 ---
 
@@ -618,7 +507,3 @@ All contracts use custom errors (gas-efficient) instead of `require()` strings.
 - [DEPLOYMENT.md](DEPLOYMENT.md) — How to deploy these contracts
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Where contracts fit in the system
 - [GLOSSARY.md](GLOSSARY.md) — Term definitions
-
-### CommitReveal
-
-- `getEarliestReveal(bytes32 taskId, bytes32 artifactHash) → (address, uint256)` — O(1) cached lookup of earliest reveal

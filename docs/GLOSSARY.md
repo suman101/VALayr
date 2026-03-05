@@ -50,18 +50,6 @@ Stage 3 miner role: writes formal invariants (properties that contracts should s
 
 Stage 3 miner role: writes exploits that attempt to break Class A's invariants. Earns score when an invariant is broken.
 
-### Commit Hash
-
-`H = keccak256(abi.encodePacked(taskId, exploitArtifactHash, nonce))` — the blinded hash submitted during the commit phase to prevent exploit theft.
-
-### Commit-Reveal
-
-Two-phase protocol preventing exploit theft. Miners first commit a hash of their exploit (commit phase, 2 hours), then reveal the actual exploit (reveal phase, 4 hours). See `CommitReveal.sol`.
-
-### Commit Window
-
-The 2-hour period after a task opens during which miners can submit commit hashes.
-
 ### Corpus
 
 The set of generated vulnerable Solidity contracts that miners must exploit. Generated deterministically by the Task Generator with a fixed seed.
@@ -105,10 +93,6 @@ The complete record of state changes produced by running an exploit: storage dif
 ### Exploit
 
 A Solidity test file that demonstrates a vulnerability in a target contract by producing measurable state changes (fund drain, privilege escalation, etc.).
-
-### Exploit Artifact Hash
-
-`keccak256(exploit_source_code)` — the hash of the raw exploit Solidity source, used in the commit-reveal protocol.
 
 ### ExploitRegistry
 
@@ -197,10 +181,6 @@ A transformation applied to vulnerability templates to generate unique task vari
 ### Netuid
 
 The numerical identifier for a Bittensor subnet. VALayr operates on a specific netuid.
-
-### Nonce
-
-A random 32-byte value used in the commit-reveal scheme to blind the commit hash. Must be kept secret until the reveal phase.
 
 ---
 

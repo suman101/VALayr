@@ -14,11 +14,10 @@ This guide is for **miners** who want to participate in the VALayr subnet by dis
 - [4. Writing Exploits](#4-writing-exploits)
 - [5. Submission Workflow](#5-submission-workflow)
 - [6. Scoring & Rewards](#6-scoring--rewards)
-- [7. Commit-Reveal Protocol](#7-commit-reveal-protocol)
-- [8. Exploit Strategies by Vulnerability Class](#8-exploit-strategies-by-vulnerability-class)
-- [9. Tips for Maximising Rewards](#9-tips-for-maximising-rewards)
-- [10. FAQ](#10-faq)
-- [11. First-Time Miner Checklist](#11-first-time-miner-checklist)
+- [7. Exploit Strategies by Vulnerability Class](#7-exploit-strategies-by-vulnerability-class)
+- [8. Tips for Maximising Rewards](#8-tips-for-maximising-rewards)
+- [9. FAQ](#9-faq)
+- [10. First-Time Miner Checklist](#10-first-time-miner-checklist)
 
 ---
 
@@ -207,27 +206,13 @@ python3 orchestrator.py submit \
 
 ## 5. Submission Workflow
 
-### 5.1 Quick Submit (Local/Development)
+### 5.1 Quick Submit
 
 ```bash
 python3 -m miner.cli submit --task 0x08fbc301 --exploit Exploit.sol
 ```
 
-### 5.2 Full Commit-Reveal Submit (Production)
-
-The commit-reveal protocol prevents other miners from stealing your exploit:
-
-```bash
-# Step 1: Commit (sends hash on-chain, hides your exploit)
-python3 -m miner.cli commit --task 0x08fbc301 --exploit Exploit.sol
-
-# Step 2: Wait for commit window to close (~2 hours)
-
-# Step 3: Reveal (sends actual exploit after window)
-python3 -m miner.cli reveal --task 0x08fbc301
-```
-
-### 5.3 Check Submission Status
+### 5.2 Check Submission Status
 
 ```bash
 # Check a specific submission
@@ -237,7 +222,7 @@ python3 -m miner.cli status --task 0x08fbc301
 python3 -m miner.cli status
 ```
 
-### 5.4 View Scores
+### 5.3 View Scores
 
 ```bash
 python3 -m miner.cli scores
@@ -282,7 +267,6 @@ Your score is determined by four factors:
 ```
 raw_score = (unique_exploits × avg_severity)
           + (duplicate_exploits × avg_severity × 0.1)
-          + (earliest_commits × 0.05)
           - (invalid_submissions × 0.05)
 ```
 
@@ -305,45 +289,7 @@ Deduplication is based on **state impact**, not source code. Two different explo
 
 ---
 
-## 7. Commit-Reveal Protocol
-
-The commit-reveal protocol prevents front-running — it ensures no one can steal your exploit by seeing it before you get credit.
-
-### 7.1 How It Works
-
-```
-You                                               Chain
- │                                                  │
- │── 1. Hash your exploit + random nonce            │
- │── 2. Submit hash on-chain (commit) ─────────────▶│
- │                                                  │
- │   [Wait 2 hours — commit window]                 │
- │                                                  │
- │── 3. Reveal exploit + nonce ────────────────────▶│
- │      Chain verifies: hash(exploit + nonce) == commit
- │                                                  │
- │   [Validator runs validation]                    │
- │                                                  │
- │◀── 4. Receive score ────────────────────────────│
-```
-
-### 7.2 Timing
-
-| Phase             | Duration | What Happens                                             |
-| ----------------- | -------- | -------------------------------------------------------- |
-| **Commit Window** | 2 hours  | Submit your hash. Others cannot see your exploit.        |
-| **Reveal Window** | 4 hours  | Reveal your exploit code. Validator verifies hash match. |
-
-### 7.3 Important
-
-- **Do NOT share your exploit** during the commit window
-- **Save your nonce** — you need it for the reveal step
-- If you miss the reveal window, your commit is **void** (no credit)
-- The commit-reveal client stores records locally in `data/commit-reveal/`
-
----
-
-## 8. Exploit Strategies by Vulnerability Class
+## 7. Exploit Strategies by Vulnerability Class
 
 ### 8.1 Reentrancy
 
@@ -431,15 +377,14 @@ contract Attacker {
 
 ---
 
-## 9. Tips for Maximising Rewards
+## 8. Tips for Maximising Rewards
 
-### 9.1 Speed Matters
+### 8.1 Speed Matters
 
-- Use commit-reveal to lock in your discovery time
 - First unique submission gets full reward
 - Commit as early as possible, even before your exploit is perfect
 
-### 9.2 Maximise Severity
+### 8.2 Maximise Severity
 
 The severity score directly multiplies your reward:
 
@@ -448,7 +393,7 @@ The severity score directly multiplies your reward:
 - **Break invariants** (20% weight) — change proxy implementation, modify multiple storage slots
 - **Permanent damage** (15% weight) — zero out critical slots
 
-### 9.3 Target Unique State Changes
+### 8.3 Target Unique State Changes
 
 Dedup is based on state impact. To avoid duplicates:
 
@@ -456,7 +401,7 @@ Dedup is based on state impact. To avoid duplicates:
 - Exploit **different entry points** that produce different storage diffs
 - Target different aspects: funds drain vs. ownership vs. proxy upgrade
 
-### 9.4 Avoid Invalid Submissions
+### 8.4 Avoid Invalid Submissions
 
 Each invalid submission costs you `-0.05` points. Before submitting:
 
@@ -468,11 +413,11 @@ forge test --fork-url http://localhost:8545 -vvvv
 # Look for non-zero storage diffs and balance changes
 ```
 
-### 9.5 Study the Templates
+### 8.5 Study the Templates
 
 The vulnerability templates in `task-generator/templates/` are based on real-world patterns. Study them to understand what the validators are looking for.
 
-### 9.6 Rate Limits
+### 8.6 Rate Limits
 
 | Limit               | Value            |
 | ------------------- | ---------------- |
@@ -484,7 +429,7 @@ Don't waste submissions on untested exploits.
 
 ---
 
-## 10. FAQ
+## 9. FAQ
 
 ### Q: Do I need Foundry installed to mine?
 
@@ -508,11 +453,11 @@ Don't waste submissions on untested exploits.
 
 ### Q: Will my exploit source code be visible to others?
 
-**A:** Not during the commit window. After reveal, your exploit is part of the validation record. The commit-reveal protocol protects you during the discovery phase.
+**A:** Not during the discovery phase. After validation, your exploit is part of the validation record. Bittensor's built-in time-locked commitments protect your submission priority.
 
 ### Q: What if the validator is down?
 
-**A:** If the validator times out or is unreachable, your submission will not be processed. The commit-reveal hash is on-chain, so you can re-submit to another validator during the reveal window.
+**A:** If the validator times out or is unreachable, your submission will not be processed. You can re-submit to another validator.
 
 ### Q: How do I check if Bittensor is working?
 
@@ -600,7 +545,7 @@ Class B miners write exploits targeting submitted invariants. The goal is to bre
 
 ---
 
-## 11. First-Time Miner Checklist
+## 10. First-Time Miner Checklist
 
 Use this checklist to verify your setup before your first submission:
 

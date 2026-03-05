@@ -23,7 +23,6 @@
    ```bash
    cast send <ProtocolRegistry> "pause()" --rpc-url $RPC_URL --private-key $OWNER_KEY
    cast send <ExploitRegistry> "pause()" --rpc-url $RPC_URL --private-key $OWNER_KEY
-   cast send <CommitReveal> "pause()" --rpc-url $RPC_URL --private-key $OWNER_KEY
    cast send <InvariantRegistry> "pause()" --rpc-url $RPC_URL --private-key $OWNER_KEY
    cast send <AdversarialScoring> "pause()" --rpc-url $RPC_URL --private-key $OWNER_KEY
    ```

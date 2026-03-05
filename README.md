@@ -46,7 +46,7 @@ VALayr incentivises miners to discover vulnerabilities in opt-in smart contracts
 | [Miner Guide](docs/MINER_GUIDE.md)                     | Miner onboarding: writing exploits, submission workflow, scoring, strategies              |
 | [Validator Guide](docs/VALIDATOR_GUIDE.md)             | Validator setup, epoch lifecycle, weight setting, monitoring, determinism                 |
 | [Testing Guide](docs/TESTING.md)                       | Test suites, CI pipeline, determinism verification, writing tests                         |
-| [Contract Reference](docs/CONTRACT_REFERENCE.md)       | Solidity contract documentation: CommitReveal, ExploitRegistry, ProtocolRegistry, Stage 3 |
+| [Contract Reference](docs/CONTRACT_REFERENCE.md)       | Solidity contract documentation: ExploitRegistry, ProtocolRegistry, Stage 3               |
 | [Exploit Writing Guide](docs/EXPLOIT_WRITING_GUIDE.md) | Annotated exploit examples for every vulnerability class, scoring strategies              |
 | [Glossary](docs/GLOSSARY.md)                           | Definitions of all key terms and concepts used in the project                             |
 | [Threat Model](docs/THREAT_MODEL.md)                   | STRIDE analysis, risk matrix, attack surfaces, security controls                          |
@@ -67,7 +67,6 @@ VALayr incentivises miners to discover vulnerabilities in opt-in smart contracts
 | Fingerprint / Dedup | `validator/fingerprint/`     | v1     |
 | Severity Scoring    | `validator/scoring/`         | v1     |
 | Anti-Collusion      | `validator/anticollusion/`   | v1     |
-| Commit-Reveal       | `validator/commit_reveal.py` | v1     |
 | Metrics / Health    | `validator/metrics.py`       | v1     |
 | Structured Logging  | `validator/utils/logging.py` | v1     |
 | Subnet Adapter      | `subnet-adapter/`            | v1     |
@@ -164,30 +163,13 @@ The orchestrator (`orchestrator.py`) is the central pipeline glue:
 task-generator → validation → fingerprint → scoring → incentive → epoch weights
 ```
 
-It also wires commit-reveal and anti-collusion into the validation flow.
+It also wires anti-collusion into the validation flow.
 
 ### Key Methods
 
 - `generate_corpus(count_per_class, seed)` — generate / refresh the task corpus
 - `process_submission(task_id, exploit_source, miner_address)` — full validation pipeline
-- `commit_exploit(task_id, exploit_source, miner_address)` — commit-reveal phase 1
-- `reveal_and_process(...)` — commit-reveal phase 2 + validation
 - `close_epoch(epoch_number, start_block, end_block)` — compute & record epoch weights
-
----
-
-## Commit-Reveal Flow
-
-Prevents front-running of exploit submissions.
-
-1. **Commit**: miner hashes `(task_id, exploit_source, nonce)` and submits the hash on-chain.
-2. **Reveal window**: after N blocks, the miner reveals the plaintext.
-3. **Validation**: the revealed exploit is validated only if the hash matches the commit.
-
-Two implementations:
-
-- `CommitRevealClient` — on-chain via the `CommitReveal.sol` contract
-- `CommitRevealSimulator` — in-memory for local development and testing
 
 ---
 
@@ -291,7 +273,7 @@ python3 neurons/validator.py --local
 ```
 
 Features: per-miner rate limiting (50/epoch), automatic corpus refresh,
-commit-reveal integration, structured logging.
+structured logging.
 
 ### Miner Neuron (`neurons/miner.py`)
 
@@ -316,7 +298,6 @@ python3 neurons/miner.py --local
 | `ANVIL_GAS_LIMIT`       | `30000000`   | Block gas limit                          |
 | `ANVIL_CHAIN_ID`        | `31337`      | Chain ID                                 |
 | `PYTHONHASHSEED`        | `0`          | Must be 0 for deterministic Python       |
-| `ETH_PRIVATE_KEY`       | _(none)_     | Private key for on-chain commit-reveal   |
 
 ---
 
@@ -350,7 +331,7 @@ Test suites:
 ```
 ├── .github/workflows/ci.yml    # CI: Forge tests + Python tests
 ├── contracts/
-│   ├── src/                    # On-chain contracts (CommitReveal, ExploitRegistry)
+│   ├── src/                    # On-chain contracts (ExploitRegistry, ProtocolRegistry)
 │   ├── corpus/                 # Generated vulnerable contract corpus
 │   └── test/                   # Foundry Solidity tests
 ├── task-generator/
@@ -362,7 +343,6 @@ Test suites:
 │   ├── fingerprint/dedup.py    # Fingerprint engine + dedup
 │   ├── scoring/severity.py     # Severity scorer
 │   ├── anticollusion/          # Anti-collusion consensus engine
-│   ├── commit_reveal.py        # Commit-reveal mechanism
 │   ├── metrics.py              # Health/metrics HTTP server
 │   └── utils/                  # Logging, hashing utilities
 ├── subnet-adapter/

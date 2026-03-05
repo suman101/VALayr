@@ -274,7 +274,6 @@ class TestValidatorNeuron:
         synapse = ExploitSubmissionSynapse()
         synapse.task_id = "0xdeadbeef"
         synapse.exploit_source = "contract X {}"
-        synapse.commit_hash = ""
         synapse.result = {}
         # Mock dendrite.hotkey
         synapse.dendrite = MagicMock()
@@ -295,7 +294,6 @@ class TestValidatorNeuron:
         synapse = ExploitSubmissionSynapse()
         synapse.task_id = "0xdeadbeef"
         synapse.exploit_source = "contract X {}"
-        synapse.commit_hash = ""
         synapse.result = {}
 
         result = n._handle_submission(synapse)
@@ -530,119 +528,11 @@ class TestConsensusExtended:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Commit-Reveal Tests
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestCommitReveal:
-    """Test CommitRevealSimulator and CommitRevealClient helpers."""
-
-    # Valid bytes32 hex task IDs for tests
-    TASK1 = "0x" + "01" * 32
-    TASK2 = "0x" + "02" * 32
-    TASK3 = "0x" + "03" * 32
-    TASK4 = "0x" + "04" * 32
-    TASK5 = "0x" + "05" * 32
-
-    def test_simulator_full_cycle(self):
-        """Commit → reveal succeeds within the time windows."""
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        t0 = 1_000_000.0
-        sim.open_task(self.TASK1, timestamp=t0)
-
-        record = sim.commit(self.TASK1, "miner-A", "contract Exploit {}", timestamp=t0 + 10)
-        assert record.commit_hash
-        assert record.nonce
-
-        # Reveal after commit window closes
-        reveal = sim.reveal(self.TASK1, "miner-A", record,
-                            timestamp=t0 + sim.COMMIT_WINDOW + 1)
-        assert reveal.success
-        assert reveal.earliest_committer == "miner-A"
-
-    def test_simulator_commit_window_closed(self):
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        t0 = 1_000_000.0
-        sim.open_task(self.TASK2, timestamp=t0)
-
-        try:
-            sim.commit(self.TASK2, "miner-B", "contract X {}",
-                       timestamp=t0 + sim.COMMIT_WINDOW + 1)
-            assert False, "Should have raised ValueError"
-        except ValueError as e:
-            assert "Commit window closed" in str(e)
-
-    def test_simulator_reveal_before_window(self):
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        t0 = 1_000_000.0
-        sim.open_task(self.TASK3, timestamp=t0)
-
-        record = sim.commit(self.TASK3, "miner-C", "contract Y {}", timestamp=t0 + 5)
-        # Reveal too early
-        reveal = sim.reveal(self.TASK3, "miner-C", record, timestamp=t0 + 10)
-        assert not reveal.success
-        assert "not open yet" in reveal.error
-
-    def test_simulator_double_commit(self):
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        t0 = 1_000_000.0
-        sim.open_task(self.TASK4, timestamp=t0)
-
-        sim.commit(self.TASK4, "miner-D", "contract Z {}", timestamp=t0 + 1)
-        try:
-            sim.commit(self.TASK4, "miner-D", "contract Z2 {}", timestamp=t0 + 2)
-            assert False, "Should have raised ValueError"
-        except ValueError as e:
-            assert "Already committed" in str(e)
-
-    def test_simulator_earliest_reveal(self):
-        """Earliest committer wins for the same artifact hash."""
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        t0 = 1_000_000.0
-        sim.open_task(self.TASK5, timestamp=t0)
-
-        # Same exploit source → same artifact hash
-        rec1 = sim.commit(self.TASK5, "miner-E", "contract Same {}", timestamp=t0 + 1)
-        rec2 = sim.commit(self.TASK5, "miner-F", "contract Same {}", timestamp=t0 + 2)
-
-        reveal_ts = t0 + sim.COMMIT_WINDOW + 1
-        r1 = sim.reveal(self.TASK5, "miner-E", rec1, timestamp=reveal_ts)
-        r2 = sim.reveal(self.TASK5, "miner-F", rec2, timestamp=reveal_ts)
-
-        assert r1.success and r2.success
-        miner, _ = sim.get_earliest_reveal(self.TASK5, rec1.exploit_artifact_hash)
-        assert miner == "miner-E"
-
-    def test_client_prepare_commit_determinism(self):
-        """prepare_commit produces correct hash structure."""
-        from validator.commit_reveal import CommitRevealClient
-
-        client = CommitRevealClient(
-            contract_address="0x" + "00" * 20,
-            rpc_url="http://localhost:8545",
-        )
-        rec = client.prepare_commit("0x" + "aa" * 32, "contract Exploit {}")
-        assert rec.commit_hash.startswith("0x")
-        assert rec.nonce.startswith("0x")
-        assert len(rec.nonce) == 66  # 0x + 64 hex chars
-        assert rec.exploit_artifact_hash.startswith("0x")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # Orchestrator Reveal-and-Process + Epoch Tests
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestOrchestratorAdvanced:
-    """Test reveal_and_process and close_epoch with actual submissions."""
+    """Test close_epoch with actual submissions."""
 
     def _make_orchestrator(self, tmpdir):
         from orchestrator import Orchestrator
@@ -654,38 +544,6 @@ class TestOrchestratorAdvanced:
             data_dir=data_dir,
         )
         return orch
-
-    def test_reveal_and_process_simulator(self):
-        """reveal_and_process succeeds with simulator commit-reveal."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            orch = self._make_orchestrator(tmpdir)
-
-            # Generate a corpus so load_task can find something
-            packages = orch.generate_corpus(count_per_class=1, seed=42)
-            assert len(packages) > 0
-            task_id = packages[0].task_id
-
-            # Open the task at the current time so commit window is open
-            now = time.time()
-            orch.commit_reveal.open_task(task_id, timestamp=now)
-
-            # Phase 1: Commit (default timestamp = time.time(), within window)
-            record = orch.commit_exploit(task_id, "contract Exploit {}", "miner-A")
-            assert record.commit_hash
-
-            # Advance simulator past commit window by rewriting the open time
-            orch.commit_reveal.tasks[task_id] = now - orch.commit_reveal.COMMIT_WINDOW - 1
-
-            # Phase 2: Reveal + process
-            result = orch.reveal_and_process(
-                task_id, "contract Exploit {}", "miner-A",
-                commit_record=record,
-            )
-            # The exploit source is minimal so validation likely rejects,
-            # but the flow should complete without errors
-            assert result.task_id == task_id
-            assert result.miner_address == "miner-A"
-            assert result.validation_result != ""
 
     def test_close_epoch_with_votes(self):
         """close_epoch after recording votes produces proper weights."""
@@ -844,37 +702,6 @@ class TestBoundaryConditions:
             result = orch.process_submission("0xabc", exploit_source, "miner-over")
             assert result.validation_result == "REJECT_INVALID_FORMAT"
             assert "exceeds" in result.error
-
-    def test_commit_reveal_nonce_exhaustion(self):
-        """Simulator should enforce MAX_COMMITS_PER_TASK limit."""
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        task_id = "task-exhaust-001"
-        sim.open_task(task_id)
-
-        max_commits = 256  # Matches contract MAX_COMMITS_PER_TASK
-
-        # Submit up to the limit
-        for i in range(max_commits):
-            record = sim.commit(
-                task_id=task_id,
-                miner=f"miner-{i:04d}",
-                exploit_source=f"contract Exploit{i} {{}}",
-            )
-            assert record is not None
-
-        # The 257th should fail or raise
-        try:
-            sim.commit(
-                task_id=task_id,
-                miner="miner-overflow",
-                exploit_source="contract ExploitOverflow {}",
-            )
-            # If it doesn't raise, the simulator doesn't enforce the limit
-            # (only the on-chain contract does) — that's acceptable
-        except (ValueError, RuntimeError):
-            pass  # Expected: simulator enforces the limit
 
     def test_epoch_overlap_guard(self):
         """Concurrent close_epoch calls should not corrupt state."""
@@ -1206,7 +1033,6 @@ if __name__ == "__main__":
         TestMinerCLI,
         TestInputSanitization,
         TestConsensusExtended,
-        TestCommitReveal,
         TestOrchestratorAdvanced,
         TestEdgeCases,
         TestBoundaryConditions,

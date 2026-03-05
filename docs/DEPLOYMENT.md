@@ -56,7 +56,6 @@ This guide covers production deployment, Docker configuration, monitoring, troub
 | Credential                          | Purpose                             | Storage                               |
 | ----------------------------------- | ----------------------------------- | ------------------------------------- |
 | Bittensor wallet (coldkey + hotkey) | Subnet registration, weight setting | `~/.bittensor/wallets/`               |
-| `ETH_PRIVATE_KEY`                   | On-chain commit-reveal transactions | Environment variable (NEVER in files) |
 
 ---
 
@@ -322,10 +321,6 @@ forge script script/Deploy.s.sol \
 # Add validators to ExploitRegistry
 cast send $EXPLOIT_REGISTRY "addValidator(address)" $VALIDATOR_ADDRESS \
   --rpc-url $RPC_URL --private-key $OWNER_KEY
-
-# Open tasks on CommitReveal
-cast send $COMMIT_REVEAL "openTask(bytes32)" $TASK_ID \
-  --rpc-url $RPC_URL --private-key $OWNER_KEY
 ```
 
 ### 5.3 Verify Determinism
@@ -441,7 +436,6 @@ metrics = requests.get("http://localhost:9946/metrics").json()
 ```bash
 # Secure data directories
 chmod 0700 data/
-chmod 0600 data/commit-reveal/commit_*.json
 chmod 0644 data/fingerprints.json
 chmod 0600 .env
 ```
@@ -468,7 +462,6 @@ ufw default deny incoming
 | Data                 | Path                     | Backup Frequency | Recovery Priority |
 | -------------------- | ------------------------ | ---------------- | ----------------- |
 | Fingerprint DB       | `data/fingerprints.json` | Every epoch      | High              |
-| Commit records       | `data/commit-reveal/`    | Before reveal    | Critical          |
 | Anti-collusion state | `data/anticollusion/`    | Every epoch      | Medium            |
 | Validation reports   | `data/reports/`          | Daily            | Low               |
 | Bittensor wallet     | `~/.bittensor/wallets/`  | Once (offline)   | Critical          |
@@ -483,7 +476,6 @@ mkdir -p "$BACKUP_DIR"
 
 # Critical data
 cp -r data/fingerprints.json "$BACKUP_DIR/"
-cp -r data/commit-reveal/ "$BACKUP_DIR/"
 cp -r data/anticollusion/ "$BACKUP_DIR/"
 
 # Compress
@@ -672,7 +664,6 @@ ls -lt data/reports/ | head -10
 - [ ] Resource limits set in `docker-compose.yml`
 - [ ] Deterministic config verified (PYTHONHASHSEED, Anvil params)
 - [ ] Smart contracts deployed and validators whitelisted
-- [ ] Commit-reveal tasks opened on-chain
 - [ ] Test submission validated end-to-end
 
 ---

@@ -275,7 +275,7 @@ class TestOwnable2StepSolidity:
             assert err in source, err
 
     def test_contracts_inherit_ownable2step(self):
-        for name in ["ExploitRegistry.sol", "ProtocolRegistry.sol", "CommitReveal.sol"]:
+        for name in ["ExploitRegistry.sol", "ProtocolRegistry.sol"]:
             sol = PROJECT_ROOT / "contracts" / "src" / name
             assert "Ownable2Step" in sol.read_text(), name
 

@@ -4,7 +4,7 @@ End-to-End Pipeline Tests — Exercises the full exploit subnet pipeline.
 generate → submit → validate → fingerprint → score → weight
 
 These tests verify the complete data flow across all modules,
-including commit-reveal, adversarial mode, and epoch management.
+including adversarial mode and epoch management.
 """
 
 import json
@@ -96,38 +96,6 @@ class TestFullPipeline:
             miner_address="0xMINER",
         )
         assert "REJECT" in result.validation_result
-
-    def test_commit_reveal_flow(self, tmp_path):
-        """Test the commit-reveal simulator flow end-to-end."""
-        orch = self._make_orchestrator(tmp_path)
-        packages = orch.generate_corpus(count_per_class=1, seed=42)
-        tasks = orch.list_tasks()
-        assert tasks
-
-        task_id = tasks[0]["task_id"]
-        exploit_source = "// test exploit\nfunction test_run() public {}"
-
-        # Phase 1: Commit
-        record = orch.commit_exploit(task_id, exploit_source, "0xMINER_A")
-        assert record.commit_hash
-        assert record.nonce
-        assert record.task_id == task_id
-
-        # Advance the simulator's clock past the commit window so reveal is valid.
-        # The simulator enforces a 2-hour commit window; shift the open_time back.
-        sim = orch.commit_reveal
-        sim.tasks[task_id] = sim.tasks[task_id] - sim.COMMIT_WINDOW - 1
-
-        # Phase 2: Reveal and process
-        result = orch.reveal_and_process(
-            task_id=task_id,
-            exploit_source=exploit_source,
-            miner_address="0xMINER_A",
-            commit_record=record,
-        )
-        assert result.task_id == task_id
-        assert result.miner_address == "0xMINER_A"
-        assert result.commit_hash == record.commit_hash
 
     def test_epoch_lifecycle(self, tmp_path):
         """Test epoch open → close → weights."""
@@ -543,48 +511,3 @@ class TestMetricsIntegration:
                 miner_address="0xTEST",
             )
             assert m._global_store.get_counter("validations_total") >= initial
-
-
-# ── Commit-Reveal Simulator Tests ────────────────────────────────────────────
-
-class TestCommitRevealSimulator:
-    """Test the in-memory commit-reveal simulator."""
-
-    def test_full_commit_reveal_cycle(self):
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        t0 = time.time()
-        sim.open_task("task_1", timestamp=t0)
-
-        record = sim.commit("task_1", "miner_A", "exploit code here", timestamp=t0 + 10)
-        assert record.commit_hash
-        assert record.nonce
-
-        # Reveal after the commit window has elapsed
-        reveal_time = t0 + sim.COMMIT_WINDOW + 60
-        result = sim.reveal("task_1", "miner_A", record, timestamp=reveal_time)
-        assert result.success is True
-
-    def test_double_reveal_fails(self):
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        t0 = time.time()
-        sim.open_task("task_1", timestamp=t0)
-
-        record = sim.commit("task_1", "miner_A", "exploit code", timestamp=t0 + 10)
-
-        reveal_time = t0 + sim.COMMIT_WINDOW + 60
-        sim.reveal("task_1", "miner_A", record, timestamp=reveal_time)
-
-        # Second reveal should fail
-        result = sim.reveal("task_1", "miner_A", record, timestamp=reveal_time + 10)
-        assert result.success is False
-
-    def test_commit_to_unopened_task_fails(self):
-        from validator.commit_reveal import CommitRevealSimulator
-
-        sim = CommitRevealSimulator()
-        with pytest.raises(Exception):
-            sim.commit("nonexistent_task", "miner_A", "exploit code")

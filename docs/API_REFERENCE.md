@@ -14,8 +14,7 @@ This document covers the public APIs of every VALayr module: Python classes and 
   - [1.3 Fingerprint Engine](#13-fingerprint-engine)
   - [1.4 Severity Scorer](#14-severity-scorer)
   - [1.5 Anti-Collusion Engine](#15-anti-collusion-engine)
-  - [1.6 Commit-Reveal](#16-commit-reveal)
-  - [1.7 Subnet Incentive Adapter](#17-subnet-incentive-adapter)
+  - [1.6 Subnet Incentive Adapter](#16-subnet-incentive-adapter)
   - [1.8 Task Generator](#18-task-generator)
   - [1.9 Metrics Server](#19-metrics-server)
   - [1.10 Utilities](#110-utilities)
@@ -59,29 +58,6 @@ def load_task(task_id: str) -> TaskPackage
 Load a task by ID or unambiguous prefix match. Raises `ValueError` if not found or ambiguous.
 
 ```python
-def commit_exploit(
-    task_id: str,
-    exploit_source: str,
-    miner_address: str,
-    nonce: str | None = None
-) -> dict
-```
-
-Phase 1 of commit-reveal. Returns `{"commit_hash": "0x...", "nonce": "0x...", "tx_hash": "0x..."}`.
-
-```python
-def reveal_and_process(
-    task_id: str,
-    exploit_source: str,
-    miner_address: str,
-    commit_hash: str,
-    nonce: str
-) -> SubmissionResult
-```
-
-Phase 2 of commit-reveal + full validation pipeline.
-
-```python
 def process_submission(
     task_id: str,
     exploit_source: str,
@@ -89,7 +65,7 @@ def process_submission(
 ) -> SubmissionResult
 ```
 
-Direct validation (bypasses commit-reveal). Use for local development.
+Full validation pipeline (sandbox execution, fingerprinting, severity scoring).
 
 ```python
 def close_epoch(
@@ -114,7 +90,6 @@ class SubmissionResult:
     severity: float                 # [0.0, 1.0]
     reward_multiplier: float        # 1.0 (original) or 0.1 (duplicate)
     execution_time_ms: float
-    commit_hash: str | None
     error: str | None
 ```
 
@@ -446,92 +421,7 @@ Reliability stats per validator.
 
 ---
 
-### 1.6 Commit-Reveal
-
-**Module:** `validator.commit_reveal`
-
-#### Dataclass: `CommitRecord`
-
-```python
-@dataclass
-class CommitRecord:
-    task_id: str
-    artifact_hash: str              # keccak256 of exploit source
-    nonce: str                      # secrets.token_hex(32)
-    commit_hash: str                # keccak256(abi.encodePacked(...))
-    committed_at: float             # timestamp
-    commit_tx_hash: str | None
-    revealed: bool
-    revealed_at: float | None
-    reveal_tx_hash: str | None
-```
-
-#### Dataclass: `RevealResult`
-
-```python
-@dataclass
-class RevealResult:
-    success: bool
-    tx_hash: str | None
-    earliest_committer: str | None  # address
-    error: str | None
-```
-
-#### Class: `CommitRevealClient`
-
-On-chain implementation using `cast` CLI.
-
-```python
-CommitRevealClient(
-    contract_address: str,
-    rpc_url: str
-)
-```
-
-**Methods:**
-
-```python
-def prepare_commit(task_id: str, exploit_source: str) -> CommitRecord
-```
-
-Generate nonce, compute hashes. Does NOT submit on-chain.
-
-```python
-def submit_commit(record: CommitRecord) -> str
-```
-
-Submit commit hash on-chain. Returns tx hash. Uses `ETH_PRIVATE_KEY` env var.
-
-```python
-def reveal(record: CommitRecord, artifact_hash: str, nonce: str) -> RevealResult
-```
-
-Submit reveal on-chain.
-
-```python
-def open_task(task_id: str) -> str
-```
-
-Open a task for commits (owner only). Returns tx hash.
-
-```python
-def is_commit_window_open(task_id: str) -> bool
-def is_reveal_window_open(task_id: str) -> bool
-```
-
-#### Class: `CommitRevealSimulator`
-
-In-memory implementation for local development.
-
-```python
-CommitRevealSimulator()
-```
-
-Same method signatures as `CommitRevealClient`. Enforces same timing windows (2h commit, 4h reveal) using simulated time.
-
----
-
-### 1.7 Subnet Incentive Adapter
+### 1.6 Subnet Incentive Adapter
 
 **Module:** `subnet_adapter.incentive`
 
@@ -624,7 +514,6 @@ raw_score = (unique × avg_severity)
 | ---------------------------- | ------ |
 | `BASE_REWARD_PER_TASK`       | `1.0`  |
 | `DUPLICATE_PENALTY`          | `0.90` |
-| `COMMIT_REVEAL_BONUS`        | `0.05` |
 | `MIN_SUBMISSIONS_FOR_WEIGHT` | `1`    |
 | `MAX_SUBMISSIONS_PER_EPOCH`  | `50`   |
 
@@ -806,8 +695,6 @@ If `data` is a `str`, it is UTF-8 encoded before hashing.
 | ---------------- | -------------- | --------- | ------------------------------------ |
 | `task_id`        | `str`          | Request   | Hex task identifier                  |
 | `exploit_source` | `str`          | Request   | Raw Solidity exploit source          |
-| `commit_hash`    | `str \| None`  | Request   | Commit hash (if using commit-reveal) |
-| `nonce`          | `str \| None`  | Request   | Reveal nonce                         |
 | `result`         | `dict \| None` | Response  | Validation result from validator     |
 
 ### `ExploitQuerySynapse`
@@ -826,42 +713,7 @@ If `data` is a `str`, it is UTF-8 encoded before hashing.
 
 ## 3. Smart Contracts
 
-### 3.1 CommitReveal.sol
-
-**Address:** Deployed per-network
-
-#### Functions
-
-| Function                                                      | Access           | Description                         |
-| ------------------------------------------------------------- | ---------------- | ----------------------------------- |
-| `openTask(bytes32 taskId)`                                    | `onlyOwner`      | Open a task for commits             |
-| `commit(bytes32 taskId, bytes32 commitHash)`                  | Any              | Submit a commit hash                |
-| `reveal(bytes32 taskId, bytes32 artifactHash, bytes32 nonce)` | Committed miners | Reveal exploit; verifies hash match |
-| `isCommitWindowOpen(bytes32 taskId) → bool`                   | View             | Check commit window status          |
-| `isRevealWindowOpen(bytes32 taskId) → bool`                   | View             | Check reveal window status          |
-| `getEarliestReveal(bytes32 taskId) → address`                 | View             | First miner to reveal               |
-| `getCommitCount(bytes32 taskId) → uint256`                    | View             | Number of commits for task          |
-
-#### Events
-
-| Event                  | Parameters                         |
-| ---------------------- | ---------------------------------- |
-| `TaskOpened`           | `taskId`, `openedAt`               |
-| `CommitSubmitted`      | `taskId`, `sender`, `commitHash`   |
-| `RevealSubmitted`      | `taskId`, `sender`, `artifactHash` |
-| `OwnershipTransferred` | `previousOwner`, `newOwner`        |
-
-#### Constants
-
-| Constant               | Value             |
-| ---------------------- | ----------------- |
-| `COMMIT_WINDOW`        | `7200` (2 hours)  |
-| `REVEAL_WINDOW`        | `14400` (4 hours) |
-| `MAX_COMMITS_PER_TASK` | `256`             |
-
----
-
-### 3.2 ExploitRegistry.sol
+### 3.1 ExploitRegistry.sol
 
 #### Functions
 

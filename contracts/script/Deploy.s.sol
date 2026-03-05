@@ -3,7 +3,6 @@ pragma solidity ^0.8.28;
 
 import "forge-std/Script.sol";
 import "../src/ProtocolRegistry.sol";
-import "../src/CommitReveal.sol";
 import "../src/ExploitRegistry.sol";
 import "../src/stage3/AdversarialMode.sol";
 
@@ -22,9 +21,6 @@ contract Deploy is Script {
 
         // Deploy ProtocolRegistry
         ProtocolRegistry registry = new ProtocolRegistry();
-
-        // Deploy CommitReveal
-        CommitReveal commitReveal = new CommitReveal();
 
         // Deploy ExploitRegistry
         ExploitRegistry exploitRegistry = new ExploitRegistry();
@@ -46,7 +42,6 @@ contract Deploy is Script {
         // Log deployed addresses
         console.log("=== Deployed Addresses ===");
         console.log("ProtocolRegistry:   ", address(registry));
-        console.log("CommitReveal:       ", address(commitReveal));
         console.log("ExploitRegistry:    ", address(exploitRegistry));
         console.log("InvariantRegistry:  ", address(invariantRegistry));
         console.log("AdversarialScoring: ", address(adversarialScoring));

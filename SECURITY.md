@@ -42,7 +42,7 @@ The following components are in scope for security reports:
 | --------------------- | ---------------------------- | -------- |
 | Smart contracts       | `contracts/src/`             | Critical |
 | Validation engine     | `validator/engine/`          | Critical |
-| Commit-reveal client  | `validator/commit_reveal.py` | Critical |
+
 | Anti-collusion engine | `validator/anticollusion/`   | High     |
 | Fingerprint dedup     | `validator/fingerprint/`     | High     |
 | Neuron wrappers       | `neurons/`                   | High     |
@@ -72,7 +72,7 @@ VALayr follows these security principles (detailed in [docs/THREAT_MODEL.md](doc
 2. **Least privilege** — non-root containers, `onlyValidator`/`onlyOwner` modifiers, minimal Docker capabilities
 3. **Determinism** — pinned toolchain versions, `PYTHONHASHSEED=0`, fixed Anvil config
 4. **Zero-trust miner input** — all miner-submitted code is treated as adversarial
-5. **On-chain verifiability** — commit-reveal trail and exploit registry provide an immutable audit log
+5. **On-chain verifiability** — exploit registry provides an immutable audit log
 6. **Fail-closed** — network guard exits fatally if isolation is breached; unknown errors rejected
 
 ## Security Checklist for Contributors

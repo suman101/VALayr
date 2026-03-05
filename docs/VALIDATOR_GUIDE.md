@@ -16,14 +16,13 @@ Complete guide for running and operating a VALayr validator node.
 6. [Validation Pipeline](#validation-pipeline)
 7. [Epoch Lifecycle](#epoch-lifecycle)
 8. [Weight Setting](#weight-setting)
-9. [Commit-Reveal Management](#commit-reveal-management)
-10. [Monitoring & Metrics](#monitoring--metrics)
-11. [Docker Deployment](#docker-deployment)
-12. [Determinism Requirements](#determinism-requirements)
-13. [Validator Onboarding Checklist](#validator-onboarding-checklist)
-14. [Security Hardening](#security-hardening)
-15. [Troubleshooting](#troubleshooting)
-16. [FAQ](#faq)
+9. [Monitoring & Metrics](#monitoring--metrics)
+10. [Docker Deployment](#docker-deployment)
+11. [Determinism Requirements](#determinism-requirements)
+12. [Validator Onboarding Checklist](#validator-onboarding-checklist)
+13. [Security Hardening](#security-hardening)
+14. [Troubleshooting](#troubleshooting)
+15. [FAQ](#faq)
 
 ---
 
@@ -96,7 +95,7 @@ btcli subnet register --netuid <NETUID> --wallet.name validator --wallet.hotkey 
 │  └─────────────────────────────────────────────────────────────┘│
 │                        │                                         │
 │  ┌─────────────────────▼───────────────────────────────────────┐│
-│  │  Anti-Collusion  │  Commit-Reveal  │  Weight Setting         ││
+│  │  Anti-Collusion  │  Weight Setting                          ││
 │  └─────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -111,7 +110,6 @@ btcli subnet register --netuid <NETUID> --wallet.name validator --wallet.hotkey 
 | FingerprintEngine      | `validator/fingerprint/dedup.py` | Canonical fingerprints, dedup               |
 | SeverityScorer         | `validator/scoring/severity.py`  | Algorithmic severity scoring                |
 | AntiCollusionEngine    | `validator/anticollusion/`       | Cross-validator consensus                   |
-| CommitRevealClient     | `validator/commit_reveal.py`     | On-chain commit-reveal protocol             |
 | MetricsServer          | `validator/metrics.py`           | Health checks and observability             |
 | SubnetIncentiveAdapter | `subnet-adapter/incentive.py`    | Weight vector computation                   |
 
@@ -325,44 +323,6 @@ subtensor.set_weights(
 ```
 
 Weights are set every `WEIGHT_SET_INTERVAL` blocks (~100 blocks).
-
----
-
-## Commit-Reveal Management
-
-Validators are responsible for managing the commit-reveal lifecycle:
-
-### Opening Tasks
-
-When new tasks are generated, the validator opens them on-chain:
-
-```python
-client = CommitRevealClient(
-    contract_address="<COMMIT_REVEAL_ADDRESS>",
-    rpc_url="http://127.0.0.1:8545",
-)
-client.open_task(task_id)
-```
-
-### Timeline
-
-```
-[openTask]───── 2 hours ─────[commit closes]───── 4 hours ─────[reveal closes]
-   │                              │                                    │
-   │  Miners submit commit hashes │  Miners reveal exploits + nonces   │
-   └──────────────────────────────┴────────────────────────────────────┘
-```
-
-### Handling Submissions
-
-The validator routes submissions based on commit-reveal state:
-
-- **Commit hash provided + commit-reveal live** → `orchestrator.reveal_and_process()`
-- **No commit hash / commit-reveal not active** → `orchestrator.process_submission()`
-
-### Priority Resolution
-
-When multiple miners submit the same exploit fingerprint, the `CommitReveal.getEarliestReveal()` function determines who committed first. The earliest committer receives the full reward.
 
 ---
 

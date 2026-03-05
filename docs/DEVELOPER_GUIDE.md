@@ -89,7 +89,7 @@ export EXPLOIT_LOG_FILE=dev.log
 ```
 valayr/
 ├── contracts/                 # Solidity — on-chain state
-│   ├── src/                   #   CommitReveal, ExploitRegistry, ProtocolRegistry
+│   ├── src/                   #   ExploitRegistry, ProtocolRegistry
 │   │   └── stage3/            #   AdversarialMode (Stage 3)
 │   ├── test/                  #   Foundry test suites
 │   ├── script/                #   Deployment scripts
@@ -103,7 +103,6 @@ valayr/
 │   ├── scoring/severity.py    #   Algorithmic severity scoring
 │   ├── anticollusion/         #   Multi-validator consensus
 │   │   └── consensus.py       #   Quorum, divergence, slashing
-│   ├── commit_reveal.py       #   On-chain + simulated commit-reveal
 │   ├── metrics.py             #   /health + /metrics HTTP server
 │   └── utils/                 #   Logging, keccak256 hashing
 │
@@ -165,7 +164,7 @@ This creates task packages in `contracts/corpus/` with a `manifest.json`.
 python3 neurons/validator.py --local
 ```
 
-Local mode simulates 3 epochs with in-memory commit-reveal.
+Local mode simulates 3 epochs with in-memory validation.
 
 ### 3.3 Use the Miner CLI
 

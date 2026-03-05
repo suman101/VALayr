@@ -5,6 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- **CommitReveal system** — `CommitReveal.sol` contract, `validator/commit_reveal.py` client, and all associated commit-reveal logic. Bittensor provides built-in time-locked knowledge commitments, making the custom contract redundant.
+
 ### Added
 
 - **Stage 3 Python integration** — `validator/engine/adversarial.py`: AdversarialEngine for Class A/B miner flows (invariant submission, challenge processing, scoring, weight computation)
@@ -14,10 +18,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `tests/test_adversarial.py` — 35 tests for Stage 3 subsystem
 - **Python lint & type-check CI job** — ruff, black, mypy in `lint-python` workflow job
 - `[tool.mypy]` configuration in `pyproject.toml`
-- Example data files in `data/reports/`, `data/anticollusion/`, `data/commit-reveal/`
+- Example data files in `data/reports/`, `data/anticollusion/`
 - `Pausable` modifier on `ProtocolRegistry.sol` — owner can pause/unpause contract in emergencies
 - Paginated `withdrawBounty()` with `startIndex` parameter and `InvalidStartIndex` guard
-- `getEarliestReveal()` convenience getter on `CommitReveal.sol` — O(1) lookup via cached earliest timestamp
 - Severity-score validation on `recordExploit()` — reverts with `InvalidSeverity` if score > 1e18
 - `ContractStillActive` error for clearer revert messages in `ProtocolRegistry`
 - `DATA_SCHEMA.md` — JSON schemas for all persistent state files
@@ -26,7 +29,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Consolidated keccak256 utility — `commit_reveal.py` and `generate.py` now delegate to `validator/utils/hashing.keccak256` (removed ~60 lines of duplicate code)
+- Consolidated keccak256 utility — `generate.py` now delegates to `validator/utils/hashing.keccak256` (removed duplicate code)
 - Repository URL placeholders replaced with `https://github.com/suman101/VALayr.git`
 - CI lint job split into `lint-solidity` and `lint-python`
 - Pinned `ruff==0.8.6`, `black==24.10.0`, `mypy==1.14.1` in `requirements.txt`
@@ -60,13 +63,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Security policy** (`SECURITY.md`) — responsible disclosure, scope, contributor checklist
 - **Contributing guide** (`CONTRIBUTING.md`) — dev setup, PR process, coding standards
 - **Changelog** (this file)
-- `OwnershipTransferred` events on all five contracts (`CommitReveal`, `ExploitRegistry`, `ProtocolRegistry`, `InvariantRegistry`, `AdversarialMode`)
+- `OwnershipTransferred` events on all contracts (`ExploitRegistry`, `ProtocolRegistry`, `InvariantRegistry`, `AdversarialMode`)
 - `ValidatorUpdated` event on `InvariantRegistry`
 - `ZeroAddress` custom errors on `InvariantRegistry` and `AdversarialScoring`
 - Disclosure window enforcement in `ProtocolRegistry.withdrawBounty()` — loops through unpaid claims within `DISCLOSURE_WINDOW`
 - Zero-address validation on `recordExploit()` in both `ExploitRegistry` and `ProtocolRegistry`
 - `AdversarialMode.t.sol` — 14 Foundry tests for `InvariantRegistry` + `AdversarialScoring`
-- `CommitReveal.t.sol` — reveal-window-close revert test
 - Graceful `SIGTERM` shutdown handlers on both validator and miner neurons
 - `RotatingFileHandler` for structured logging (10 MB, 5 backups)
 - Bounded `consensus_history` (10 K entries) and `recent_results` pruning
@@ -99,7 +101,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Port counter in `validate.py` — race condition on `_next_port` (replaced with `threading.Lock`)
 - `AdversarialMode.t.sol` — `vm.expectRevert` now uses custom error selectors instead of string matching
 - `consensus.py` — below-quorum threshold changed from `> quorum` to `>= quorum` (`0.51` fix)
-- `miner.py` / `commit_reveal.py` — private key no longer visible in `ps` output
+- `miner.py` — private key no longer visible in `ps` output
 - Function selector hashing — replaced Python `sha3` with `keccak256` across codebase
 - Report filenames — added `time.time_ns()` to prevent collisions
 - `fcntl` — conditional import with `msvcrt` fallback for non-POSIX platforms

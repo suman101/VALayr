@@ -80,7 +80,6 @@ echo
 
 CONTRACTS=(
     "ProtocolRegistry"
-    "CommitReveal"
     "ExploitRegistry"
     "InvariantRegistry"
     "AdversarialScoring"

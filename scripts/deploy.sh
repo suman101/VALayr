@@ -194,13 +194,11 @@ parse_address() {
 }
 
 PROTOCOL_REGISTRY=$(parse_address "ProtocolRegistry")
-COMMIT_REVEAL=$(parse_address "CommitReveal")
 EXPLOIT_REGISTRY=$(parse_address "ExploitRegistry")
 INVARIANT_REGISTRY=$(parse_address "InvariantRegistry")
 ADVERSARIAL_SCORING=$(parse_address "AdversarialScoring")
 
 echo "  ProtocolRegistry:   ${PROTOCOL_REGISTRY:-NOT FOUND}"
-echo "  CommitReveal:       ${COMMIT_REVEAL:-NOT FOUND}"
 echo "  ExploitRegistry:    ${EXPLOIT_REGISTRY:-NOT FOUND}"
 echo "  InvariantRegistry:  ${INVARIANT_REGISTRY:-NOT FOUND}"
 echo "  AdversarialScoring: ${ADVERSARIAL_SCORING:-NOT FOUND}"
@@ -229,7 +227,6 @@ verify_contract() {
 
 VERIFY_OK=true
 verify_contract "ProtocolRegistry" "$PROTOCOL_REGISTRY" || VERIFY_OK=false
-verify_contract "CommitReveal" "$COMMIT_REVEAL" || VERIFY_OK=false
 verify_contract "ExploitRegistry" "$EXPLOIT_REGISTRY" || VERIFY_OK=false
 verify_contract "InvariantRegistry" "$INVARIANT_REGISTRY" || VERIFY_OK=false
 verify_contract "AdversarialScoring" "$ADVERSARIAL_SCORING" || VERIFY_OK=false
@@ -281,7 +278,6 @@ cat > "$DEPLOY_FILE" <<EOF
   "deployer": "$DEPLOYER_ADDR",
   "contracts": {
     "ProtocolRegistry": "${PROTOCOL_REGISTRY:-null}",
-    "CommitReveal": "${COMMIT_REVEAL:-null}",
     "ExploitRegistry": "${EXPLOIT_REGISTRY:-null}",
     "InvariantRegistry": "${INVARIANT_REGISTRY:-null}",
     "AdversarialScoring": "${ADVERSARIAL_SCORING:-null}"
@@ -298,7 +294,6 @@ ENV_FILE="$DEPLOY_LOG_DIR/.env.${NETWORK}"
 cat > "$ENV_FILE" <<EOF
 # VALayr deployment — ${NETWORK} — $(date -u +"%Y-%m-%d")
 PROTOCOL_REGISTRY_ADDRESS=${PROTOCOL_REGISTRY:-}
-COMMIT_REVEAL_ADDRESS=${COMMIT_REVEAL:-}
 EXPLOIT_REGISTRY_ADDRESS=${EXPLOIT_REGISTRY:-}
 INVARIANT_REGISTRY_ADDRESS=${INVARIANT_REGISTRY:-}
 ADVERSARIAL_SCORING_ADDRESS=${ADVERSARIAL_SCORING:-}
