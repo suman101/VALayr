@@ -70,11 +70,11 @@ The CI pipeline and `tests/conftest.py` handle this automatically.
 
 ### Solidity Tests (`contracts/test/`)
 
-| File                     | Tests | Description                                                   |
-| ------------------------ | ----- | ------------------------------------------------------------- |
-| `ExploitRegistry.t.sol`  | 7     | Exploit recording, deduplication, quorum, severity, rewards   |
-| `ProtocolRegistry.t.sol` | 20    | Registration, bounties, claims, expiry, deactivation, fuzz    |
-| `AdversarialMode.t.sol`  | 24    | Invariant registry, adversarial scoring, bounds checks, fuzz  |
+| File                     | Tests | Description                                                  |
+| ------------------------ | ----- | ------------------------------------------------------------ |
+| `ExploitRegistry.t.sol`  | 7     | Exploit recording, deduplication, quorum, severity, rewards  |
+| `ProtocolRegistry.t.sol` | 20    | Registration, bounties, claims, expiry, deactivation, fuzz   |
+| `AdversarialMode.t.sol`  | 24    | Invariant registry, adversarial scoring, bounds checks, fuzz |
 
 ### Example Exploits (`exploits/`)
 

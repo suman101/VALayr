@@ -275,6 +275,7 @@ class Orchestrator:
         task_id: str,
         exploit_source: str,
         miner_address: str,
+        entry_functions: list[str] | None = None,
     ) -> SubmissionResult:
         """
         Full pipeline: validate → fingerprint → score → record.
@@ -314,10 +315,11 @@ class Orchestrator:
             result.error = f"Task {task_id[:16]}... not found"
             return result
 
-        # Step 2: Build submission
+        # Step 2: Build submission (with multi-tx entry_functions if provided)
         submission = ExploitSubmission(
             task_id=task_id,
             exploit_source=exploit_source,
+            entry_functions=entry_functions or [],
         )
 
         # Step 3: Validate

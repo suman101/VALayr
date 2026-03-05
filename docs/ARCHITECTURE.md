@@ -86,18 +86,18 @@ The system is designed around three hard constraints:
 
 ### 3.2 Component Responsibilities
 
-| Component                 | Location                     | Responsibility                                                                                                                             |
-| ------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Orchestrator**          | `orchestrator.py`            | Central integration point; wires task generation → validation → fingerprinting → scoring → incentive computation → epoch weight production |
-| **Task Generator**        | `task-generator/`            | Produces deterministic vulnerable Solidity contract packages from templates + mutations                                                    |
-| **Mutator Framework**     | `task-generator/mutator/`    | Pluggable source-level transformations that preserve vulnerability semantics while changing bytecode fingerprints                          |
-| **Validation Engine**     | `validator/engine/`          | Executes exploit submissions in deterministic, sandboxed Anvil instances; binary outcome (VALID / REJECT)                                  |
-| **Fingerprint Engine**    | `validator/fingerprint/`     | Computes state-impact fingerprints and deduplicates submissions; first submitter gets full reward                                          |
-| **Severity Scorer**       | `validator/scoring/`         | Algorithmic severity scoring (funds drained, privilege escalation, invariant breakage, permanent lock)                                     |
-| **Anti-Collusion Engine** | `validator/anticollusion/`   | Multi-validator consensus with quorum, agreement thresholds, divergence tracking, and slashing                                             |
-| **Miner Neuron**          | `neurons/miner.py`           | Receives task queries, manages exploit preparation and submission                                                             |
-| **Miner CLI**             | `miner/cli.py`               | Interactive command-line workflow: list tasks → scaffold → submit → check scores                                                           |
-| **Smart Contracts**       | `contracts/src/`             | On-chain state: exploit registry, protocol bounty registry, adversarial scoring                                    |
+| Component                 | Location                   | Responsibility                                                                                                                             |
+| ------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Orchestrator**          | `orchestrator.py`          | Central integration point; wires task generation → validation → fingerprinting → scoring → incentive computation → epoch weight production |
+| **Task Generator**        | `task-generator/`          | Produces deterministic vulnerable Solidity contract packages from templates + mutations                                                    |
+| **Mutator Framework**     | `task-generator/mutator/`  | Pluggable source-level transformations that preserve vulnerability semantics while changing bytecode fingerprints                          |
+| **Validation Engine**     | `validator/engine/`        | Executes exploit submissions in deterministic, sandboxed Anvil instances; binary outcome (VALID / REJECT)                                  |
+| **Fingerprint Engine**    | `validator/fingerprint/`   | Computes state-impact fingerprints and deduplicates submissions; first submitter gets full reward                                          |
+| **Severity Scorer**       | `validator/scoring/`       | Algorithmic severity scoring (funds drained, privilege escalation, invariant breakage, permanent lock)                                     |
+| **Anti-Collusion Engine** | `validator/anticollusion/` | Multi-validator consensus with quorum, agreement thresholds, divergence tracking, and slashing                                             |
+| **Miner Neuron**          | `neurons/miner.py`         | Receives task queries, manages exploit preparation and submission                                                                          |
+| **Miner CLI**             | `miner/cli.py`             | Interactive command-line workflow: list tasks → scaffold → submit → check scores                                                           |
+| **Smart Contracts**       | `contracts/src/`           | On-chain state: exploit registry, protocol bounty registry, adversarial scoring                                                            |
 
 ---
 
@@ -232,12 +232,12 @@ The orchestrator is the central integration point. It initialises every sub-comp
 
 **Key Methods:**
 
-| Method                                                    | Description                                               |
-| --------------------------------------------------------- | --------------------------------------------------------- |
-| `generate_corpus(count_per_class, seed)`                  | Generate or refresh the task corpus via `CorpusGenerator` |
-| `load_task(task_id)`                                      | Load task by ID or unambiguous prefix                     |
-| `process_submission(task_id, source, miner)`              | Full validation pipeline                                  |
-| `close_epoch(epoch, start_block, end_block)`              | Compute weights, prune state, persist results             |
+| Method                                       | Description                                               |
+| -------------------------------------------- | --------------------------------------------------------- |
+| `generate_corpus(count_per_class, seed)`     | Generate or refresh the task corpus via `CorpusGenerator` |
+| `load_task(task_id)`                         | Load task by ID or unambiguous prefix                     |
+| `process_submission(task_id, source, miner)` | Full validation pipeline                                  |
+| `close_epoch(epoch, start_block, end_block)` | Compute weights, prune state, persist results             |
 
 **Output:** `SubmissionResult` dataclass containing validation result, fingerprint, duplicate status, severity score, reward multiplier, and timing.
 

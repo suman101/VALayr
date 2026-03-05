@@ -691,11 +691,11 @@ If `data` is a `str`, it is UTF-8 encoded before hashing.
 
 **Direction:** Miner → Validator
 
-| Field            | Type           | Direction | Description                          |
-| ---------------- | -------------- | --------- | ------------------------------------ |
-| `task_id`        | `str`          | Request   | Hex task identifier                  |
-| `exploit_source` | `str`          | Request   | Raw Solidity exploit source          |
-| `result`         | `dict \| None` | Response  | Validation result from validator     |
+| Field            | Type           | Direction | Description                      |
+| ---------------- | -------------- | --------- | -------------------------------- |
+| `task_id`        | `str`          | Request   | Hex task identifier              |
+| `exploit_source` | `str`          | Request   | Raw Solidity exploit source      |
+| `result`         | `dict \| None` | Response  | Validation result from validator |
 
 ### `ExploitQuerySynapse`
 

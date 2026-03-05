@@ -12,15 +12,15 @@ contract Treasury is Ownable2Step, Pausable {
     // ── Structs ──────────────────────────────────────────────────────────
 
     struct Competition {
-        bytes32 taskId;           // Target contract task ID
-        uint256 prizePool;        // Total ETH in escrow
+        bytes32 taskId; // Target contract task ID
+        uint256 prizePool; // Total ETH in escrow
         uint256 startTime;
-        uint256 deadline;         // Submissions close here
-        address winner;           // Best exploit miner
-        uint256 winnerScore;      // Highest severity score (1e18)
+        uint256 deadline; // Submissions close here
+        address winner; // Best exploit miner
+        uint256 winnerScore; // Highest severity score (1e18)
         bytes32 winnerFingerprint;
-        bool settled;             // True after settlement
-        bool withdrawn;           // True after winner claims
+        bool settled; // True after settlement
+        bool withdrawn; // True after winner claims
         uint256 submissionCount;
     }
 
@@ -43,11 +43,32 @@ contract Treasury is Ownable2Step, Pausable {
 
     // ── Events ───────────────────────────────────────────────────────────
 
-    event CompetitionCreated(uint256 indexed id, bytes32 indexed taskId, uint256 prizePool, uint256 deadline);
-    event ScoreSubmitted(uint256 indexed id, address indexed miner, uint256 score, bytes32 fingerprint);
-    event CompetitionSettled(uint256 indexed id, address indexed winner, uint256 reward);
-    event PrizeWithdrawn(uint256 indexed id, address indexed winner, uint256 amount);
-    event ValidatorUpdated(address indexed oldValidator, address indexed newValidator);
+    event CompetitionCreated(
+        uint256 indexed id,
+        bytes32 indexed taskId,
+        uint256 prizePool,
+        uint256 deadline
+    );
+    event ScoreSubmitted(
+        uint256 indexed id,
+        address indexed miner,
+        uint256 score,
+        bytes32 fingerprint
+    );
+    event CompetitionSettled(
+        uint256 indexed id,
+        address indexed winner,
+        uint256 reward
+    );
+    event PrizeWithdrawn(
+        uint256 indexed id,
+        address indexed winner,
+        uint256 amount
+    );
+    event ValidatorUpdated(
+        address indexed oldValidator,
+        address indexed newValidator
+    );
     event FeesWithdrawn(address indexed to, uint256 amount);
 
     // ── Errors ───────────────────────────────────────────────────────────
@@ -103,7 +124,8 @@ contract Treasury is Ownable2Step, Pausable {
         bytes32 taskId,
         uint256 duration
     ) external payable whenNotPaused returns (uint256 id) {
-        if (duration < MIN_DURATION || duration > MAX_DURATION) revert InvalidDuration();
+        if (duration < MIN_DURATION || duration > MAX_DURATION)
+            revert InvalidDuration();
         if (msg.value < MIN_PRIZE) revert InsufficientPrize();
 
         id = nextCompetitionId++;
@@ -120,7 +142,12 @@ contract Treasury is Ownable2Step, Pausable {
             submissionCount: 0
         });
 
-        emit CompetitionCreated(id, taskId, msg.value, block.timestamp + duration);
+        emit CompetitionCreated(
+            id,
+            taskId,
+            msg.value,
+            block.timestamp + duration
+        );
     }
 
     /// @notice Submit a miner's score for an active competition.
@@ -193,16 +220,19 @@ contract Treasury is Ownable2Step, Pausable {
     // ── View Functions ───────────────────────────────────────────────────
 
     /// @notice Get full competition details.
-    function getCompetition(uint256 id) external view returns (Competition memory) {
+    function getCompetition(
+        uint256 id
+    ) external view returns (Competition memory) {
         return competitions[id];
     }
 
     /// @notice Check if a competition is accepting submissions.
     function isActive(uint256 id) external view returns (bool) {
         Competition storage comp = competitions[id];
-        return comp.startTime > 0
-            && block.timestamp <= comp.deadline
-            && !comp.settled;
+        return
+            comp.startTime > 0 &&
+            block.timestamp <= comp.deadline &&
+            !comp.settled;
     }
 
     /// @notice Time remaining before deadline (0 if ended).

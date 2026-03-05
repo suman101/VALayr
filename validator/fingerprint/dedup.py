@@ -55,13 +55,31 @@ class FingerprintComponents:
     ownership_changed: bool = False
     proxy_admin_mutated: bool = False
     call_graph_hash: str = ""
+    # Multi-tx: ordered list of test function names
+    test_function_order: list[str] = field(default_factory=list)
+    # Multi-tx: per-function selector groups (preserving execution order)
+    per_function_selectors: dict[str, list[str]] = field(default_factory=dict)
 
     def canonical_string(self) -> str:
-        """Produce deterministic canonical string for hashing."""
+        """Produce deterministic canonical string for hashing.
+
+        For multi-tx exploits, the fingerprint encodes the *sequence* of
+        per-function selector sets so that two exploits calling the same
+        functions in a different order produce different fingerprints.
+        """
         parts = []
 
-        # 1. Function selectors (sorted)
-        parts.append("selectors:" + ",".join(sorted(self.function_selectors)))
+        # 1. Function selectors — sequence-aware for multi-tx
+        if self.per_function_selectors and self.test_function_order:
+            # Hash per-function selector sets in execution order
+            seq_parts = []
+            for fn_name in self.test_function_order:
+                fn_sels = sorted(set(self.per_function_selectors.get(fn_name, [])))
+                seq_parts.append(f"{fn_name}={','.join(fn_sels)}")
+            parts.append("selector_sequence:" + "|".join(seq_parts))
+        else:
+            # Single-tx fallback: sorted flat selectors
+            parts.append("selectors:" + ",".join(sorted(self.function_selectors)))
 
         # 2. Storage diffs (sorted by slot index)
         sorted_diffs = sorted(self.storage_slot_diffs, key=lambda d: d.get("slot", ""))
@@ -145,6 +163,10 @@ class FingerprintEngine:
         # Function selectors
         fc.function_selectors = execution_trace.get("function_selectors", [])
 
+        # Multi-tx: per-function selector groups and execution order
+        fc.per_function_selectors = execution_trace.get("per_function_selectors", {})
+        fc.test_function_order = execution_trace.get("test_function_order", [])
+
         # Storage diffs
         raw_diffs = execution_trace.get("storage_diffs", [])
         for diff in raw_diffs:
@@ -170,17 +192,27 @@ class FingerprintEngine:
             if diff.get("slot", "") == EIP1967_IMPL_SLOT:
                 fc.proxy_admin_mutated = True
 
-        # Call graph hash
+        # Call graph hash — sequence-aware for multi-tx
         call_trace = execution_trace.get("call_trace", [])
         if call_trace:
             graph_str = json.dumps(call_trace, sort_keys=True, separators=(",", ":"))
             from validator.utils.hashing import keccak256
-            fc.call_graph_hash = keccak256(graph_str.encode())[2:34]  # 16 hex chars
+            fc.call_graph_hash = keccak256(graph_str.encode())[2:34]
+        elif fc.per_function_selectors and fc.test_function_order:
+            # Multi-tx: hash the ordered per-function selector chains
+            from validator.utils.hashing import keccak256
+            chain_parts = []
+            for fn_name in fc.test_function_order:
+                fn_sels = fc.per_function_selectors.get(fn_name, [])
+                chain_parts.append(f"{fn_name}:{'->'.join(fn_sels)}")
+            fc.call_graph_hash = keccak256(
+                "|".join(chain_parts).encode()
+            )[2:34]
         else:
             from validator.utils.hashing import keccak256
             fc.call_graph_hash = keccak256(
                 "->".join(fc.function_selectors).encode()
-            )[2:34]  # 16 hex chars
+            )[2:34]
 
         return fc
 

@@ -38,19 +38,19 @@ We will acknowledge receipt within **48 hours** and aim to release a patch withi
 
 The following components are in scope for security reports:
 
-| Component             | Path                         | Priority |
-| --------------------- | ---------------------------- | -------- |
-| Smart contracts       | `contracts/src/`             | Critical |
-| Validation engine     | `validator/engine/`          | Critical |
+| Component         | Path                | Priority |
+| ----------------- | ------------------- | -------- |
+| Smart contracts   | `contracts/src/`    | Critical |
+| Validation engine | `validator/engine/` | Critical |
 
-| Anti-collusion engine | `validator/anticollusion/`   | High     |
-| Fingerprint dedup     | `validator/fingerprint/`     | High     |
-| Neuron wrappers       | `neurons/`                   | High     |
-| Orchestrator          | `orchestrator.py`            | High     |
-| Subnet adapter        | `subnet-adapter/`            | Medium   |
-| Docker infrastructure | `docker/`                    | Medium   |
-| Task generator        | `task-generator/`            | Low      |
-| CI / scripts          | `.github/`, `scripts/`       | Low      |
+| Anti-collusion engine | `validator/anticollusion/` | High |
+| Fingerprint dedup | `validator/fingerprint/` | High |
+| Neuron wrappers | `neurons/` | High |
+| Orchestrator | `orchestrator.py` | High |
+| Subnet adapter | `subnet-adapter/` | Medium |
+| Docker infrastructure | `docker/` | Medium |
+| Task generator | `task-generator/` | Low |
+| CI / scripts | `.github/`, `scripts/` | Low |
 
 ## Out of Scope
 

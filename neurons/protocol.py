@@ -15,7 +15,7 @@ can still reference these classes without importing bittensor itself.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 # ── Bittensor-conditional base class ────────────────────────────────────────
 
@@ -55,6 +55,9 @@ class ExploitSubmissionSynapse(_SynapseBase):
     # --- Miner-set request fields ---
     task_id: str = ""
     exploit_source: str = ""
+    # Multi-tx: list of test_* function names in execution order.
+    # Optional — if empty, the validator auto-detects from exploit_source.
+    entry_functions: List[str] = []
 
     # --- Validator-set response fields ---
     result: Optional[Dict[str, Any]] = None

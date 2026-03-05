@@ -299,6 +299,7 @@ class ValidatorNeuron:
                 task_id=task_id,
                 exploit_source=exploit_source,
                 miner_address=miner_hotkey,
+                entry_functions=getattr(synapse, "entry_functions", None) or [],
             )
 
             with self._submission_lock:

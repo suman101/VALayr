@@ -88,7 +88,12 @@ class SeverityScorer:
         return breakdown.final_severity
 
     def score_detailed(self, trace) -> SeverityBreakdown:
-        """Compute severity with full breakdown."""
+        """Compute severity with full breakdown.
+
+        For multi-tx exploits with per-function results, each step's
+        impact is evaluated independently to avoid net-delta masking
+        (e.g. setup deposits then attack drains → net zero misleads).
+        """
         breakdown = SeverityBreakdown()
 
         # Handle both object and dict inputs
@@ -103,6 +108,8 @@ class SeverityScorer:
             if not isinstance(event_logs, list):
                 event_logs = []
             reverted = bool(trace.get("reverted", False))
+            test_results = trace.get("test_results", {})
+            is_multi_tx = trace.get("is_multi_tx", False)
         else:
             balance_delta = getattr(trace, "balance_delta", 0)
             storage_diffs = getattr(trace, "storage_diffs", [])
@@ -110,17 +117,38 @@ class SeverityScorer:
                 storage_diffs = [{"slot": d.slot, "before": d.before, "after": d.after} for d in storage_diffs]
             event_logs = getattr(trace, "event_logs", [])
             reverted = getattr(trace, "reverted", False)
+            test_results = getattr(trace, "test_results", {})
+            is_multi_tx = getattr(trace, "is_multi_tx", False)
 
         if reverted:
             return breakdown
 
         # ── 1. Funds Drained Score ────────────────────────────────────────
-        wei_drained = abs(balance_delta) if balance_delta < 0 else 0
+        # For multi-tx: use the maximum per-function gas impact as a proxy
+        # for complexity, and treat any negative balance_delta as drain.
+        # The net delta can mask actual drain so we use abs for multi-tx.
+        if is_multi_tx and test_results:
+            # Multi-tx: total gas across steps indicates attack complexity
+            total_gas = sum(
+                r.get("gas_used", 0) for r in test_results.values()
+                if isinstance(r, dict)
+            )
+            # Use absolute balance_delta for multi-tx (net can understate)
+            wei_drained = abs(balance_delta)
+            # Complexity bonus: multi-step exploits with high total gas
+            # get a small bonus (up to 10%) to incentivize discovery
+            complexity_bonus = min(0.10, math.log10(max(total_gas, 1)) / 80.0)
+        else:
+            wei_drained = abs(balance_delta) if balance_delta < 0 else 0
+            complexity_bonus = 0.0
+
         breakdown.wei_drained = wei_drained
 
         if wei_drained > 0:
             log_drain = math.log10(wei_drained + 1)
-            breakdown.funds_drained_score = min(log_drain / MAX_LOG_DRAIN, 1.0)
+            breakdown.funds_drained_score = min(
+                (log_drain / MAX_LOG_DRAIN) + complexity_bonus, 1.0
+            )
 
         # ── 2. Privilege Escalation Score ─────────────────────────────────
         # Check if any ownership/admin slots changed
@@ -177,6 +205,8 @@ class SeverityScorer:
 
         # Build detail string
         details = []
+        if is_multi_tx:
+            details.append(f"multi_tx({len(test_results)}_steps)")
         if breakdown.funds_drained_score > 0:
             details.append(f"drain={breakdown.wei_drained}wei(score={breakdown.funds_drained_score:.3f})")
         if breakdown.privilege_escalation_score > 0:

@@ -107,6 +107,12 @@ class ExecutionTrace:
     function_selectors: list[str] = field(default_factory=list)
     # Multi-tx support: per-function results when exploit has multiple test_* functions
     test_results: dict[str, dict] = field(default_factory=dict)  # {name: {gas, status, reason}}
+    # Multi-tx: ordered list of test function names that were executed
+    test_function_order: list[str] = field(default_factory=list)
+    # Multi-tx: per-function selector groups {test_name: [selector1, selector2]}
+    per_function_selectors: dict[str, list[str]] = field(default_factory=dict)
+    # True when exploit has multiple test_* functions
+    is_multi_tx: bool = False
 
 
 @dataclass
@@ -114,7 +120,8 @@ class ExploitSubmission:
     """What a miner submits."""
     task_id: str
     exploit_source: str          # Solidity source (Foundry test format)
-    entry_function: str = "test_run"  # Entry point function name (must start with test_ for Forge)
+    entry_function: str = "test_run"  # Default entry point (used when wrapping raw code)
+    entry_functions: list[str] = field(default_factory=list)  # Multiple test_* functions (auto-detected)
     expected_state_diff: Optional[dict] = None  # Optional expected diff JSON
 
 
@@ -314,6 +321,11 @@ class ValidationEngine:
         exploit_wrapped = self._wrap_exploit(submission.exploit_source, submission.entry_function)
         (test_dir / "Exploit.t.sol").write_text(exploit_wrapped)
 
+        # Auto-detect test_* functions in the final wrapped exploit
+        detected = self._detect_test_functions(exploit_wrapped)
+        if detected and not submission.entry_functions:
+            submission.entry_functions = detected
+
         # Write foundry.toml
         foundry_config = f"""[profile.default]
 src = "src"
@@ -343,13 +355,38 @@ local = "http://{ANVIL_HOST}:{self.anvil_port}"
 
         return ws
 
+    @staticmethod
+    def _detect_test_functions(source: str) -> list[str]:
+        """Detect all test_* function names in Solidity source."""
+        return re.findall(r'function\s+(test_\w+)\s*\(', source)
+
     def _wrap_exploit(self, exploit_source: str, entry_function: str) -> str:
-        """Ensure exploit is in proper Foundry test format."""
+        """Ensure exploit is in proper Foundry test format.
+
+        If the source already contains pragma + contract declarations AND
+        has one or more test_* functions, it is used as-is (multi-tx safe).
+        Otherwise, raw code is wrapped into a single test function.
+        """
         # If already has pragma and contract, use as-is
         if "pragma solidity" in exploit_source and "contract" in exploit_source:
             return exploit_source
 
-        # Wrap raw exploit code into Foundry test
+        # Check if raw source contains multiple test_* functions (unlikely but possible)
+        test_fns = self._detect_test_functions(exploit_source)
+        if len(test_fns) > 1:
+            # Source has multiple test functions but no pragma/contract — wrap with structure
+            return f"""// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+import "forge-std/Test.sol";
+import "../src/Vulnerable.sol";
+
+contract ExploitTest is Test {{
+{exploit_source}
+}}
+"""
+
+        # Wrap raw exploit code into Foundry test (single function)
         return f"""// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
@@ -755,17 +792,27 @@ contract ExploitTest is Test {{
             # Estimate gas from state changes
             trace.gas_used = 21_000 + len(trace.storage_diffs) * 5_000
 
-        # Extract function selectors from call trace (if available in stderr)
+        # Extract function selectors from call trace, grouped per test_* function
         selectors = set()
+        current_test_fn: str | None = None
+        per_fn_selectors: dict[str, list[str]] = {}
+        fn_order: list[str] = []
+
         for line in exec_result.get("stderr", "").split("\n"):
+            # Detect test function headers in forge trace (e.g. "[PASS] test_attack() ...")
+            header_match = re.search(r'\[(PASS|FAIL)\]\s+(test_\w+)\s*\(', line)
+            if header_match:
+                current_test_fn = header_match.group(2)
+                if current_test_fn not in per_fn_selectors:
+                    per_fn_selectors[current_test_fn] = []
+                    fn_order.append(current_test_fn)
+                continue
+
             if "├─" in line or "└─" in line:
                 # Parse forge trace format
                 parts = line.split("::")
                 if len(parts) >= 2:
-                    # Use the full function signature (e.g. "withdraw(uint256)") for
-                    # correct ABI selector computation, not just the bare name.
                     raw = parts[-1].strip()
-                    # Strip trailing return type / whitespace after closing paren
                     paren_open = raw.find("(")
                     paren_close = raw.rfind(")")
                     if paren_open != -1 and paren_close != -1:
@@ -776,7 +823,18 @@ contract ExploitTest is Test {{
                         from validator.utils.hashing import keccak256
                         selector = keccak256(func_sig.encode())[2:10]  # first 4 bytes
                         selectors.add(selector)
+                        if current_test_fn is not None:
+                            per_fn_selectors[current_test_fn].append(selector)
+
         trace.function_selectors = sorted(selectors)
+        trace.per_function_selectors = per_fn_selectors
+        trace.test_function_order = fn_order
+        trace.is_multi_tx = len(trace.test_results) > 1
+
+        # Merge per-function selectors into test_results entries
+        for fn_name, fn_sels in per_fn_selectors.items():
+            if fn_name in trace.test_results:
+                trace.test_results[fn_name]["selectors"] = sorted(set(fn_sels))
 
         return trace
 

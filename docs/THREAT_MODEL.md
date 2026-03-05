@@ -71,14 +71,14 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 ### 4.1 Smart Contract Entry Points
 
-| Function                                | Access                | Threat                         | Mitigation                                                                  |
-| --------------------------------------- | --------------------- | ------------------------------ | --------------------------------------------------------------------------- |
-| `ExploitRegistry.recordExploit()`       | `onlyValidator`       | Fake exploit injection         | Validator whitelist + multi-quorum check (`MIN_QUORUM = 5`)                 |
-| `ProtocolRegistry.registerContract()`   | Any (with ETH)        | Registration spam              | Minimum bounty requirement (0.01 ETH), `extcodehash` check                  |
-| `ProtocolRegistry.recordExploit()`      | `onlyValidator`       | False claim to drain bounty    | Validator whitelist, 90 % max reward cap (`MAX_REWARD_BPS = 9000`)          |
-| `ProtocolRegistry.withdrawBounty()`     | `onlyProtocol`        | Withdraw before claims settled | Disclosure window enforcement loop (72 h)                                   |
-| `ProtocolRegistry.payExploitReward()`   | Any (after window)    | Reentrancy                     | Checks-effects-interactions pattern; reward computed once and immutable     |
-| `AdversarialScoring.processChallenge()` | `onlyOwner`           | Centralised scoring            | Designed as validator-only in Stage 3; decentralisation planned             |
+| Function                                | Access             | Threat                         | Mitigation                                                              |
+| --------------------------------------- | ------------------ | ------------------------------ | ----------------------------------------------------------------------- |
+| `ExploitRegistry.recordExploit()`       | `onlyValidator`    | Fake exploit injection         | Validator whitelist + multi-quorum check (`MIN_QUORUM = 5`)             |
+| `ProtocolRegistry.registerContract()`   | Any (with ETH)     | Registration spam              | Minimum bounty requirement (0.01 ETH), `extcodehash` check              |
+| `ProtocolRegistry.recordExploit()`      | `onlyValidator`    | False claim to drain bounty    | Validator whitelist, 90 % max reward cap (`MAX_REWARD_BPS = 9000`)      |
+| `ProtocolRegistry.withdrawBounty()`     | `onlyProtocol`     | Withdraw before claims settled | Disclosure window enforcement loop (72 h)                               |
+| `ProtocolRegistry.payExploitReward()`   | Any (after window) | Reentrancy                     | Checks-effects-interactions pattern; reward computed once and immutable |
+| `AdversarialScoring.processChallenge()` | `onlyOwner`        | Centralised scoring            | Designed as validator-only in Stage 3; decentralisation planned         |
 
 ### 4.2 Network Interfaces
 
@@ -91,13 +91,13 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 ### 4.3 File I/O
 
-| Path                                          | R/W | Risk                                       | Mitigation                                          |
-| --------------------------------------------- | --- | ------------------------------------------ | --------------------------------------------------- |
-| `data/fingerprints.json`                      | R/W | Dedup corruption → duplicate rewards       | `fcntl.LOCK_EX` + atomic `os.replace`               |
-| `data/anticollusion/anticollusion_state.json` | R/W | False slashing decisions                   | Bounded history (10 K entries), periodic pruning    |
-| `data/reports/*.json`                         | W   | Exploit IP leakage                         | Written inside secure validator container           |
-| `data/miner/exploits/*.sol`                   | R/W | Pre-disclosure vulnerability details       | Miner-local, never transmitted after validation     |
-| `/tmp/exploit-val-*`                          | R/W | Sandbox escape artefacts                   | Auto-cleaned in `finally` block; `tempfile.mkdtemp` |
+| Path                                          | R/W | Risk                                 | Mitigation                                          |
+| --------------------------------------------- | --- | ------------------------------------ | --------------------------------------------------- |
+| `data/fingerprints.json`                      | R/W | Dedup corruption → duplicate rewards | `fcntl.LOCK_EX` + atomic `os.replace`               |
+| `data/anticollusion/anticollusion_state.json` | R/W | False slashing decisions             | Bounded history (10 K entries), periodic pruning    |
+| `data/reports/*.json`                         | W   | Exploit IP leakage                   | Written inside secure validator container           |
+| `data/miner/exploits/*.sol`                   | R/W | Pre-disclosure vulnerability details | Miner-local, never transmitted after validation     |
+| `/tmp/exploit-val-*`                          | R/W | Sandbox escape artefacts             | Auto-cleaned in `finally` block; `tempfile.mkdtemp` |
 
 ---
 
@@ -113,18 +113,18 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 ### 5.2 Intellectual Property
 
-| Asset                   | Location                                | CIA Impact                                 |
-| ----------------------- | --------------------------------------- | ------------------------------------------ |
-| Exploit source code     | Synapse payloads, `data/reports/*.json` | Pre-disclosure leakage to competitors      |
-| Vulnerability templates | `task-generator/templates/*.sol`        | Low — public after generation              |
+| Asset                   | Location                                | CIA Impact                            |
+| ----------------------- | --------------------------------------- | ------------------------------------- |
+| Exploit source code     | Synapse payloads, `data/reports/*.json` | Pre-disclosure leakage to competitors |
+| Vulnerability templates | `task-generator/templates/*.sol`        | Low — public after generation         |
 
 ### 5.3 Cryptographic Material
 
-| Asset                 | Location                | CIA Impact                                     |
-| --------------------- | ----------------------- | ---------------------------------------------- |
-| `ETH_PRIVATE_KEY`     | Runtime env var, memory | On-chain tx signing (exploit recording)        |
-| Bittensor wallet keys | `bt.wallet()` keystore  | Staking, weight-setting authority              |
-| Anvil deployer key    | Hardcoded (`0xac09…`)   | LOW — well-known test key, sandbox only        |
+| Asset                 | Location                | CIA Impact                              |
+| --------------------- | ----------------------- | --------------------------------------- |
+| `ETH_PRIVATE_KEY`     | Runtime env var, memory | On-chain tx signing (exploit recording) |
+| Bittensor wallet keys | `bt.wallet()` keystore  | Staking, weight-setting authority       |
+| Anvil deployer key    | Hardcoded (`0xac09…`)   | LOW — well-known test key, sandbox only |
 
 ---
 
@@ -132,10 +132,10 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 ### 6.1 Spoofing
 
-| Threat                                    | Impact                   | Mitigation                                                                        |
-| ----------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| Miner impersonates another miner's hotkey | Steal credit for exploit | Bittensor cryptographic identity (hotkey/coldkey)                          |
-| Fake validator records exploit            | Drain bounty pool        | `onlyValidator` modifier; validators added only by contract owner                 |
+| Threat                                    | Impact                   | Mitigation                                                        |
+| ----------------------------------------- | ------------------------ | ----------------------------------------------------------------- |
+| Miner impersonates another miner's hotkey | Steal credit for exploit | Bittensor cryptographic identity (hotkey/coldkey)                 |
+| Fake validator records exploit            | Drain bounty pool        | `onlyValidator` modifier; validators added only by contract owner |
 
 ### 6.2 Tampering
 
@@ -147,16 +147,16 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 ### 6.3 Repudiation
 
-| Threat                             | Impact                        | Mitigation                                                                             |
-| ---------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
+| Threat                             | Impact                        | Mitigation                                                                                |
+| ---------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------- |
 | Validator denies validation result | Dispute resolution impossible | On-chain exploit registry provides immutable audit trail; consensus relay logs exportable |
-| Miner denies submission            | Weight disputes               | Bittensor synapse provides signed message trail                                        |
+| Miner denies submission            | Weight disputes               | Bittensor synapse provides signed message trail                                           |
 
 ### 6.4 Information Disclosure
 
 | Threat                                       | Impact                    | Mitigation                                                                               |
 | -------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
-| Exploit code leaked before disclosure window | Front-running by attacker | Bittensor time-locked commitments; validator sandbox isolation                            |
+| Exploit code leaked before disclosure window | Front-running by attacker | Bittensor time-locked commitments; validator sandbox isolation                           |
 | Private key in process listing               | Key theft                 | `ETH_PRIVATE_KEY` passed via env var (not CLI args); `del _pk` after use in miner neuron |
 | Metrics endpoint leaks sensitive data        | Operational intelligence  | Read-only JSON; no exploit data; bind `127.0.0.1` outside Docker                         |
 
@@ -250,19 +250,19 @@ MINER                        VALIDATOR                         EVM CHAIN
 
 ## 10. Security Controls Summary
 
-| Control                            | Type                   | Location                                         |
-| ---------------------------------- | ---------------------- | ------------------------------------------------ |
-| Docker network isolation           | Preventive             | `docker-compose.yml`, `entrypoint.sh`            |
-| Path-traversal sanitiser           | Preventive             | `validator/engine/validate.py`                   |
-| Multi-validator consensus          | Detective + Corrective | `validator/anticollusion/consensus.py`           |
-| Fingerprint deduplication          | Detective              | `validator/fingerprint/dedup.py`                 |
-| Rate limiting (per-miner + global) | Preventive             | `neurons/validator.py`                           |
-| Disclosure window enforcement      | Preventive             | `ProtocolRegistry.sol`                           |
-| Divergence-based slashing          | Corrective             | `validator/anticollusion/consensus.py`           |
-| Private key hygiene                | Preventive             | `neurons/miner.py`                               |
-| Deterministic build toolchain      | Preventive             | Dockerfiles, CI, `PYTHONHASHSEED=0`              |
-| Non-root container user            | Preventive             | `Dockerfile.validator`, `Dockerfile.miner`       |
-| OwnershipTransferred events        | Detective              | All four contracts                               |
+| Control                            | Type                   | Location                                   |
+| ---------------------------------- | ---------------------- | ------------------------------------------ |
+| Docker network isolation           | Preventive             | `docker-compose.yml`, `entrypoint.sh`      |
+| Path-traversal sanitiser           | Preventive             | `validator/engine/validate.py`             |
+| Multi-validator consensus          | Detective + Corrective | `validator/anticollusion/consensus.py`     |
+| Fingerprint deduplication          | Detective              | `validator/fingerprint/dedup.py`           |
+| Rate limiting (per-miner + global) | Preventive             | `neurons/validator.py`                     |
+| Disclosure window enforcement      | Preventive             | `ProtocolRegistry.sol`                     |
+| Divergence-based slashing          | Corrective             | `validator/anticollusion/consensus.py`     |
+| Private key hygiene                | Preventive             | `neurons/miner.py`                         |
+| Deterministic build toolchain      | Preventive             | Dockerfiles, CI, `PYTHONHASHSEED=0`        |
+| Non-root container user            | Preventive             | `Dockerfile.validator`, `Dockerfile.miner` |
+| OwnershipTransferred events        | Detective              | All four contracts                         |
 
 ---
 

@@ -53,9 +53,9 @@ This guide covers production deployment, Docker configuration, monitoring, troub
 
 ### Credentials
 
-| Credential                          | Purpose                             | Storage                               |
-| ----------------------------------- | ----------------------------------- | ------------------------------------- |
-| Bittensor wallet (coldkey + hotkey) | Subnet registration, weight setting | `~/.bittensor/wallets/`               |
+| Credential                          | Purpose                             | Storage                 |
+| ----------------------------------- | ----------------------------------- | ----------------------- |
+| Bittensor wallet (coldkey + hotkey) | Subnet registration, weight setting | `~/.bittensor/wallets/` |
 
 ---
 
