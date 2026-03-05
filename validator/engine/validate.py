@@ -466,7 +466,7 @@ contract ExploitTest is Test {{
                 if ".." in stripped:
                     return False
                 # Disallow absolute paths (Unix + Windows)
-                if re.search(r'["\']/', stripped) or re.search(r'["\'][A-Za-z]:\\\\', stripped):
+                if re.search(r'["\']/', stripped) or re.search(r'["\'][A-Za-z]:\\?', stripped):
                     return False
 
             # Reject foundry remapping directives embedded in source comments

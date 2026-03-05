@@ -149,7 +149,11 @@ class SubnetIncentiveAdapter:
             if consensus["result"] == "VALID":
                 result.total_valid += 1
                 score.valid_exploits += 1
-                score.total_severity += consensus["severity_score"]
+                severity = consensus.get("severity_score", 0.0)
+                if not isinstance(severity, (int, float)):
+                    severity = 0.0
+                severity = max(0.0, min(1.0, severity))
+                score.total_severity += severity
 
                 if consensus.get("is_first_fingerprint", False):
                     score.unique_fingerprints += 1

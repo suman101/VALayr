@@ -246,12 +246,13 @@ class AntiCollusionEngine:
 
             result.votes.append(vote)
 
-        # Find majority
+        # Find majority (iterate in sorted order for determinism)
         total_votes = len(votes)
         majority_result = None
         majority_validators = []
 
-        for res, validators in result_tally.items():
+        for res in sorted(result_tally.keys()):
+            validators = result_tally[res]
             ratio = len(validators) / total_votes
             if ratio >= CONSENSUS_THRESHOLD:
                 majority_result = res
@@ -260,8 +261,12 @@ class AntiCollusionEngine:
                 break
 
         if majority_result is None:
-            # No consensus — find plurality
-            majority_result = max(result_tally, key=lambda r: len(result_tally[r]))
+            # No consensus — find plurality with deterministic tie-breaking
+            # On equal vote count, pick lexicographically first result
+            majority_result = max(
+                result_tally,
+                key=lambda r: (len(result_tally[r]), r),
+            )
             majority_validators = result_tally[majority_result]
             result.agreement_ratio = len(majority_validators) / total_votes
 

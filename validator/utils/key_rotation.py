@@ -122,14 +122,10 @@ def _wallet_address(cast_bin: str, private_key: str) -> str:
     )
     stdout, stderr = proc.communicate(input=private_key, timeout=10)
     if proc.returncode != 0:
-        # Fallback: older cast versions may not support --private-key-stdin
-        result = subprocess.run(
-            [cast_bin, "wallet", "address", private_key],
-            capture_output=True, text=True, timeout=10,
+        raise RuntimeError(
+            f"cast wallet address failed: {stderr.strip()}. "
+            "Requires cast version with --private-key-stdin support."
         )
-        if result.returncode != 0:
-            raise RuntimeError(f"cast wallet address failed: {result.stderr.strip()}")
-        return result.stdout.strip()
     return stdout.strip()
 
 

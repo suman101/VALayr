@@ -23,9 +23,10 @@ class BalanceMutator(Mutator):
         if literal is None:
             return source
 
+        literal_str = str(literal)
         source = re.sub(
             r"(\d+)\s*(ether|wei)",
-            rf"{literal} \2",
+            lambda m: f"{literal_str} {m.group(2)}",
             source,
             count=1,
         )

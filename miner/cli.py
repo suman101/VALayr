@@ -90,8 +90,11 @@ class MinerCLI:
         # Show source code summary
         source_dir = task.get("_source_dir", "")
         if source_dir:
-            source_path = Path(source_dir) / "Vulnerable.sol"
-            if source_path.exists():
+            source_path = (Path(source_dir) / "Vulnerable.sol").resolve()
+            corpus_dir = (PROJECT_ROOT / "contracts" / "corpus").resolve()
+            if not str(source_path).startswith(str(corpus_dir) + os.sep):
+                logger.warning("Task source directory outside corpus: %s", source_dir)
+            elif source_path.exists():
                 source = source_path.read_text()
                 lines = source.strip().split("\n")
                 print(f"\nSource ({len(lines)} lines):")
@@ -109,16 +112,19 @@ class MinerCLI:
             logger.error("Exploit file not found: %s", exploit_path)
             return
 
-        file_size = exploit_path.stat().st_size
-        if file_size > MAX_EXPLOIT_SOURCE_BYTES:
+        try:
+            exploit_source = exploit_path.read_text()
+        except (IOError, OSError) as e:
+            logger.error("Failed to read exploit file: %s", e)
+            return
+
+        if len(exploit_source.encode()) > MAX_EXPLOIT_SOURCE_BYTES:
             logger.error(
-                "Exploit file too large (%d bytes, max %d)",
-                file_size,
+                "Exploit source too large (%d bytes, max %d)",
+                len(exploit_source.encode()),
                 MAX_EXPLOIT_SOURCE_BYTES,
             )
             return
-
-        exploit_source = exploit_path.read_text()
         logger.info("Submitting exploit for task %s...", args.task[:16])
         logger.info("File: %s (%d bytes), Miner: %s", exploit_path.name, len(exploit_source), self.miner_address)
 
@@ -195,7 +201,11 @@ class MinerCLI:
             print(f"[!] Task not found: {args.task}")
             return
 
-        output_dir = Path(args.output) if args.output else Path(".")
+        output_dir = Path(args.output).resolve() if args.output else Path(".").resolve()
+        cwd = Path.cwd().resolve()
+        if not str(output_dir).startswith(str(cwd)):
+            print(f"[!] Output directory must be under {cwd}")
+            return
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Read the vulnerable source

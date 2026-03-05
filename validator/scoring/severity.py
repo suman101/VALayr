@@ -94,9 +94,15 @@ class SeverityScorer:
         # Handle both object and dict inputs
         if isinstance(trace, dict):
             balance_delta = trace.get("balance_delta", 0)
+            if not isinstance(balance_delta, (int, float)):
+                balance_delta = 0
             storage_diffs = trace.get("storage_diffs", [])
+            if not isinstance(storage_diffs, list):
+                storage_diffs = []
             event_logs = trace.get("event_logs", [])
-            reverted = trace.get("reverted", False)
+            if not isinstance(event_logs, list):
+                event_logs = []
+            reverted = bool(trace.get("reverted", False))
         else:
             balance_delta = getattr(trace, "balance_delta", 0)
             storage_diffs = getattr(trace, "storage_diffs", [])
@@ -120,6 +126,8 @@ class SeverityScorer:
         # Check if any ownership/admin slots changed
         for diff in storage_diffs:
             slot = diff.get("slot", "") if isinstance(diff, dict) else diff.slot
+            if isinstance(slot, int):
+                slot = hex(slot)
             if slot in OWNER_SLOT_INDICES or slot == EIP1967_ADMIN_SLOT:
                 breakdown.privilege_escalation_score = 1.0
                 break

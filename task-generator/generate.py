@@ -111,7 +111,14 @@ class TaskPackage:
         if not self.task_id:
             self.compute_task_id()
 
-        task_dir = output_dir / self.task_id[:10]
+        # Sanitize task_id: keep only hex-safe characters
+        sanitized_id = "".join(c for c in self.task_id[:10] if c in "0123456789abcdef")
+        if not sanitized_id:
+            sanitized_id = "unknown"
+        task_dir = (output_dir / sanitized_id).resolve()
+        output_resolved = output_dir.resolve()
+        if not str(task_dir).startswith(str(output_resolved) + os.sep):
+            raise ValueError(f"Task directory escape detected: {self.task_id}")
         task_dir.mkdir(parents=True, exist_ok=True)
 
         # Save source
@@ -274,7 +281,10 @@ class CorpusGenerator:
                                  difficulty: int = 1,
                                  mutations: Optional[dict] = None) -> TaskPackage:
         """Load a template, optionally apply mutations, produce TaskPackage."""
-        template_path = self.templates_dir / template_name
+        template_path = (self.templates_dir / template_name).resolve()
+        templates_resolved = self.templates_dir.resolve()
+        if not str(template_path).startswith(str(templates_resolved) + os.sep):
+            raise ValueError(f"Template path escape attempt: {template_name}")
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")
 
