@@ -125,7 +125,9 @@ contract ProtocolRegistryTest is Test {
         assertEq(registry.getExploitCount(contractHash), 1);
     }
 
-    function test_payExploitReward_after_expiry_reverts() public {
+    function test_payExploitReward_after_expiry_succeeds() public {
+        // H19 fix: reward is snapshotted at claim time, so payment should
+        // succeed even after contract expiry (miners keep earned rewards).
         DummyTarget dummy = new DummyTarget();
         uint256 expiry = block.timestamp + 2 hours;
         registry.registerContract{value: 10 ether}(address(dummy), expiry);
@@ -135,10 +137,10 @@ contract ProtocolRegistryTest is Test {
         bytes32 fingerprint = keccak256("exploit-2");
         registry.recordExploit(contractHash, fingerprint, MINER, 0.5e18);
 
-        // Warp past both disclosure window AND expiry
-        vm.warp(expiry + 1);
+        // Warp past both disclosure window (72h) AND expiry
+        vm.warp(block.timestamp + 73 hours);
 
-        vm.expectRevert(ProtocolRegistry.ContractExpired.selector);
+        // Should succeed — reward was snapshotted at claim time
         registry.payExploitReward(contractHash, fingerprint);
     }
 
@@ -301,6 +303,29 @@ contract ProtocolRegistryTest is Test {
             vm.expectRevert(ProtocolRegistry.InvalidStartIndex.selector);
         }
         registry.withdrawBounty(contractHash, startIndex);
+    }
+
+    // ── C1 Overflow Fuzz Test ─────────────────────────────────────────────
+
+    /// @notice Fuzz: recordExploit reward calculation never overflows or exceeds pool.
+    function testFuzz_recordExploit_noOverflow(uint256 bountyWei, uint256 severity) public {
+        // Bound inputs to realistic ranges
+        bountyWei = bound(bountyWei, 0.01 ether, 100_000 ether);
+        severity = bound(severity, 1, 1e18);
+
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: bountyWei}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        bytes32 fp = keccak256(abi.encodePacked("fuzz-overflow", bountyWei, severity));
+
+        // Must not revert from overflow
+        registry.recordExploit(contractHash, fp, MINER, severity);
+
+        // Reward must not exceed bounty pool
+        (,,, uint256 remainingPool,,,) = registry.registry(contractHash);
+        assertLe(remainingPool, bountyWei, "Pool should not exceed original bounty");
     }
 
     receive() external payable {}

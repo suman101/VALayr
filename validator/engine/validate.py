@@ -44,6 +44,9 @@ ANVIL_PORT_BASE = 18545  # Each validation gets a unique port
 FOUNDRY_VERSION = "nightly-2024-12-01"
 DOCKER_IMAGE = "ghcr.io/exploit-subnet/validator:v0.1.0"
 
+# Maximum size of JSON output from Docker sandbox (10 MB guard)
+MAX_JSON_OUTPUT_SIZE = 10 * 1024 * 1024
+
 # Anvil[0] well-known deployer key (public knowledge — used only inside sandbox).
 # SECURITY: Even though this key is public, we use --unlocked + --from instead of
 # passing it via CLI arg to avoid leaking patterns with real keys in production.
@@ -345,14 +348,24 @@ local = "http://{ANVIL_HOST}:{self.anvil_port}"
         # Symlink forge-std so exploits can `import "forge-std/Test.sol"`
         project_forge_std = Path(__file__).resolve().parent.parent.parent / "contracts" / "lib" / "forge-std"
         if project_forge_std.is_dir():
-            lib_dir = ws / "lib"
-            lib_dir.mkdir(exist_ok=True)
-            link = lib_dir / "forge-std"
-            if not link.exists():
-                try:
-                    link.symlink_to(project_forge_std)
-                except OSError:
-                    logger.debug("Could not symlink forge-std into workspace")
+            # Verify forge-std hasn't been replaced with a symlink to an
+            # attacker-controlled directory.
+            if project_forge_std.is_symlink():
+                real_target = project_forge_std.resolve()
+                contracts_root = Path(__file__).resolve().parent.parent.parent / "contracts"
+                if not str(real_target).startswith(str(contracts_root)):
+                    logger.warning("forge-std symlink points outside contracts tree: %s", real_target)
+                    project_forge_std = None  # Don't use it
+
+            if project_forge_std and project_forge_std.is_dir():
+                lib_dir = ws / "lib"
+                lib_dir.mkdir(exist_ok=True)
+                link = lib_dir / "forge-std"
+                if not link.exists():
+                    try:
+                        link.symlink_to(project_forge_std)
+                    except OSError:
+                        logger.debug("Could not symlink forge-std into workspace")
 
         return ws
 
@@ -486,13 +499,30 @@ contract ExploitTest is Test {{
             except OSError as e:
                 logger.debug("Workspace cleanup failed: %s", e)
 
+    # Dangerous Solidity opcode patterns that should never appear in exploit
+    # test harnesses. These are checked as a belt-and-suspenders defence;
+    # the Anvil sandbox (--network=none + temp workspace) is the primary
+    # isolation layer.
+    _DANGEROUS_PATTERNS = re.compile(
+        r'\b('
+        r'delegatecall\s*\(|'
+        r'callcode\s*\(|'
+        r'staticcall\s*\(.+\.call|'
+        r'assembly\s*\{[^}]*sstore|'
+        r'assembly\s*\{[^}]*create2|'
+        r'assembly\s*\{[^}]*selfdestruct'
+        r')'
+    )
+
     @staticmethod
     def _sanitize_source(source: str) -> bool:
         """Reject exploit source with dangerous patterns.
 
         Checks for:
-          - Path traversal (.. in imports)
+          - Path traversal (.. in imports or strings)
           - Absolute paths in imports (/etc/..., C:\\...)
+          - URL-based imports (https://...)
+          - Dangerous low-level opcode patterns in assembly blocks
 
         Note: The Anvil sandbox (--network=none + temp workspace) is the
         primary defense.  These checks are a belt-and-suspenders layer.
@@ -500,25 +530,31 @@ contract ExploitTest is Test {{
         for line in source.split("\n"):
             stripped = line.strip()
 
-            # Check import lines
+            # Check import lines AND string literals containing paths
             if stripped.startswith("import") or (stripped.startswith("from") and "import" in stripped):
-                # Disallow path traversal
-                if ".." in stripped:
+                # Allow standard Foundry single-parent traversal (../src/*)
+                # but block deeper traversals (../../, ../../../, etc.)
+                if "../../" in stripped:
                     return False
                 # Disallow absolute paths (Unix + Windows)
-                if re.search(r'["\']/', stripped) or re.search(r'["\'][A-Za-z]:\\?', stripped):
+                if re.search(r'["\']/', stripped) or re.search(r'["\'][A-Za-z]:\\\\?', stripped):
+                    return False
+                # Disallow URL-based imports
+                if re.search(r'["\']https?://', stripped):
                     return False
 
-            # Reject foundry remapping directives embedded in source comments
-            # (won't affect compilation, but signals malicious intent)
-            if stripped.startswith("//") and "=" in stripped and ("/" in stripped):
-                # Could be a remapping hint — benign in isolation but flag it
-                pass
+            # Check for deep path traversal in string literals (not just imports)
+            if '"../../' in stripped or "'../../" in stripped:
+                return False
 
-        # Source-level safety checks (belt-and-suspenders; Anvil sandbox is primary defense)
-        # Reject selfdestruct/create2 in non-test contracts submitted as exploits
-        # NOTE: These are valid exploit techniques, so we do NOT block them.
-        # The sandbox (--network=none + temp workspace) is the real protection.
+        # Reject dangerous assembly-level opcode patterns in the source body
+        # (not import lines). These are valid exploit techniques against the
+        # *target* but should not appear in the test harness itself.
+        # NOTE: We allow selfdestruct/create2 outside of assembly blocks
+        # because they are legitimate exploit techniques.
+        if ValidationEngine._DANGEROUS_PATTERNS.search(source):
+            return False
+
         return True
 
     @staticmethod

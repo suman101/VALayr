@@ -15,6 +15,7 @@ Or via the CLI:
 
 import hashlib
 import json
+import logging
 import os
 import re
 import sys
@@ -25,6 +26,8 @@ import urllib.error
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
@@ -203,10 +206,18 @@ class MainnetContractSource:
 
     @staticmethod
     def _normalise_address(address: str) -> str:
-        """Validate and normalise an Ethereum address."""
+        """Validate and normalise an Ethereum address.
+
+        Strict validation: exactly 42 chars (0x + 40 hex digits).
+        Rejects any embedded query-string, URL-encoding, or whitespace
+        to prevent SSRF via the Etherscan API.
+        """
         address = address.strip()
         if not re.match(r"^0x[0-9a-fA-F]{40}$", address):
             raise ValueError(f"Invalid Ethereum address: {address}")
+        # Defense-in-depth: reject any chars that could be URL-encoded attacks
+        if any(c in address for c in ('?', '&', '#', '%', ' ', '\t', '\n')):
+            raise ValueError(f"Address contains forbidden characters: {address}")
         return address
 
     def _api_get_source(
@@ -221,6 +232,10 @@ class MainnetContractSource:
         if self.api_key:
             query["apikey"] = self.api_key
         url = f"{base_url}?{urllib.parse.urlencode(query)}"
+        # Mask the API key in any URL that might appear in error logs
+        safe_url = url
+        if self.api_key:
+            safe_url = url.replace(self.api_key, "***")
 
         body = None
         for attempt in range(MAX_API_RETRIES):
@@ -236,6 +251,7 @@ class MainnetContractSource:
                 backoff = BACKOFF_BASE_SECONDS * (2 ** attempt)
                 time.sleep(backoff)
             except (urllib.error.URLError, json.JSONDecodeError, OSError):
+                logger.debug("API request failed: %s", safe_url)
                 return None
 
         if body is None:
@@ -267,10 +283,19 @@ class MainnetContractSource:
         if "sources" in files and isinstance(files["sources"], dict):
             files = files["sources"]
 
+        # Cap file count to prevent memory exhaustion from malicious responses
+        MAX_FILES = 500
         parts = []
-        for filename, entry in sorted(files.items()):
+        for i, (filename, entry) in enumerate(sorted(files.items())):
+            if i >= MAX_FILES:
+                parts.append(f"// ── (truncated: {len(files) - MAX_FILES} more files) ──")
+                break
+            # Sanitize filename to prevent path traversal in comments
+            safe_name = re.sub(r'[^a-zA-Z0-9_.\-/]', '_', filename)
+            if '..' in safe_name:
+                safe_name = safe_name.replace('..', '__')
             content = entry.get("content", "") if isinstance(entry, dict) else str(entry)
-            parts.append(f"// ── {filename} ──\n{content}")
+            parts.append(f"// ── {safe_name} ──\n{content}")
 
         return "\n\n".join(parts)
 
@@ -283,10 +308,17 @@ class MainnetContractSource:
             return raw
 
         sources = obj.get("sources", {})
+        MAX_FILES = 500
         parts = []
-        for filename, entry in sorted(sources.items()):
+        for i, (filename, entry) in enumerate(sorted(sources.items())):
+            if i >= MAX_FILES:
+                parts.append(f"// ── (truncated: {len(sources) - MAX_FILES} more files) ──")
+                break
+            safe_name = re.sub(r'[^a-zA-Z0-9_.\-/]', '_', filename)
+            if '..' in safe_name:
+                safe_name = safe_name.replace('..', '__')
             content = entry.get("content", "")
-            parts.append(f"// ── {filename} ──\n{content}")
+            parts.append(f"// ── {safe_name} ──\n{content}")
 
         return "\n\n".join(parts) if parts else raw
 

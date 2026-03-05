@@ -100,24 +100,36 @@ check "Chain ID" "$EXPECTED_CHAIN" "$ANVIL_CHAIN_ID"
 echo ""
 echo "[4] Bytecode reproducibility"
 
+# Optional: pinned bytecode hashes for release builds.
+# Once a release is finalised, populate EXPECTED_BYTECODE_HASH with:
+#   export EXPECTED_BYTECODE_HASH="sha256:..."  (from CI build artifact)
+# When set, this verifies the local build matches the release build exactly.
+EXPECTED_BYTECODE_HASH="${EXPECTED_BYTECODE_HASH:-}"
+
 if command -v forge &> /dev/null && [ -d "contracts/out" ]; then
-    # Build twice and compare
-    # Use md5 on macOS, md5sum on Linux
-    if command -v md5sum &> /dev/null; then
-        MD5CMD="md5sum"
-    elif command -v md5 &> /dev/null; then
-        MD5CMD="md5 -r"
+    # Build twice and compare — use sha256 for cryptographic integrity
+    if command -v sha256sum &> /dev/null; then
+        HASHCMD="sha256sum"
+    elif command -v shasum &> /dev/null; then
+        HASHCMD="shasum -a 256"
     else
-        MD5CMD="shasum"
+        HASHCMD="md5sum"
     fi
 
     forge build --force 2>/dev/null
-    HASH1=$(find contracts/out -name "*.json" -exec $MD5CMD {} + 2>/dev/null | sort | $MD5CMD | awk '{print $1}')
+    HASH1=$(find contracts/out -name "*.json" -exec $HASHCMD {} + 2>/dev/null | sort | $HASHCMD | awk '{print $1}')
 
     forge build --force 2>/dev/null
-    HASH2=$(find contracts/out -name "*.json" -exec $MD5CMD {} + 2>/dev/null | sort | $MD5CMD | awk '{print $1}')
+    HASH2=$(find contracts/out -name "*.json" -exec $HASHCMD {} + 2>/dev/null | sort | $HASHCMD | awk '{print $1}')
 
     check "Double-build hash match" "$HASH1" "$HASH2"
+
+    # If a pinned release hash is provided, verify against it
+    if [ -n "$EXPECTED_BYTECODE_HASH" ]; then
+        check "Pinned bytecode hash" "$EXPECTED_BYTECODE_HASH" "$HASH1"
+    else
+        echo "  ⚠ No EXPECTED_BYTECODE_HASH set (set for release builds)"
+    fi
 else
     echo "  ⚠ Skipped (forge not available or contracts not built)"
 fi

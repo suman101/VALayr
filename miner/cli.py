@@ -34,7 +34,7 @@ from orchestrator import Orchestrator, SubmissionResult
 MINER_DATA_DIR = PROJECT_ROOT / "data" / "miner"
 SUBMISSIONS_DIR = MINER_DATA_DIR / "submissions"
 LOCAL_CONFIG = MINER_DATA_DIR / "config.json"
-MAX_EXPLOIT_SOURCE_BYTES = 512 * 1024  # 512 KB
+MAX_EXPLOIT_SOURCE_BYTES = 64_000  # 64 KB — matches validator's limit
 
 
 # ── Miner Client ─────────────────────────────────────────────────────────────
@@ -107,7 +107,24 @@ class MinerCLI:
 
     def cmd_submit(self, args):
         """Submit an exploit for validation."""
-        exploit_path = Path(args.exploit)
+        exploit_path = Path(args.exploit).resolve()
+        cwd = Path.cwd().resolve()
+
+        # Prevent path traversal: exploit file must be under cwd or
+        # a known project directory
+        if not (str(exploit_path).startswith(str(cwd) + os.sep)
+                or str(exploit_path).startswith(str(PROJECT_ROOT) + os.sep)):
+            logger.error("Exploit file must be under %s or %s", cwd, PROJECT_ROOT)
+            return
+
+        # Reject symlinks pointing outside the allowed directories
+        if exploit_path.is_symlink():
+            real = exploit_path.resolve()
+            if not (str(real).startswith(str(cwd) + os.sep)
+                    or str(real).startswith(str(PROJECT_ROOT) + os.sep)):
+                logger.error("Exploit symlink points outside allowed directory")
+                return
+
         if not exploit_path.exists():
             logger.error("Exploit file not found: %s", exploit_path)
             return

@@ -28,8 +28,10 @@ RPC_URL="${RPC_URL:-http://127.0.0.1:8545}"
 DEPLOY_LOG_DIR="${DEPLOY_LOG_DIR:-$PROJECT_ROOT/deployments}"
 CHAIN_ID=""
 
-# Default Anvil[0] key (public knowledge — Anvil only)
-DEPLOYER_KEY="${DEPLOYER_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+# Default Anvil[0] key — ONLY used for local development.
+# For testnet/mainnet the caller MUST provide DEPLOYER_KEY explicitly.
+ANVIL_DEFAULT_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+DEPLOYER_KEY="${DEPLOYER_KEY:-}"
 
 # ── Parse args ───────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -51,10 +53,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── Network presets ──────────────────────────────────────────────────────────
+# Guard: Non-local networks MUST have an explicit deployer key
+if [[ "$NETWORK" != "local" && -z "$DEPLOYER_KEY" ]]; then
+    echo "ERROR: DEPLOYER_KEY must be set for non-local deployments."
+    echo "       Never use the default Anvil key on testnet/mainnet."
+    exit 1
+fi
+
 case "$NETWORK" in
     local)
         RPC_URL="${RPC_URL:-http://127.0.0.1:8545}"
         CHAIN_ID="31337"
+        # Fall back to Anvil[0] default ONLY for local
+        DEPLOYER_KEY="${DEPLOYER_KEY:-$ANVIL_DEFAULT_KEY}"
         ;;
     testnet)
         RPC_URL="${RPC_URL:-https://test.finney.opentensor.ai}"

@@ -1,5 +1,12 @@
 # Prometheus alerting rules for VALayr subnet.
 # Triggers alerts for operational anomalies.
+#
+# SECURITY: Ensure the Alertmanager receiver configuration (alertmanager.yml)
+# uses TLS for all outgoing notification channels (email, Slack, webhooks):
+#   - smtp_require_tls: true   (for email receivers)
+#   - Use https:// URLs only  (for webhook/slack receivers)
+#   - tls_config: { insecure_skip_verify: false }  (for all HTTP targets)
+# See: https://prometheus.io/docs/alerting/latest/configuration/#tls_config
 
 groups:
   - name: valayr-alerts

@@ -24,6 +24,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -41,16 +42,28 @@ logger = get_logger(__name__)
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _find_cast() -> str:
-    """Find the cast binary, checking common locations."""
+    """Find the cast binary, checking common locations.
+
+    Returns the *resolved absolute path* to the binary so that subsequent
+    calls cannot be hijacked via PATH manipulation.
+    """
     for candidate in [
         "cast",
         os.path.expanduser("~/.foundry/bin/cast"),
     ]:
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [candidate, "--version"],
-                capture_output=True, check=True, timeout=5,
+                capture_output=True, check=True, timeout=5, text=True,
             )
+            # Verify the version output looks legitimate (contains "cast")
+            if "cast" not in result.stdout.lower() and "foundry" not in result.stdout.lower():
+                continue
+            # Resolve to absolute path to prevent PATH hijacking
+            import shutil
+            resolved = shutil.which(candidate)
+            if resolved:
+                return os.path.realpath(resolved)
             return candidate
         except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             continue
@@ -126,7 +139,11 @@ def _wallet_address(cast_bin: str, private_key: str) -> str:
             f"cast wallet address failed: {stderr.strip()}. "
             "Requires cast version with --private-key-stdin support."
         )
-    return stdout.strip()
+    address = stdout.strip()
+    # Validate output looks like an Ethereum address
+    if not re.match(r'^0x[0-9a-fA-F]{40}$', address):
+        raise RuntimeError(f"cast wallet address returned invalid address: {address[:20]}")
+    return address
 
 
 # ── Key Rotation Operations ─────────────────────────────────────────────────

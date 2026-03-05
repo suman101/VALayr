@@ -69,11 +69,18 @@ class IdentityStore:
         miner_hotkey: str,
         platform: str,
         platform_id: str,
+        signed_challenge: str = "",
     ) -> IdentityClaim:
         """Register a miner's claim to a platform identity.
 
         The claim starts unverified. Call ``verify_claim()`` to check it
         against the platform API.
+
+        Args:
+            signed_challenge: Optional. A signature of the miner's hotkey
+                using the platform account, proving the miner controls the
+                platform identity.  While the platform API is the ultimate
+                authority, this acts as a lightweight pre-check.
         """
         if not _HOTKEY_PATTERN.match(miner_hotkey):
             raise ValueError(f"Invalid hotkey format: {miner_hotkey}")

@@ -178,6 +178,8 @@ class ImmunefiAdapter(BountyPlatform):
     def _api_post(self, endpoint: str, payload: dict) -> Optional[dict]:
         if not self.api_key:
             return None
+        if not endpoint.startswith("/") or "?" in endpoint:
+            return None
         url = self.BASE_URL + endpoint
         data = json.dumps(payload).encode()
         req = urllib.request.Request(url, data=data, method="POST")
@@ -192,6 +194,8 @@ class ImmunefiAdapter(BountyPlatform):
 
     def _api_get(self, endpoint: str) -> Optional[dict]:
         if not self.api_key:
+            return None
+        if not endpoint.startswith("/") or "?" in endpoint:
             return None
         url = self.BASE_URL + endpoint
         req = urllib.request.Request(url, method="GET")
@@ -273,6 +277,8 @@ class Code4renaAdapter(BountyPlatform):
     def _api_post(self, endpoint: str, payload: dict) -> Optional[dict]:
         if not self.api_key:
             return None
+        if not endpoint.startswith("/") or "?" in endpoint:
+            return None
         url = self.BASE_URL + endpoint
         data = json.dumps(payload).encode()
         req = urllib.request.Request(url, data=data, method="POST")
@@ -287,6 +293,8 @@ class Code4renaAdapter(BountyPlatform):
 
     def _api_get(self, endpoint: str) -> Optional[dict]:
         if not self.api_key:
+            return None
+        if not endpoint.startswith("/") or "?" in endpoint:
             return None
         url = self.BASE_URL + endpoint
         req = urllib.request.Request(url, method="GET")

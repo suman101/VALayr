@@ -240,9 +240,10 @@ contract ProtocolRegistry is Pausable {
         if (exploitHistory[contractHash].length >= MAX_CLAIMS_PER_CONTRACT)
             revert TooManyClaims();
 
-        // Reward = (bountyPool * severity * MAX_REWARD_BPS) / (1e18 * 10000)
-        uint256 reward = (reg.bountyPool * severityScore * MAX_REWARD_BPS) /
-            (1e18 * 10000);
+        // Reward = (bountyPool * severity / 1e18) * MAX_REWARD_BPS / 10000
+        // Split multiplication to prevent overflow for large bounty pools (>1000 ETH).
+        uint256 scaledSeverity = (reg.bountyPool * severityScore) / 1e18;
+        uint256 reward = (scaledSeverity * MAX_REWARD_BPS) / 10000;
         if (reward > reg.bountyPool) reward = reg.bountyPool;
 
         claims[contractHash][exploitFingerprint] = ExploitClaim({
@@ -262,14 +263,15 @@ contract ProtocolRegistry is Pausable {
     }
 
     /// @notice Pay out exploit reward after disclosure window.
+    /// @dev Rewards are snapshotted at claim time, so payment is allowed even
+    ///      if the registered contract has since expired — miners should not
+    ///      lose their earned reward due to expiry.
     function payExploitReward(
         bytes32 contractHash,
         bytes32 exploitFingerprint
     ) external nonReentrant whenNotPaused {
-        RegisteredContract storage reg = registry[contractHash];
-        if (reg.expiresAt != 0 && block.timestamp > reg.expiresAt)
-            revert ContractExpired();
         ExploitClaim storage claim = claims[contractHash][exploitFingerprint];
+        if (claim.miner == address(0)) revert NotRegistered();
         if (claim.paid) revert ExploitAlreadyClaimed();
         if (block.timestamp < claim.claimedAt + DISCLOSURE_WINDOW)
             revert DisclosureWindowActive();
@@ -292,6 +294,33 @@ contract ProtocolRegistry is Pausable {
         if (validator == address(0)) revert ZeroAddress();
         validators[validator] = status;
         emit ValidatorUpdated(validator, status);
+    }
+
+    /// @notice Withdraw remaining bounty in a single call (checks ALL claims).
+    /// @dev Convenience wrapper around withdrawBounty for small claim histories.
+    ///      Reverts if history exceeds MAX_CLAIMS_PER_CONTRACT (use paginated version instead).
+    function withdrawBountyAll(
+        bytes32 contractHash
+    ) external onlyProtocol(contractHash) nonReentrant {
+        RegisteredContract storage reg = registry[contractHash];
+        if (reg.active) revert ContractStillActive();
+
+        bytes32[] storage history = exploitHistory[contractHash];
+        for (uint256 i = 0; i < history.length; i++) {
+            ExploitClaim storage c = claims[contractHash][history[i]];
+            if (c.miner != address(0) && !c.paid) {
+                if (block.timestamp < c.claimedAt + DISCLOSURE_WINDOW)
+                    revert DisclosureWindowActive();
+            }
+        }
+
+        uint256 amount = reg.bountyPool;
+        reg.bountyPool = 0;
+
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        if (!ok) revert PaymentFailed();
+
+        emit BountyWithdrawn(contractHash, amount);
     }
 
     // ── View Functions ───────────────────────────────────────────────────

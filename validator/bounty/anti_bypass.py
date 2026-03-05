@@ -19,6 +19,8 @@ Limitations:
     mitigated by requiring identity linking for bounty reward splits.
 """
 
+import hashlib
+import hmac
 import json
 import os
 import time
@@ -27,7 +29,13 @@ from pathlib import Path
 from typing import Optional
 
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# ── Constants ──────────────────────────────────────────────────────────────────────
+
+# HMAC secret for receipt integrity.  In production, this should be
+# loaded from a secrets store or environment variable.  If unset, a
+# random 32-byte key is generated per process (sufficient for single-
+# validator deployments; multi-validator setups MUST share the key).
+_RECEIPT_HMAC_KEY = os.environ.get("VALAYR_RECEIPT_HMAC_KEY", "").encode() or os.urandom(32)
 
 # Grace window: platform submission within this many seconds AFTER subnet
 # submission is considered legitimate (accounts for relay latency).
@@ -47,6 +55,18 @@ class SubnetReceipt:
     fingerprint: str
     subnet_timestamp: int      # Unix timestamp of subnet receipt
     bittensor_block: int = 0   # Bittensor block number (on-chain proof)
+    hmac_tag: str = ""         # HMAC-SHA256 of the receipt fields
+
+    def compute_hmac(self) -> str:
+        """Compute HMAC tag over the canonical fields."""
+        message = f"{self.task_id}|{self.miner_hotkey}|{self.fingerprint}|{self.subnet_timestamp}|{self.bittensor_block}"
+        return hmac.new(_RECEIPT_HMAC_KEY, message.encode(), hashlib.sha256).hexdigest()
+
+    def verify_hmac(self) -> bool:
+        """Verify the HMAC tag is valid."""
+        if not self.hmac_tag:
+            return False
+        return hmac.compare_digest(self.hmac_tag, self.compute_hmac())
 
 
 @dataclass
@@ -95,6 +115,7 @@ class AntiBypassEngine:
             subnet_timestamp=int(time.time()),
             bittensor_block=bittensor_block,
         )
+        receipt.hmac_tag = receipt.compute_hmac()
         self._receipts[fingerprint] = receipt
         self._save_receipts()
         return receipt

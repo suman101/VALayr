@@ -169,6 +169,7 @@ contract Treasury is Ownable2Step, Pausable {
         uint256 score,
         bytes32 fingerprint
     ) external onlyValidator whenNotPaused {
+        if (miner == address(0)) revert ZeroAddress();
         Competition storage comp = competitions[competitionId];
         if (block.timestamp > comp.deadline) revert CompetitionNotActive();
         if (comp.settled) revert AlreadySettled();
