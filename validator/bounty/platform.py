@@ -107,7 +107,8 @@ class ImmunefiAdapter(BountyPlatform):
     BASE_URL = "https://api.immunefi.com/v1"
 
     def __init__(self, api_key: str = ""):
-        self.api_key = api_key or os.environ.get("IMMUNEFI_API_KEY", "")
+        from validator.utils.secrets import get_secret
+        self.api_key = api_key or get_secret("IMMUNEFI_API_KEY", required=False)
 
     @property
     def name(self) -> str:
@@ -216,7 +217,8 @@ class Code4renaAdapter(BountyPlatform):
     BASE_URL = "https://api.code4rena.com/v1"
 
     def __init__(self, api_key: str = ""):
-        self.api_key = api_key or os.environ.get("CODE4RENA_API_KEY", "")
+        from validator.utils.secrets import get_secret
+        self.api_key = api_key or get_secret("CODE4RENA_API_KEY", required=False)
 
     @property
     def name(self) -> str:

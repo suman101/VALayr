@@ -164,6 +164,13 @@ class Orchestrator:
         self._last_closed_epoch: int = -1
         self._epoch_lock = threading.Lock()
 
+        # Startup validation — log which secrets are configured
+        try:
+            from validator.utils.secrets import log_secret_status
+            log_secret_status()
+        except Exception:
+            pass  # Don't block startup if secrets module has issues
+
     # ── Task Corpus ───────────────────────────────────────────────────────
 
     def generate_corpus(self, count_per_class: int = 2, seed: int = 42,

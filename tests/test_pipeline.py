@@ -384,5 +384,26 @@ def main():
     return 0 if failed == 0 else 1
 
 
+def test_task_package_save_path_traversal():
+    """TaskPackage.save() rejects task_ids that would escape output_dir."""
+    from task_generator.generate import TaskPackage, DeploymentConfig
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pkg = TaskPackage(
+            source_code="contract T {}",
+            solc_version="0.8.28",
+            deployment_config=DeploymentConfig(),
+            vulnerability_class="test",
+            difficulty=1,
+        )
+        # Force a malicious task_id (non-hex chars are stripped, so
+        # the sanitization reduces it to empty → "unknown", which is safe).
+        pkg.task_id = "../../etc/passwd"
+        # Should NOT raise because sanitized_id strips non-hex, result is "aed"
+        # but let's verify the path stays inside output_dir
+        saved = pkg.save(Path(tmpdir))
+        assert str(saved.resolve()).startswith(str(Path(tmpdir).resolve()))
+
+
 if __name__ == "__main__":
     sys.exit(main())

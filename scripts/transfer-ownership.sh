@@ -24,7 +24,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 RPC_URL="${RPC_URL:-http://127.0.0.1:8545}"
-DEPLOYER_KEY="${DEPLOYER_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+
+# Default Anvil[0] key — ONLY for local development.
+# For testnet/mainnet the caller MUST provide DEPLOYER_KEY explicitly.
+ANVIL_DEFAULT_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+DEPLOYER_KEY="${DEPLOYER_KEY:-}"
 
 DEPLOYMENT_FILE=""
 NEW_OWNER=""
@@ -66,6 +70,20 @@ fi
 if [[ ! -f "$DEPLOYMENT_FILE" ]]; then
     echo "[!] Deployment file not found: $DEPLOYMENT_FILE"
     exit 1
+fi
+
+# ── Resolve deployer key ─────────────────────────────────────────────────────
+# For local (127.0.0.1 / localhost) RPCs, default to Anvil[0] key.
+# For all other networks, DEPLOYER_KEY must be set explicitly.
+if [[ -z "$DEPLOYER_KEY" ]]; then
+    if [[ "$RPC_URL" == *"127.0.0.1"* || "$RPC_URL" == *"localhost"* ]]; then
+        DEPLOYER_KEY="$ANVIL_DEFAULT_KEY"
+        echo "[*] Using default Anvil key for local RPC"
+    else
+        echo "[!] DEPLOYER_KEY must be set for non-local networks"
+        echo "    export DEPLOYER_KEY=0x..."
+        exit 1
+    fi
 fi
 
 # ── Extract contract addresses from deployment JSON ──────────────────────────

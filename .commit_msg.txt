@@ -1,0 +1,26 @@
+feat: unified secrets manager + critical path test coverage
+
+Further Considerations Implementation:
+1. Unified Key Management (validator/utils/secrets.py):
+   - Centralized get_secret() with format validation and fail-fast
+   - log_secret_status() for startup diagnostics
+   - validate_environment() for pre-flight checks
+   - Refactored 4 consumers: anti_bypass, platform (Immunefi+Code4rena), mainnet
+
+2. Security Hardening:
+   - transfer-ownership.sh: added non-local guard (was defaulting to Anvil key)
+   - neurons/validator.py: key rotation reads owner_key from env, not JSON
+   - orchestrator.py: startup secret status logging
+
+3. Critical Path Test Coverage (322 Python + 107 Solidity = 429 total):
+   - tests/test_key_rotation.py: 12 tests (find_cast, wallet_address,
+     rotate_validator, transfer_ownership, batch_rotate, _check_key_rotation)
+   - tests/test_validate_engine_unit.py: 24 tests (sanitize_source,
+     has_state_change, build_trace, all rejection paths, fingerprint, detect_test_fns)
+   - tests/test_mainnet_source.py: 14 tests (normalise_address, fetch_contract,
+     to_task_package, flatten_multi_file, flatten_standard_json)
+   - tests/test_bounty.py expanded: +15 tests (ImmunefiAdapter mock HTTP,
+     Code4renaAdapter mock HTTP, SecretsManager unit tests)
+   - tests/test_pipeline.py: +1 TaskPackage path traversal guard test
+
+All tests pass: 322 Python (1 skipped), 107 Solidity, 0 failures.

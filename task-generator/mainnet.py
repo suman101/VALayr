@@ -89,7 +89,8 @@ class MainnetContractSource:
         output_dir: Optional[Path] = None,
         allowed_chains: Optional[set[int]] = None,
     ):
-        self.api_key = api_key or os.environ.get("ETHERSCAN_API_KEY", "")
+        from validator.utils.secrets import get_secret
+        self.api_key = api_key or get_secret("ETHERSCAN_API_KEY", required=False)
         self.output_dir = output_dir or (
             Path(__file__).parent.parent / "contracts" / "corpus"
         )

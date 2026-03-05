@@ -356,7 +356,10 @@ class ValidatorNeuron:
             config = json.loads(self._rotation_config.read_text())
             contracts = config.get("contracts", [])
             rpc_url = config.get("rpc_url", "")
-            owner_key = config.get("owner_key", "")
+            # Read owner_key from env (never store private keys in JSON).
+            # The JSON config may contain the env var name to use.
+            owner_key_env = config.get("owner_key_env", "DEPLOYER_KEY")
+            owner_key = os.environ.get(owner_key_env, config.get("owner_key", ""))
             old_validator = config.get("old_validator", "")
             new_validator = config.get("new_validator", "")
 

@@ -28,14 +28,16 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
+from validator.utils.secrets import get_secret
+
 
 # ── Constants ──────────────────────────────────────────────────────────────────────
 
-# HMAC secret for receipt integrity.  In production, this should be
-# loaded from a secrets store or environment variable.  If unset, a
-# random 32-byte key is generated per process (sufficient for single-
-# validator deployments; multi-validator setups MUST share the key).
-_RECEIPT_HMAC_KEY = os.environ.get("VALAYR_RECEIPT_HMAC_KEY", "").encode() or os.urandom(32)
+# HMAC secret for receipt integrity.  Loaded via the unified secrets
+# manager.  Falls back to a random 32-byte key for single-validator
+# dev deployments (multi-validator setups MUST share the key via env).
+_hmac_str = get_secret("VALAYR_RECEIPT_HMAC_KEY", required=False)
+_RECEIPT_HMAC_KEY = _hmac_str.encode() if _hmac_str else os.urandom(32)
 
 # Grace window: platform submission within this many seconds AFTER subnet
 # submission is considered legitimate (accounts for relay latency).

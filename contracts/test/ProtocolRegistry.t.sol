@@ -308,7 +308,10 @@ contract ProtocolRegistryTest is Test {
     // ── C1 Overflow Fuzz Test ─────────────────────────────────────────────
 
     /// @notice Fuzz: recordExploit reward calculation never overflows or exceeds pool.
-    function testFuzz_recordExploit_noOverflow(uint256 bountyWei, uint256 severity) public {
+    function testFuzz_recordExploit_noOverflow(
+        uint256 bountyWei,
+        uint256 severity
+    ) public {
         // Bound inputs to realistic ranges
         bountyWei = bound(bountyWei, 0.01 ether, 100_000 ether);
         severity = bound(severity, 1, 1e18);
@@ -318,14 +321,20 @@ contract ProtocolRegistryTest is Test {
         bytes32 contractHash = registry.getContractHash(address(dummy));
         registry.setValidator(address(this), true);
 
-        bytes32 fp = keccak256(abi.encodePacked("fuzz-overflow", bountyWei, severity));
+        bytes32 fp = keccak256(
+            abi.encodePacked("fuzz-overflow", bountyWei, severity)
+        );
 
         // Must not revert from overflow
         registry.recordExploit(contractHash, fp, MINER, severity);
 
         // Reward must not exceed bounty pool
-        (,,, uint256 remainingPool,,,) = registry.registry(contractHash);
-        assertLe(remainingPool, bountyWei, "Pool should not exceed original bounty");
+        (, , , uint256 remainingPool, , , ) = registry.registry(contractHash);
+        assertLe(
+            remainingPool,
+            bountyWei,
+            "Pool should not exceed original bounty"
+        );
     }
 
     receive() external payable {}

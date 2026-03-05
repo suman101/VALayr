@@ -120,13 +120,7 @@ services:
         window: 120s
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python3",
-          "-c",
-          "import miner; print('ok')",
-        ]
+      test: ["CMD", "python3", "-c", "import miner; print('ok')"]
       interval: 60s
       timeout: 10s
       retries: 3
