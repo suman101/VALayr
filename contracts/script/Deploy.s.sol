@@ -5,6 +5,7 @@ import "forge-std/Script.sol";
 import "../src/ProtocolRegistry.sol";
 import "../src/ExploitRegistry.sol";
 import "../src/stage3/AdversarialMode.sol";
+import "../src/Treasury.sol";
 
 /// @title Deploy — Foundry deployment script for all subnet contracts.
 /// @dev Run: forge script contracts/script/Deploy.s.sol --rpc-url <RPC> --broadcast
@@ -37,6 +38,9 @@ contract Deploy is Script {
         invariantRegistry.setValidator(deployer, true);
         adversarialScoring.setValidator(deployer, true);
 
+        // Deploy Treasury (winner-takes-all competitions)
+        Treasury treasury = new Treasury(deployer);
+
         vm.stopBroadcast();
 
         // Log deployed addresses
@@ -45,6 +49,7 @@ contract Deploy is Script {
         console.log("ExploitRegistry:    ", address(exploitRegistry));
         console.log("InvariantRegistry:  ", address(invariantRegistry));
         console.log("AdversarialScoring: ", address(adversarialScoring));
+        console.log("Treasury:           ", address(treasury));
         console.log("Deployer/Validator: ", deployer);
     }
 }

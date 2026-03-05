@@ -33,6 +33,7 @@ from validator import metrics as _metrics
 logger = get_logger(__name__)
 
 from task_generator.generate import CorpusGenerator, TaskPackage
+from task_generator.mainnet import MainnetContractSource
 from validator.engine.validate import (
     ValidationEngine,
     ExploitSubmission,
@@ -129,6 +130,7 @@ class Orchestrator:
 
         # Initialize components
         self.corpus_gen = CorpusGenerator(output_dir=self.corpus_dir)
+        self.mainnet_source = MainnetContractSource(output_dir=self.corpus_dir)
         self.validator = ValidationEngine(
             validator_id=validator_id,
             anvil_port=anvil_port,
@@ -178,6 +180,44 @@ class Orchestrator:
             json.dumps(manifest, indent=2, sort_keys=True)
         )
         logger.info("Generated %d tasks across %d classes", len(packages), len(set(p.vulnerability_class for p in packages)))
+        return packages
+
+    def fetch_mainnet_tasks(
+        self,
+        addresses: list[str],
+        chain_id: int = 1,
+        difficulty: int = 3,
+    ) -> list[TaskPackage]:
+        """Fetch verified mainnet contracts and add them to the corpus.
+
+        Merges fetched packages into the existing manifest so synthetic and
+        mainnet tasks coexist in the same corpus directory.
+        """
+        logger.info("Fetching %d mainnet contract(s) from chain %d", len(addresses), chain_id)
+        packages = self.mainnet_source.fetch_and_save(
+            addresses=addresses, chain_id=chain_id, difficulty=difficulty,
+        )
+
+        # Merge into existing manifest
+        manifest_path = self.corpus_dir / "manifest.json"
+        if manifest_path.exists():
+            manifest = json.loads(manifest_path.read_text())
+        else:
+            manifest = {"version": 1, "total_tasks": 0, "tasks": []}
+
+        existing_ids = {t["task_id"] for t in manifest.get("tasks", [])}
+        for pkg in packages:
+            if pkg.task_id not in existing_ids:
+                manifest["tasks"].append({
+                    "task_id": pkg.task_id,
+                    "vulnerability_class": pkg.vulnerability_class,
+                    "difficulty": pkg.difficulty,
+                    "source_hash": hashlib.sha256(pkg.source_code.encode()).hexdigest(),
+                })
+        manifest["total_tasks"] = len(manifest["tasks"])
+
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+        logger.info("Added %d mainnet task(s) to corpus", len(packages))
         return packages
 
     def list_tasks(self) -> list[dict]:
