@@ -124,17 +124,16 @@ class SeverityScorer:
             return breakdown
 
         # ── 1. Funds Drained Score ────────────────────────────────────────
-        # For multi-tx: use the maximum per-function gas impact as a proxy
-        # for complexity, and treat any negative balance_delta as drain.
-        # The net delta can mask actual drain so we use abs for multi-tx.
+        # For multi-tx: use aggregate gas as a complexity proxy.
+        # Funds drained must still reflect a real net outflow from target,
+        # so we only score drain when balance_delta is negative.
         if is_multi_tx and test_results:
             # Multi-tx: total gas across steps indicates attack complexity
             total_gas = sum(
                 r.get("gas_used", 0) for r in test_results.values()
                 if isinstance(r, dict)
             )
-            # Use absolute balance_delta for multi-tx (net can understate)
-            wei_drained = abs(balance_delta)
+            wei_drained = abs(balance_delta) if balance_delta < 0 else 0
             # Complexity bonus: multi-step exploits with high total gas
             # get a small bonus (up to 10%) to incentivize discovery
             complexity_bonus = min(0.10, math.log10(max(total_gas, 1)) / 80.0)

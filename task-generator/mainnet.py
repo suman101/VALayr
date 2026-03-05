@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, field
@@ -54,7 +55,9 @@ EXPLORER_APIS: dict[int, str] = {
 MAX_SOURCE_BYTES = 512 * 1024
 
 # Rate-limit: seconds between Etherscan requests.
-REQUEST_DELAY = 0.25
+REQUEST_DELAY = 0.5
+MAX_API_RETRIES = 4
+BACKOFF_BASE_SECONDS = 1.0
 
 
 # ── Data Structures ──────────────────────────────────────────────────────────
@@ -210,18 +213,32 @@ class MainnetContractSource:
         self, base_url: str, address: str
     ) -> Optional[dict]:
         """Call the block explorer getsourcecode endpoint."""
-        params = (
-            f"?module=contract&action=getsourcecode"
-            f"&address={address}&apikey={self.api_key}"
-        )
-        url = base_url + params
+        query = {
+            "module": "contract",
+            "action": "getsourcecode",
+            "address": address,
+        }
+        if self.api_key:
+            query["apikey"] = self.api_key
+        url = f"{base_url}?{urllib.parse.urlencode(query)}"
 
-        try:
-            req = urllib.request.Request(url, method="GET")
-            req.add_header("User-Agent", "VALayr-Subnet/0.1")
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                body = json.loads(resp.read().decode())
-        except (urllib.error.URLError, json.JSONDecodeError, OSError):
+        body = None
+        for attempt in range(MAX_API_RETRIES):
+            try:
+                req = urllib.request.Request(url, method="GET")
+                req.add_header("User-Agent", "VALayr-Subnet/0.1")
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    body = json.loads(resp.read().decode())
+                break
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == MAX_API_RETRIES - 1:
+                    return None
+                backoff = BACKOFF_BASE_SECONDS * (2 ** attempt)
+                time.sleep(backoff)
+            except (urllib.error.URLError, json.JSONDecodeError, OSError):
+                return None
+
+        if body is None:
             return None
 
         if body.get("status") != "1" or not body.get("result"):

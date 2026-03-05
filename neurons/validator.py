@@ -286,8 +286,11 @@ class ValidatorNeuron:
                 synapse.result = {"error": f"Invalid submission format: {ve.message}"}
                 return synapse
 
-            # Per-miner rate limiting
+            # Per-miner rate limiting + epoch-level cap (both under lock)
             with self._submission_lock:
+                if len(self.submissions_this_epoch) >= MAX_SUBMISSIONS_PER_EPOCH:
+                    synapse.result = {"error": "Epoch submission limit reached"}
+                    return synapse
                 miner_count = self._miner_submission_counts.get(miner_hotkey, 0)
                 if miner_count >= MAX_SUBMISSIONS_PER_MINER_PER_EPOCH:
                     synapse.result = {"error": "Per-miner epoch submission limit reached"}

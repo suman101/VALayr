@@ -136,7 +136,6 @@ FORGE_ARGS=(
     script "$CONTRACTS_DIR/script/Deploy.s.sol"
     --rpc-url "$RPC_URL"
     --broadcast
-    --private-key "$DEPLOYER_KEY"
     -vvv
 )
 
@@ -144,8 +143,8 @@ if [[ "$VERIFY" == "true" && -n "${ETHERSCAN_API_KEY:-}" ]]; then
     FORGE_ARGS+=(--verify --etherscan-api-key "$ETHERSCAN_API_KEY")
 fi
 
-# Capture output
-DEPLOY_OUTPUT=$(forge "${FORGE_ARGS[@]}" 2>&1)
+# Capture output — pass private key via stdin to avoid ps/proc leakage
+DEPLOY_OUTPUT=$(echo "$DEPLOYER_KEY" | forge "${FORGE_ARGS[@]}" --private-key-stdin 2>&1)
 DEPLOY_EXIT=$?
 
 if [[ $DEPLOY_EXIT -ne 0 ]]; then

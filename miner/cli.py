@@ -203,7 +203,7 @@ class MinerCLI:
 
         output_dir = Path(args.output).resolve() if args.output else Path(".").resolve()
         cwd = Path.cwd().resolve()
-        if not str(output_dir).startswith(str(cwd)):
+        if output_dir != cwd and cwd not in output_dir.parents:
             print(f"[!] Output directory must be under {cwd}")
             return
         output_dir.mkdir(parents=True, exist_ok=True)

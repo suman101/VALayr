@@ -20,6 +20,7 @@ Limitations:
 """
 
 import json
+import os
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -181,8 +182,14 @@ class AntiBypassEngine:
 
     def _save_receipts(self) -> None:
         data = {fp: asdict(r) for fp, r in self._receipts.items()}
-        self._receipts_path.write_text(json.dumps(data, indent=2, sort_keys=True))
+        payload = json.dumps(data, indent=2, sort_keys=True)
+        tmp_path = self._receipts_path.with_suffix(self._receipts_path.suffix + ".tmp")
+        tmp_path.write_text(payload)
+        os.replace(tmp_path, self._receipts_path)
 
     def _save_violations(self) -> None:
         data = [asdict(v) for v in self._violations]
-        self._violations_path.write_text(json.dumps(data, indent=2))
+        payload = json.dumps(data, indent=2)
+        tmp_path = self._violations_path.with_suffix(self._violations_path.suffix + ".tmp")
+        tmp_path.write_text(payload)
+        os.replace(tmp_path, self._violations_path)

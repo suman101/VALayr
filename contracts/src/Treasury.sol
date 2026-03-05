@@ -9,6 +9,17 @@ import "./Pausable.sol";
 ///         The best exploit (highest severity) wins the entire prize pool.
 /// @dev Lifecycle: create → fund → miners submit → deadline passes → settle → winner withdraws.
 contract Treasury is Ownable2Step, Pausable {
+    // ── Reentrancy Guard ───────────────────────────────────────────────
+
+    uint256 private _locked = 1;
+
+    modifier nonReentrant() {
+        require(_locked == 1, "ReentrancyGuard: reentrant call");
+        _locked = 2;
+        _;
+        _locked = 1;
+    }
+
     // ── Structs ──────────────────────────────────────────────────────────
 
     struct Competition {
@@ -200,7 +211,7 @@ contract Treasury is Ownable2Step, Pausable {
     }
 
     /// @notice Winner withdraws their prize after settlement.
-    function withdrawPrize(uint256 competitionId) external {
+    function withdrawPrize(uint256 competitionId) external nonReentrant {
         Competition storage comp = competitions[competitionId];
         if (!comp.settled) revert NotSettled();
         if (comp.withdrawn) revert AlreadyWithdrawn();

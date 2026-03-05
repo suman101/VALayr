@@ -117,6 +117,10 @@ class AdversarialConsensusResult:
 
 # ── Anti-Collusion Engine ────────────────────────────────────────────────────
 
+# Save state every N consensus rounds (not every single call) to reduce I/O.  
+SAVE_STATE_INTERVAL = 10
+
+
 class AntiCollusionEngine:
     """
     Manages validator assignment, consensus, divergence tracking, and slashing.
@@ -133,6 +137,7 @@ class AntiCollusionEngine:
         self.validators: dict[str, ValidatorState] = {}
         self.consensus_history: list[ConsensusResult] = []
         self.slash_events: list[SlashEvent] = []
+        self._rounds_since_save: int = 0
 
         self._load_state()
 
@@ -316,7 +321,11 @@ class AntiCollusionEngine:
         _MAX_HISTORY = 10_000
         if len(self.consensus_history) > _MAX_HISTORY:
             self.consensus_history = self.consensus_history[-_MAX_HISTORY:]
-        self._save_state()
+
+        self._rounds_since_save += 1
+        if self._rounds_since_save >= SAVE_STATE_INTERVAL:
+            self._save_state()
+            self._rounds_since_save = 0
 
         return result
 
@@ -412,7 +421,11 @@ class AntiCollusionEngine:
         _MAX_HISTORY = 10_000
         if len(self.consensus_history) > _MAX_HISTORY:
             self.consensus_history = self.consensus_history[-_MAX_HISTORY:]
-        self._save_state()
+
+        self._rounds_since_save += 1
+        if self._rounds_since_save >= SAVE_STATE_INTERVAL:
+            self._save_state()
+            self._rounds_since_save = 0
 
         return result
 
@@ -421,6 +434,8 @@ class AntiCollusionEngine:
     def _check_slashing(self):
         """Check all validators for slash conditions and cooldown recovery."""
         now = time.time()
+        to_slash: list[str] = []
+
         for hotkey, v in self.validators.items():
             # Recovery: lift slash after cooldown if divergence has improved
             if v.slashed and v.slashed_at > 0:
@@ -437,7 +452,10 @@ class AntiCollusionEngine:
                 continue  # Not enough data
 
             if v.divergence_rate > DIVERGENCE_SLASH_THRESHOLD:
-                self._slash_validator(hotkey, v)
+                to_slash.append(hotkey)
+
+        for hotkey in to_slash:
+            self._slash_validator(hotkey, self.validators[hotkey])
 
     def _slash_validator(self, hotkey: str, v: ValidatorState):
         """Execute slash on a validator."""

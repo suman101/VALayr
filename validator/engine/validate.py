@@ -318,7 +318,8 @@ class ValidationEngine:
         (src_dir / "Vulnerable.sol").write_text(task_source)
 
         # Write exploit (Foundry test format)
-        exploit_wrapped = self._wrap_exploit(submission.exploit_source, submission.entry_function)
+        solc_version = task_json.get("solc_version", "0.8.28")
+        exploit_wrapped = self._wrap_exploit(submission.exploit_source, submission.entry_function, solc_version)
         (test_dir / "Exploit.t.sol").write_text(exploit_wrapped)
 
         # Auto-detect test_* functions in the final wrapped exploit
@@ -360,7 +361,7 @@ local = "http://{ANVIL_HOST}:{self.anvil_port}"
         """Detect all test_* function names in Solidity source."""
         return re.findall(r'function\s+(test_\w+)\s*\(', source)
 
-    def _wrap_exploit(self, exploit_source: str, entry_function: str) -> str:
+    def _wrap_exploit(self, exploit_source: str, entry_function: str, solc_version: str = "0.8.28") -> str:
         """Ensure exploit is in proper Foundry test format.
 
         If the source already contains pragma + contract declarations AND
@@ -376,7 +377,7 @@ local = "http://{ANVIL_HOST}:{self.anvil_port}"
         if len(test_fns) > 1:
             # Source has multiple test functions but no pragma/contract — wrap with structure
             return f"""// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^{solc_version};
 
 import "forge-std/Test.sol";
 import "../src/Vulnerable.sol";
@@ -388,7 +389,7 @@ contract ExploitTest is Test {{
 
         # Wrap raw exploit code into Foundry test (single function)
         return f"""// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^{solc_version};
 
 import "forge-std/Test.sol";
 import "../src/Vulnerable.sol";
@@ -667,6 +668,11 @@ contract ExploitTest is Test {{
 
             if not full_dump_ok:
                 # Fallback: poll slots 0-63 (wider than before, but still limited)
+                logger.warning(
+                    "anvil_dumpState unavailable — falling back to slot polling. "
+                    "Storage in mappings/dynamic arrays will be missed; "
+                    "trace may undercount state changes."
+                )
                 for slot in range(64):
                     slot_hex = hex(slot)
                     stor_resp = rpc_call("eth_getStorageAt", [target_address, slot_hex, "latest"])
@@ -849,38 +855,13 @@ contract ExploitTest is Test {{
         return False
 
     def _compute_fingerprint(self, trace: ExecutionTrace) -> str:
-        """
-        Compute canonical exploit fingerprint.
+        """Compute canonical exploit fingerprint via shared dedup engine logic."""
+        from validator.fingerprint.dedup import FingerprintEngine
 
-        fingerprint = keccak(
-            function_selectors,
-            sorted_storage_slot_diffs,
-            balance_delta,
-            call_graph_hash
-        )
-        """
-        components = []
-
-        # Function selectors (sorted)
-        components.append(",".join(sorted(trace.function_selectors)))
-
-        # Sorted storage slot diffs
-        slot_diffs = []
-        for diff in sorted(trace.storage_diffs, key=lambda d: d.slot):
-            slot_diffs.append(f"{diff.slot}:{diff.before}->{diff.after}")
-        components.append("|".join(slot_diffs))
-
-        # Balance delta
-        components.append(str(trace.balance_delta))
-
-        # Call graph hash (from selectors for now)
-        call_graph_str = "->".join(trace.function_selectors)
-        components.append(call_graph_str)
-
-        canonical = "::".join(components)
-        from validator.utils.hashing import keccak256
-        fingerprint = keccak256(canonical.encode())
-        return fingerprint
+        trace_dict = asdict(trace)
+        engine = FingerprintEngine()
+        components = engine.extract_components(trace_dict)
+        return engine.compute_fingerprint(components)
 
     def _finalize(self, report: ValidationReport, start_time: float) -> ValidationReport:
         """Add timing info to report."""

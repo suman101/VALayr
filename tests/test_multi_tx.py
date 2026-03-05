@@ -292,7 +292,7 @@ def test_severity_multi_tx_complexity_bonus():
 
 
 def test_severity_multi_tx_abs_delta():
-    """Multi-tx uses abs(balance_delta) to avoid net-zero masking."""
+    """Multi-tx positive delta does not count as drained funds."""
     scorer = SeverityScorer()
 
     # Multi-tx: setup deposits 5 ETH, attack drains 5 ETH → net delta = 0
@@ -308,9 +308,9 @@ def test_severity_multi_tx_abs_delta():
         },
     }
     s = scorer.score_detailed(trace_positive_delta)
-    assert s.funds_drained_score > 0, \
-        "Multi-tx should use abs(delta) so positive delta still counts"
-    print("  [+] Multi-tx abs delta OK")
+    assert s.funds_drained_score == 0, \
+        "Multi-tx positive delta should not count as drained funds"
+    print("  [+] Multi-tx positive delta ignored OK")
 
 
 def test_severity_single_tx_positive_delta_ignored():

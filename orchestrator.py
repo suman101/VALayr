@@ -536,11 +536,29 @@ class Orchestrator:
                     timeout=self.DOCKER_SANDBOX_TIMEOUT,
                 )
 
-                # Try to parse result from stdout (last line is JSON)
-                output_lines = result_proc.stdout.strip().splitlines()
-                if output_lines:
+                # Read result from the dedicated output file (written inside container)
+                result_json_path = tmpdir / "result.json"
+                result_data = None
+
+                if result_json_path.exists():
                     try:
-                        result_data = json.loads(output_lines[-1])
+                        result_data = json.loads(result_json_path.read_text())
+                    except (json.JSONDecodeError, OSError) as e:
+                        logger.error("Docker result.json parse error: %s", e)
+
+                # Fall back to parsing stdout last line if output file not found
+                if result_data is None:
+                    output_lines = result_proc.stdout.strip().splitlines()
+                    if output_lines:
+                        try:
+                            result_data = json.loads(output_lines[-1])
+                        except (json.JSONDecodeError, ValueError, TypeError) as e:
+                            report.error_message = f"Docker sandbox output parse error: {e}"
+                            logger.error("Docker sandbox parse error: %s\nstdout: %s",
+                                         e, result_proc.stdout[:500])
+
+                if result_data:
+                    try:
                         report.result = ValidationResult(
                             result_data.get("result", "REJECT_INVALID_FORMAT")
                         )
@@ -550,11 +568,9 @@ class Orchestrator:
                         if result_data.get("execution_trace"):
                             from validator.engine.validate import ExecutionTrace
                             report.execution_trace = ExecutionTrace(**result_data["execution_trace"])
-                    except (json.JSONDecodeError, ValueError, TypeError) as e:
-                        report.error_message = f"Docker sandbox output parse error: {e}"
-                        logger.error("Docker sandbox parse error: %s\nstdout: %s",
-                                     e, result_proc.stdout[:500])
-                else:
+                    except (ValueError, TypeError) as e:
+                        report.error_message = f"Docker result parse error: {e}"
+                elif not report.error_message:
                     report.error_message = "Docker sandbox produced no output"
                     if result_proc.stderr:
                         logger.error("Docker sandbox stderr: %s", result_proc.stderr[:500])
@@ -601,7 +617,7 @@ class Orchestrator:
 
     def _close_epoch_inner(self, epoch_number: int, start_block: int, end_block: int) -> EpochResult:
         """Internal epoch close logic, called under lock."""
-        if epoch_number < self._last_closed_epoch:
+        if epoch_number <= self._last_closed_epoch:
             logger.warning(
                 "Epoch %d already closed (last=%d) — skipping",
                 epoch_number, self._last_closed_epoch,

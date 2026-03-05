@@ -182,4 +182,7 @@ class IdentityStore:
                     p: asdict(c) for p, c in identity.claims.items()
                 },
             }
-        self._db_path.write_text(json.dumps(data, indent=2, sort_keys=True))
+        payload = json.dumps(data, indent=2, sort_keys=True)
+        tmp_path = self._db_path.with_suffix(self._db_path.suffix + ".tmp")
+        tmp_path.write_text(payload)
+        os.replace(tmp_path, self._db_path)

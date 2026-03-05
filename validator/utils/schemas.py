@@ -62,8 +62,9 @@ TASK_DEFINITION_SCHEMA = {
             },
         },
         "difficulty": {
-            "type": "string",
-            "enum": ["easy", "medium", "hard"],
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
         },
         "source_hash": {
             "type": "string",

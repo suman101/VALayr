@@ -4,7 +4,7 @@
 
 ## 1. Executive Summary
 
-VALayr is a **Bittensor subnet (SN-XX)** that incentivises the deterministic, adversarial discovery of smart-contract exploits. Miners craft Solidity exploit code targeting vulnerable contracts; validators execute it in sandboxed Anvil instances, fingerprint the results, score severity, de-duplicate submissions, and produce on-chain weight vectors that distribute TAO rewards.
+VALayr is a **Bittensor subnet** that incentivises the deterministic, adversarial discovery of smart-contract exploits. Miners craft Solidity exploit code targeting vulnerable contracts; validators execute it in sandboxed Anvil instances, fingerprint the results, score severity, de-duplicate submissions, and produce on-chain weight vectors that distribute TAO rewards.
 
 The system is designed around three hard constraints:
 

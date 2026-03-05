@@ -35,6 +35,9 @@ echo "    ANVIL_CHAIN_ID=$ANVIL_CHAIN_ID"
 echo "    PYTHONHASHSEED=$PYTHONHASHSEED"
 
 # ── Run Command ──────────────────────────────────────────────────────────────
+# Trap EXIT to clean up any background processes (e.g. Anvil) on crash
+trap 'kill $(jobs -p) 2>/dev/null; wait 2>/dev/null' EXIT INT TERM
+
 case "${1:-validate}" in
     validate)
         echo "[*] Starting validation engine..."

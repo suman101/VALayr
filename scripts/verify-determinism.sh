@@ -52,9 +52,17 @@ else
     echo "  ⚠ solc not found (Foundry manages its own)"
 fi
 
+EXPECTED_FOUNDRY="nightly-2024-12-01"
 if command -v forge &> /dev/null; then
     FORGE_VER=$(forge --version 2>&1 | head -1)
     echo "  Foundry: $FORGE_VER"
+    if echo "$FORGE_VER" | grep -q "$EXPECTED_FOUNDRY"; then
+        echo "  ✓ Foundry nightly matches ($EXPECTED_FOUNDRY)"
+        PASS=$((PASS + 1))
+    else
+        echo "  ✗ Foundry nightly mismatch (expected $EXPECTED_FOUNDRY)"
+        FAIL=$((FAIL + 1))
+    fi
 fi
 
 # ── 2. Python Config ─────────────────────────────────────────────────────────
