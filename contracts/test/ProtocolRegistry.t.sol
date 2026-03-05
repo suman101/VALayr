@@ -142,6 +142,57 @@ contract ProtocolRegistryTest is Test {
         registry.payExploitReward(contractHash, fingerprint);
     }
 
+    // ── withdrawBounty Pagination Tests ──────────────────────────────────
+
+    function test_withdrawBounty_invalidStartIndex_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 1 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+
+        // Deactivate to allow withdrawal
+        registry.deactivateContract(contractHash);
+
+        // startIndex beyond history length should revert
+        vm.expectRevert(ProtocolRegistry.InvalidStartIndex.selector);
+        registry.withdrawBounty(contractHash, 999);
+    }
+
+    function test_withdrawBounty_stillActive_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 1 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+
+        // Contract is still active — should revert with ContractStillActive
+        vm.expectRevert(ProtocolRegistry.ContractStillActive.selector);
+        registry.withdrawBounty(contractHash, 0);
+    }
+
+    // ── Severity Validation Tests ────────────────────────────────────────
+
+    function test_recordExploit_severityExceedsMax_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 10 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        bytes32 fingerprint = keccak256("exploit-severity");
+        // severityScore > 1e18 should revert
+        vm.expectRevert(ProtocolRegistry.InvalidSeverity.selector);
+        registry.recordExploit(contractHash, fingerprint, MINER, 2e18);
+    }
+
+    function test_recordExploit_maxSeverity_succeeds() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 10 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        bytes32 fingerprint = keccak256("exploit-max-sev");
+        // Exactly 1e18 should succeed
+        registry.recordExploit(contractHash, fingerprint, MINER, 1e18);
+        assertEq(registry.getExploitCount(contractHash), 1);
+    }
+
     receive() external payable {}
 }
 

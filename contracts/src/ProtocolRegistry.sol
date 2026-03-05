@@ -91,12 +91,15 @@ contract ProtocolRegistry is Pausable {
     error NotRegistered();
     error InsufficientBounty();
     error ContractInactive();
+    error ContractStillActive();
     error ExploitAlreadyClaimed();
     error DisclosureWindowActive();
     error InvalidValidator();
+    error InvalidSeverity();
     error PaymentFailed();
     error TooManyClaims();
     error ContractExpired();
+    error InvalidStartIndex();
 
     // ── Modifiers ────────────────────────────────────────────────────────
 
@@ -175,12 +178,13 @@ contract ProtocolRegistry is Pausable {
         uint256 startIndex
     ) external onlyProtocol(contractHash) nonReentrant {
         RegisteredContract storage reg = registry[contractHash];
-        if (reg.active) revert ContractInactive(); // Must deactivate first
+        if (reg.active) revert ContractStillActive();
 
         // Enforce: all existing claims must be paid or disclosure window expired
         // Process up to MAX_CLAIMS_PER_WITHDRAWAL at a time to bound gas
         uint256 maxPerCall = 20;
         bytes32[] storage history = exploitHistory[contractHash];
+        if (startIndex > history.length) revert InvalidStartIndex();
         uint256 end = startIndex + maxPerCall;
         if (end > history.length) end = history.length;
 
@@ -215,6 +219,7 @@ contract ProtocolRegistry is Pausable {
         uint256 severityScore // 1e18 fixed-point (0 to 1e18)
     ) external onlyValidator whenNotPaused {
         if (miner == address(0)) revert ZeroAddress();
+        if (severityScore > 1e18) revert InvalidSeverity();
         RegisteredContract storage reg = registry[contractHash];
         if (!reg.active) revert ContractInactive();
         if (reg.expiresAt != 0 && block.timestamp > reg.expiresAt)

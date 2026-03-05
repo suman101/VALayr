@@ -281,6 +281,8 @@ class ValidatorNeuron:
                 if miner_count >= MAX_SUBMISSIONS_PER_MINER_PER_EPOCH:
                     synapse.result = {"error": "Per-miner epoch submission limit reached"}
                     return synapse
+                # Increment count atomically with check to prevent race condition
+                self._miner_submission_counts[miner_hotkey] = miner_count + 1
 
             # If commit-reveal is active and a commit_hash is provided,
             # route through the two-phase reveal_and_process pipeline
@@ -300,7 +302,6 @@ class ValidatorNeuron:
 
             with self._submission_lock:
                 self.submissions_this_epoch.append(result)
-                self._miner_submission_counts[miner_hotkey] = miner_count + 1
 
             synapse.result = result.to_dict()
             return synapse
@@ -328,7 +329,7 @@ class ValidatorNeuron:
 
     def _close_current_epoch(self):
         """Close the current epoch and compute weights."""
-        if self.current_epoch <= self._last_closed_epoch:
+        if self.current_epoch < self._last_closed_epoch:
             logger.warning(
                 "Epoch %d already closed (last=%d) — skipping",
                 self.current_epoch, self._last_closed_epoch,

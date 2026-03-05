@@ -665,7 +665,7 @@ class Orchestrator:
 
     def _close_epoch_inner(self, epoch_number: int, start_block: int, end_block: int) -> EpochResult:
         """Internal epoch close logic, called under lock."""
-        if epoch_number <= self._last_closed_epoch:
+        if epoch_number < self._last_closed_epoch:
             logger.warning(
                 "Epoch %d already closed (last=%d) — skipping",
                 epoch_number, self._last_closed_epoch,

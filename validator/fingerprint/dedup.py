@@ -200,7 +200,7 @@ class FingerprintEngine:
             if fingerprint in task_db:
                 record = task_db[fingerprint]
                 record.submission_count += 1
-                self._save_db()
+                self._save_db_unlocked()
 
                 return DedupResult(
                     fingerprint=fingerprint,
@@ -222,7 +222,7 @@ class FingerprintEngine:
             if task_id not in self._db:
                 self._db[task_id] = {}
             self._db[task_id][fingerprint] = record
-            self._save_db()
+            self._save_db_unlocked()
 
             return DedupResult(
                 fingerprint=fingerprint,
@@ -268,11 +268,19 @@ class FingerprintEngine:
             self._db = {}
 
     def _save_db(self):
+        """Persist fingerprint database (acquires _lock first)."""
+        with self._lock:
+            self._save_db_unlocked()
+
+    def _save_db_unlocked(self):
         """Persist fingerprint database with atomic write + exclusive lock.
 
         Writes to a temporary file in the same directory, then renames.
         This prevents partial-write corruption if the process crashes mid-write.
         ``fcntl.LOCK_EX`` serialises concurrent validators on the same machine.
+
+        IMPORTANT: Caller must already hold ``self._lock`` or guarantee
+        single-threaded access.
         """
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         lock_path = self.db_path.with_suffix(".lock")
@@ -348,6 +356,6 @@ class FingerprintEngine:
                 del self._db[task_id]
 
             if pruned:
-                self._save_db()
+                self._save_db_unlocked()
 
             return pruned

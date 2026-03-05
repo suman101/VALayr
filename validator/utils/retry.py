@@ -48,6 +48,8 @@ def retry_subprocess(
             )
         except subprocess.TimeoutExpired as e:
             last_exc = e
+        except FileNotFoundError:
+            raise  # Fail fast — executable not found, retrying won't help
         except OSError as e:
             last_exc = e
 
