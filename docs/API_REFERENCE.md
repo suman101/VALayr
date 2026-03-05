@@ -1,6 +1,6 @@
 # VALayr — API Reference
 
-> Version 1.0 · Last updated: 2026-03
+> Version 1.1 · Last updated: 2026-03-03
 
 This document covers the public APIs of every VALayr module: Python classes and functions, Bittensor synapse formats, smart contract interfaces, CLI commands, and HTTP endpoints.
 
@@ -782,9 +782,16 @@ Returns a logger under the `exploit_subnet` namespace. Configured once on first 
 def keccak256(data: bytes | str) -> str
 ```
 
-Returns `0x`-prefixed 64-char hex string. Uses pycryptodome primary, `cast keccak` fallback.
+Returns `0x`-prefixed 64-char hex string.
 
-> **Note:** This is Ethereum keccak256, NOT NIST SHA-3 (`hashlib.sha3_256`).
+**Backend resolution order:**
+1. `pycryptodome` (`Crypto.Hash.keccak`) — primary, fast
+2. `pysha3` (`sha3.keccak_256`) — fallback if pycryptodome unavailable
+3. `cast keccak` (Foundry CLI) — last resort, subprocess-based
+
+If `data` is a `str`, it is UTF-8 encoded before hashing.
+
+> **Warning:** This is Ethereum keccak256, NOT NIST SHA-3 (`hashlib.sha3_256`). Using `hashlib.sha3_256` will produce different hashes and break determinism.
 
 ---
 
@@ -1039,6 +1046,15 @@ docker run <image> COMMAND
 | `PYTHONHASHSEED`          | `0`          | **Must be 0** for determinism    |
 | `PYTHONDONTWRITEBYTECODE` | `1`          | Skip `.pyc` generation           |
 | `ETH_PRIVATE_KEY`         | _(none)_     | Private key for on-chain ops     |
+
+---
+
+## Cross-References
+
+- [CONTRACT_REFERENCE.md](CONTRACT_REFERENCE.md) — Solidity contract ABIs and custom errors
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture and component interactions
+- [DATA_SCHEMA.md](DATA_SCHEMA.md) — JSON schemas for files produced by these APIs
+- [GLOSSARY.md](GLOSSARY.md) — Term definitions
 
 ---
 

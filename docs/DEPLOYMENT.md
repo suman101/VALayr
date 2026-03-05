@@ -1,6 +1,6 @@
 # VALayr — Deployment & Operations Guide
 
-> Version 1.0 · Last updated: 2026-03
+> Version 1.1 · Last updated: 2026-03-03
 
 This guide covers production deployment, Docker configuration, monitoring, troubleshooting, and operational procedures for running VALayr validator and miner nodes.
 
@@ -678,3 +678,16 @@ ls -lt data/reports/ | head -10
 ---
 
 _For security-related concerns, see [SECURITY.md](../SECURITY.md) and [THREAT_MODEL.md](THREAT_MODEL.md)._
+
+---
+
+## Operational Runbooks
+
+For incident response and operational procedures, see:
+
+| Runbook                                           | When to Use                                        |
+| ------------------------------------------------- | -------------------------------------------------- |
+| [Key Rotation](runbooks/key-rotation.md)          | Compromised or expired validator/deployer keys     |
+| [Epoch Stall](runbooks/epoch-stall.md)            | Epoch fails to close or weight-setting stalls      |
+| [Consensus Failure](runbooks/consensus-failure.md)| Validators cannot reach quorum on submissions      |
+| [Validator Drift](runbooks/validator-drift.md)    | Determinism check fails or validators give different results |

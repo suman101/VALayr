@@ -1,5 +1,7 @@
 # Validator Guide
 
+> Version 1.1 · Last updated: 2026-03-03
+
 Complete guide for running and operating a VALayr validator node.
 
 ---
@@ -18,6 +20,7 @@ Complete guide for running and operating a VALayr validator node.
 10. [Monitoring & Metrics](#monitoring--metrics)
 11. [Docker Deployment](#docker-deployment)
 12. [Determinism Requirements](#determinism-requirements)
+13. [Validator Onboarding Checklist](#validator-onboarding-checklist)
 13. [Security Hardening](#security-hardening)
 14. [Troubleshooting](#troubleshooting)
 15. [FAQ](#faq)
@@ -200,7 +203,7 @@ ANVIL_CONFIG = {
 }
 ```
 
-> **Critical:** Different Anvil parameters between validators = different execution results = failed quorum = lost rewards.
+> **Critical:** Different Anvil parameters between validators = different execution results = failed quorum = lost rewards. Run `bash scripts/verify-determinism.sh` to validate your configuration automatically.
 
 ---
 
@@ -621,6 +624,68 @@ When a Class B miner submits an exploit targeting a Class A invariant, the valid
 - Your validator address must be registered via `setValidator()` on both `InvariantRegistry` and `AdversarialScoring`
 - The `Deploy.s.sol` script handles this automatically for fresh deployments
 - For existing deployments, the contract owner must call `setValidator(yourAddress, true)`
+
+---
+
+## Validator Onboarding Checklist
+
+Use this checklist to ensure your validator is correctly configured before going live:
+
+### Infrastructure
+
+- [ ] **Hardware**: 16 GB+ RAM, 8+ CPU cores, 100 GB+ SSD
+- [ ] **OS**: Linux (recommended) or macOS — Docker required for production
+- [ ] **Network**: Stable connection, low latency to Bittensor finney network
+
+### Software
+
+- [ ] **Python 3.10+** installed — `python3 --version`
+- [ ] **Foundry nightly-2024-12-01** — `forge --version` (do NOT use newer versions)
+- [ ] **Docker 24.0+** — `docker --version`
+- [ ] **Repository cloned** — `git clone https://github.com/suman101/VALayr.git`
+- [ ] **Dependencies installed** — `pip install -e ".[dev]"`
+
+### Determinism Verification
+
+- [ ] **Run `bash scripts/verify-determinism.sh`** — all 6 checks must PASS
+- [ ] `PYTHONHASHSEED=0` set in environment
+- [ ] Anvil parameters match canonical values (see [config](#configuration))
+- [ ] `solc 0.8.28` resolved by Foundry
+
+### Bittensor
+
+- [ ] **Wallet created** — `btcli wallet new_hotkey --wallet.name validator`
+- [ ] **Subnet registered** — `btcli subnet register --netuid <NETUID> --wallet.name validator`
+- [ ] **Sufficient stake** — check with `btcli wallet overview`
+
+### Monitoring
+
+- [ ] **Health endpoint accessible** — `curl http://localhost:9946/health`
+- [ ] **Prometheus scraping configured** (optional but recommended)
+- [ ] **Alertmanager rules loaded** — `docker/alerts.yml`
+
+### Go-Live
+
+- [ ] Run a local test epoch: `python3 neurons/validator.py --local`
+- [ ] Verify weight-setting works: check logs for `set_weights` calls
+- [ ] Switch to production: `python3 neurons/validator.py --netuid <NETUID> --subtensor.network finney`
+
+---
+
+## Cross-References
+
+| Document                                             | Relevance                               |
+| ---------------------------------------------------- | --------------------------------------- |
+| [ARCHITECTURE.md](ARCHITECTURE.md)                   | Full system architecture and data flow  |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                       | Docker deployment and monitoring setup  |
+| [TESTING.md](TESTING.md)                             | Test suites and determinism checks      |
+| [THREAT_MODEL.md](THREAT_MODEL.md)                   | Security controls and risk mitigations  |
+| [CONTRACT_REFERENCE.md](CONTRACT_REFERENCE.md)       | Smart contract ABI reference            |
+| [DATA_SCHEMA.md](DATA_SCHEMA.md)                     | JSON schemas for state files            |
+| [Runbook: Epoch Stall](runbooks/epoch-stall.md)      | Recovering from stalled epochs          |
+| [Runbook: Consensus Failure](runbooks/consensus-failure.md) | Handling consensus failures       |
+| [Runbook: Validator Drift](runbooks/validator-drift.md)     | Diagnosing determinism drift      |
+| [Runbook: Key Rotation](runbooks/key-rotation.md)    | Rotating compromised validator keys     |
 
 ### Emergency Pause
 

@@ -1,5 +1,7 @@
 # Smart Contract Reference
 
+> Version 1.1 · Last updated: 2026-03-03
+
 Complete reference for all Solidity contracts in the VALayr exploit subnet.
 
 ---
@@ -13,6 +15,7 @@ Complete reference for all Solidity contracts in the VALayr exploit subnet.
 5. [ProtocolRegistry](#protocolregistry)
 6. [InvariantRegistry (Stage 3)](#invariantregistry-stage-3)
 7. [AdversarialScoring (Stage 3)](#adversarialscoring-stage-3)
+8. [Custom Errors Reference](#custom-errors-reference)
 8. [Build & Test](#build--test)
 9. [Foundry Configuration](#foundry-configuration)
 
@@ -582,6 +585,39 @@ Administrative functions (`transferOwnership`, `acceptOwnership`, `setValidator`
 
 - `getClassAScore(address miner) → int256` — Class A miner score
 - `getClassBScore(address miner) → int256` — Class B miner score
+
+---
+
+## Custom Errors Reference
+
+All contracts use custom errors (gas-efficient) instead of `require()` strings.
+
+| Error                    | Contract(s)                    | Trigger                                                |
+| ------------------------ | ------------------------------ | ------------------------------------------------------ |
+| `ZeroAddress()`          | All five contracts             | Null address passed for miner, owner, or validator     |
+| `NotOwner()`             | All five contracts             | Caller is not `owner`                                  |
+| `NotValidator()`         | InvariantRegistry, AdversarialScoring | Caller is not a registered validator            |
+| `TaskNotOpen()`          | CommitReveal                   | Attempting commit/reveal on a non-open task            |
+| `CommitWindowClosed()`   | CommitReveal                   | Commit submitted after the 2-hour window               |
+| `RevealWindowClosed()`   | CommitReveal                   | Reveal submitted after the 4-hour window               |
+| `RevealTooEarly()`       | CommitReveal                   | Reveal attempted during commit window                  |
+| `InvalidHash()`          | CommitReveal                   | Revealed hash doesn't match committed hash             |
+| `AlreadyCommitted()`     | CommitReveal                   | Same miner committed twice for same task               |
+| `AlreadyRevealed()`      | CommitReveal                   | Same miner revealed twice for same task                |
+| `ContractStillActive()`  | ProtocolRegistry               | Attempting to close a contract that still has active claims |
+| `ContractInactive()`     | ProtocolRegistry               | Attempting operations on an inactive contract          |
+| `InvalidSeverity()`      | ProtocolRegistry               | Severity score > 1e18 (must be in [0, 1e18])          |
+| `InvalidStartIndex()`    | ProtocolRegistry               | `withdrawBounty()` called with startIndex > history length |
+| `ContractPaused()`       | All five contracts             | Function called while contract is paused               |
+
+---
+
+## Cross-References
+
+- [API_REFERENCE.md](API_REFERENCE.md) — Python APIs that interact with these contracts
+- [DEPLOYMENT.md](DEPLOYMENT.md) — How to deploy these contracts
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Where contracts fit in the system
+- [GLOSSARY.md](GLOSSARY.md) — Term definitions
 
 ### CommitReveal
 

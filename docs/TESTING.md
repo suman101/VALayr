@@ -1,5 +1,7 @@
 # Testing Guide
 
+> Version 1.1 · Last updated: 2026-03-03
+
 Comprehensive guide to running and writing tests for the VALayr exploit subnet.
 
 ---
@@ -495,3 +497,21 @@ PYTHONHASHSEED=0 python -m pytest tests/ --cov=validator --cov=task-generator --
 ```
 
 Open `htmlcov/index.html` for a detailed coverage report.
+
+---
+
+## Test Counts (as of v0.1.0)
+
+| Suite                    | Count | Framework |
+| ------------------------ | ----- | --------- |
+| Foundry contract tests   | 81    | forge     |
+| Python integration tests | 198   | pytest    |
+| Skipped (expected)       | 1     | pytest    |
+
+---
+
+## Cross-References
+
+- [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) — Development setup for running tests
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — Test requirements for PRs
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Component architecture (what each test covers)

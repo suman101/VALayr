@@ -1,6 +1,8 @@
 # VALayr
 
-A Bittensor subnet for deterministic, adversarial smart contract exploit discovery.
+> **v0.1.0** · Bittensor subnet for deterministic, adversarial smart-contract exploit discovery.
+
+VALayr incentivises miners to discover vulnerabilities in opt-in smart contracts. Miners craft Solidity exploits, validators execute them in deterministic sandboxes, and the results are fingerprinted, scored, de-duplicated, and rewarded with TAO.
 
 ## Architecture
 
@@ -21,6 +23,17 @@ A Bittensor subnet for deterministic, adversarial smart contract exploit discove
 
 1. **Incentives are on-chain and adversarial.** Every scoring rule is deterministic and published.
 2. **Validation must be cheaper than generation.** O(minutes) vs O(hours).
+3. **Deterministic reproducibility.** Any observer can re-run validation and reach the same result.
+
+## Getting Started
+
+| I want to…                  | Start here                                        |
+| --------------------------- | ------------------------------------------------- |
+| **Mine** (find exploits)    | [Miner Guide](docs/MINER_GUIDE.md)               |
+| **Validate** (run a node)   | [Validator Guide](docs/VALIDATOR_GUIDE.md)        |
+| **Develop** (contribute)    | [Developer Guide](docs/DEVELOPER_GUIDE.md)        |
+| **Deploy** (production)     | [Deployment Guide](docs/DEPLOYMENT.md)            |
+| **Audit** (security review) | [Threat Model](docs/THREAT_MODEL.md)              |
 
 ## Documentation
 
@@ -37,6 +50,7 @@ A Bittensor subnet for deterministic, adversarial smart contract exploit discove
 | [Exploit Writing Guide](docs/EXPLOIT_WRITING_GUIDE.md) | Annotated exploit examples for every vulnerability class, scoring strategies              |
 | [Glossary](docs/GLOSSARY.md)                           | Definitions of all key terms and concepts used in the project                             |
 | [Threat Model](docs/THREAT_MODEL.md)                   | STRIDE analysis, risk matrix, attack surfaces, security controls                          |
+| [Data Schema](docs/DATA_SCHEMA.md)                     | JSON schemas for all persistent state files (fingerprints, epochs, commits)               |
 | [Contributing](CONTRIBUTING.md)                        | PR process, coding standards, development setup                                           |
 | [Security Policy](SECURITY.md)                         | Vulnerability reporting, scope, disclosure policy                                         |
 | [Changelog](CHANGELOG.md)                              | Release history and notable changes                                                       |
@@ -376,4 +390,5 @@ Test suites:
 
 ## Legal
 
-Only opt-in protocol contracts. 72-hour disclosure window enforced on-chain.
+Only opt-in protocol contracts are targeted. 72-hour disclosure window enforced on-chain.
+See [SECURITY.md](SECURITY.md) for the vulnerability reporting policy and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) for the full risk analysis.

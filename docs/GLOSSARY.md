@@ -134,6 +134,10 @@ Foundry's testing framework for Solidity. Discovers and runs `test_*()` function
 
 Ethereum development toolkit including `forge` (build/test), `anvil` (local node), and `cast` (CLI interaction). Pinned to `nightly-2024-12-01`.
 
+### Finney
+
+A Bittensor network environment. `finney` is the production mainnet where real TAO rewards are distributed. Other networks: `test` (testnet), `local` (development).
+
 ---
 
 ## G
@@ -262,6 +266,10 @@ Algorithmic score in [0, 1] computed from four weighted components: funds draine
 
 Python component (`validator/scoring/severity.py`) that computes severity scores from execution traces.
 
+### Slashing
+
+Penality mechanism where a validator's stake or reputation is reduced for misbehaviour. In VALayr, validators with >20% divergence from consensus trigger divergence-based slashing via the anti-collusion engine.
+
 ### State Impact
 
 The measurable changes an exploit produces on the target contract: storage slot diffs, balance changes, event logs. The basis for fingerprinting and deduplication.
@@ -282,9 +290,17 @@ Python component (`subnet-adapter/incentive.py`) that maps exploit scores to Bit
 
 A Bittensor message type for communication between neurons. VALayr defines `ExploitSubmissionSynapse` and `ExploitQuerySynapse` in `neurons/protocol.py`.
 
+### Subnet UID
+
+See **Netuid**.
+
 ---
 
 ## T
+
+### TAO
+
+The native token of the Bittensor network. Miners earn TAO rewards proportional to their weight vector scores. Validators distribute TAO by setting weights on subtensor each epoch.
 
 ### Task
 

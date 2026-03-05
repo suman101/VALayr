@@ -20,7 +20,7 @@ Thank you for your interest in contributing to VALayr! This guide covers the dev
 | Tool    | Version            | Install                                                     |
 | ------- | ------------------ | ----------------------------------------------------------- |
 | Python  | ≥ 3.10             | [python.org](https://www.python.org/)                       |
-| Foundry | nightly-2024-12-01 | `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
+| Foundry | nightly-2024-12-01 | `curl -L https://foundry.paradigm.xyz \| bash && foundryup --version nightly-2024-12-01` |
 | Docker  | ≥ 24.0             | [docker.com](https://www.docker.com/)                       |
 | Git     | ≥ 2.30             | System package manager                                      |
 
@@ -34,16 +34,16 @@ cd VALayr
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Install Foundry (if not already installed)
+# Install Foundry (pinned to nightly-2024-12-01 for deterministic builds)
 curl -L https://foundry.paradigm.xyz | bash
-foundryup
+foundryup --version nightly-2024-12-01
 
 # Install Solidity dependencies
 cd contracts && forge install && cd ..
 
 # Verify setup
-forge test --root contracts          # 32 Solidity tests
-python3 -m pytest tests/ -q          # 81+ Python tests
+forge test --root contracts          # 81 Solidity tests
+python3 -m pytest tests/ -q          # 198 Python tests
 ```
 
 ### Environment Variables
@@ -224,3 +224,12 @@ Every PR triggers:
 - **Read** [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) to understand trust boundaries
 - Follow the **Security Checklist** in SECURITY.md for every PR
 - Report vulnerabilities via the process in SECURITY.md — not via public issues
+
+---
+
+## Further Reading
+
+- [Developer Guide](docs/DEVELOPER_GUIDE.md) — Detailed development setup, adding templates/mutators/contracts
+- [Testing Guide](docs/TESTING.md) — Test suites, CI pipeline, writing tests
+- [Architecture](docs/ARCHITECTURE.md) — System architecture and design decisions
+- [Glossary](docs/GLOSSARY.md) — Definitions of key terms

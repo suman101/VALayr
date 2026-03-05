@@ -15,6 +15,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Python lint & type-check CI job** — ruff, black, mypy in `lint-python` workflow job
 - `[tool.mypy]` configuration in `pyproject.toml`
 - Example data files in `data/reports/`, `data/anticollusion/`, `data/commit-reveal/`
+- `Pausable` modifier on `ProtocolRegistry.sol` — owner can pause/unpause contract in emergencies
+- Paginated `withdrawBounty()` with `startIndex` parameter and `InvalidStartIndex` guard
+- `getEarliestReveal()` convenience getter on `CommitReveal.sol` — O(1) lookup via cached earliest timestamp
+- Severity-score validation on `recordExploit()` — reverts with `InvalidSeverity` if score > 1e18
+- `ContractStillActive` error for clearer revert messages in `ProtocolRegistry`
+- `DATA_SCHEMA.md` — JSON schemas for all persistent state files
+- Operational runbooks: `docs/runbooks/key-rotation.md`, `epoch-stall.md`, `consensus-failure.md`, `validator-drift.md`
+- Type annotations across Python codebase (`orchestrator.py`, `validate.py`, `severity.py`, `incentive.py`)
 
 ### Changed
 
@@ -22,6 +30,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Repository URL placeholders replaced with `https://github.com/suman101/VALayr.git`
 - CI lint job split into `lint-solidity` and `lint-python`
 - Pinned `ruff==0.8.6`, `black==24.10.0`, `mypy==1.14.1` in `requirements.txt`
+- Epoch overlap guard uses `<` instead of `<=` in `orchestrator.py` and `validator.py`
+- Consensus iteration sorted for deterministic tie-breaking (lexicographic on miner address)
+- Severity scores clamped to [0, 1] in `incentive.py`
+- Storage slot normalization (int → hex) in `severity.py`
+
+### Fixed
+
+- **CRITICAL**: `withdrawBounty()` pagination bypass — `startIndex > history.length` skipped validation checks but still transferred bounty
+- **CRITICAL**: Deadlock in `FingerprintEngine` — `prune()`/`check_duplicate()` calling `_save_db()` inside `_lock` (split into `_save_db()` and `_save_db_unlocked()`)
+- **CRITICAL**: Race condition in validator submission rate limiting — check-and-increment was not atomic
+- Path traversal vulnerabilities in task-generator template loading and miner CLI source lookup
+- TOCTOU race in file size check — now checks size after read
+- Regex injection in `RenameMutator` and `BalanceMutator` — switched to lambda replacement
+- Windows path regex bypass in `validate.py` — fixed `_sanitize_source()` pattern
+- `retry_subprocess` now re-raises `FileNotFoundError` immediately instead of retrying
+- Private key CLI arg exposure removed from `key_rotation.py` — requires `--private-key-stdin`
+
+### Security
+
+- 19 bugs/vulnerabilities fixed across two security audit rounds
+- See `docs/THREAT_MODEL.md` for updated residual risk status (R-3 through R-6 resolved)
 
 ## [0.1.0] — 2026-03-03
 
@@ -31,7 +60,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Security policy** (`SECURITY.md`) — responsible disclosure, scope, contributor checklist
 - **Contributing guide** (`CONTRIBUTING.md`) — dev setup, PR process, coding standards
 - **Changelog** (this file)
-- `OwnershipTransferred` events on all four contracts (`CommitReveal`, `ExploitRegistry`, `ProtocolRegistry`, `AdversarialMode`)
+- `OwnershipTransferred` events on all five contracts (`CommitReveal`, `ExploitRegistry`, `ProtocolRegistry`, `InvariantRegistry`, `AdversarialMode`)
 - `ValidatorUpdated` event on `InvariantRegistry`
 - `ZeroAddress` custom errors on `InvariantRegistry` and `AdversarialScoring`
 - Disclosure window enforcement in `ProtocolRegistry.withdrawBounty()` — loops through unpaid claims within `DISCLOSURE_WINDOW`

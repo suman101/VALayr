@@ -1,6 +1,6 @@
 # VALayr — System Architecture
 
-> Version 1.0 · Last updated: 2026-03
+> Version 1.1 · Last updated: 2026-03-03
 
 ## 1. Executive Summary
 
@@ -746,17 +746,23 @@ Validator                SubnetAdapter           AntiCollusion        Chain
 
 ## 12. Cross-References
 
-| Document                                 | Coverage                                               |
-| ---------------------------------------- | ------------------------------------------------------ |
-| [README.md](../README.md)                | Quickstart, component overview, CLI usage              |
-| [THREAT_MODEL.md](THREAT_MODEL.md)       | STRIDE analysis, risk matrix, attack surfaces          |
-| [API_REFERENCE.md](API_REFERENCE.md)     | Module APIs, synapse formats, contract ABIs            |
-| [DEPLOYMENT.md](DEPLOYMENT.md)           | Production deployment, Docker, monitoring              |
-| [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | Development setup, testing, adding components          |
-| [MINER_GUIDE.md](MINER_GUIDE.md)         | Miner onboarding, exploit writing, submission workflow |
-| [CONTRIBUTING.md](../CONTRIBUTING.md)    | PR process, coding standards                           |
-| [SECURITY.md](../SECURITY.md)            | Vulnerability reporting, scope                         |
-| [CHANGELOG.md](../CHANGELOG.md)          | Release history                                        |
+| Document                                               | Coverage                                               |
+| ------------------------------------------------------ | ------------------------------------------------------ |
+| [README.md](../README.md)                              | Quickstart, component overview, CLI usage              |
+| [THREAT_MODEL.md](THREAT_MODEL.md)                     | STRIDE analysis, risk matrix, attack surfaces          |
+| [API_REFERENCE.md](API_REFERENCE.md)                   | Module APIs, synapse formats, contract ABIs            |
+| [CONTRACT_REFERENCE.md](CONTRACT_REFERENCE.md)         | Solidity contract ABIs, storage layout, events         |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                         | Production deployment, Docker, monitoring              |
+| [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)               | Development setup, testing, adding components          |
+| [MINER_GUIDE.md](MINER_GUIDE.md)                       | Miner onboarding, exploit writing, submission workflow |
+| [VALIDATOR_GUIDE.md](VALIDATOR_GUIDE.md)               | Validator setup, epoch lifecycle, weight setting       |
+| [EXPLOIT_WRITING_GUIDE.md](EXPLOIT_WRITING_GUIDE.md)   | Annotated exploit examples for every vuln class        |
+| [TESTING.md](TESTING.md)                               | Test suites, CI pipeline, determinism verification     |
+| [DATA_SCHEMA.md](DATA_SCHEMA.md)                       | JSON schemas for persistent state files                |
+| [GLOSSARY.md](GLOSSARY.md)                             | Definitions of all key terms                           |
+| [CONTRIBUTING.md](../CONTRIBUTING.md)                  | PR process, coding standards                           |
+| [SECURITY.md](../SECURITY.md)                          | Vulnerability reporting, scope                         |
+| [CHANGELOG.md](../CHANGELOG.md)                        | Release history                                        |
 
 ---
 

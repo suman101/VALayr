@@ -1,6 +1,6 @@
 # VALayr — Developer Guide
 
-> Version 1.0 · Last updated: 2026-03
+> Version 1.1 · Last updated: 2026-03-03
 
 This guide is for developers who want to contribute to VALayr's core codebase — adding features, fixing bugs, extending the validation engine, writing new mutators, or improving contracts.
 
@@ -47,6 +47,10 @@ cd contracts && forge install && cd ..
 forge test --root contracts -v        # Solidity tests
 python3 -m pytest tests/ -q           # Python tests
 ```
+
+> **Note:** The repository uses directory symlinks for Python module imports: `task_generator → task-generator/` and `subnet_adapter → subnet-adapter/`. These are checked into Git. If they appear broken after cloning on Windows, recreate them with `mklink /D task_generator task-generator`.
+
+> **Solidity dependencies:** The `contracts/lib/forge-std` submodule is installed by `forge install`. If you see missing import errors, run `cd contracts && forge install` again.
 
 ### 1.2 Environment Variables
 
@@ -695,9 +699,15 @@ There's a helper at `tests/_debug_anvil.py` for inspecting Anvil state during de
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture, component interactions, data flow
 - [API_REFERENCE.md](API_REFERENCE.md) — Complete API documentation
-- [THREAT_MODEL.md](THREAT_MODEL.md) — Security analysis
+- [CONTRACT_REFERENCE.md](CONTRACT_REFERENCE.md) — Solidity contract ABIs, events, and errors
+- [TESTING.md](TESTING.md) — Test suites, CI pipeline, determinism verification
+- [THREAT_MODEL.md](THREAT_MODEL.md) — Security analysis and risk matrix
+- [DATA_SCHEMA.md](DATA_SCHEMA.md) — JSON schemas for persistent state files
 - [DEPLOYMENT.md](DEPLOYMENT.md) — Production deployment guide
 - [MINER_GUIDE.md](MINER_GUIDE.md) — Guide for exploit miners
+- [VALIDATOR_GUIDE.md](VALIDATOR_GUIDE.md) — Guide for validator operators
+- [EXPLOIT_WRITING_GUIDE.md](EXPLOIT_WRITING_GUIDE.md) — Annotated exploit examples
+- [GLOSSARY.md](GLOSSARY.md) — Definitions of all key terms
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — PR process and standards
 
 ---

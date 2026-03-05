@@ -1,6 +1,6 @@
 # VALayr — Miner Guide
 
-> Version 1.0 · Last updated: 2026-03
+> Version 1.1 · Last updated: 2026-03-03
 
 This guide is for **miners** who want to participate in the VALayr subnet by discovering and submitting smart contract exploits. You do not need to understand the validator internals — this guide covers everything you need to earn TAO.
 
@@ -18,6 +18,7 @@ This guide is for **miners** who want to participate in the VALayr subnet by dis
 - [8. Exploit Strategies by Vulnerability Class](#8-exploit-strategies-by-vulnerability-class)
 - [9. Tips for Maximising Rewards](#9-tips-for-maximising-rewards)
 - [10. FAQ](#10-faq)
+- [11. First-Time Miner Checklist](#11-first-time-miner-checklist)
 
 ---
 
@@ -596,3 +597,32 @@ Class B miners write exploits targeting submitted invariants. The goal is to bre
    - Checks if the invariant holds or is broken
    - Updates scores for both miners
 4. Both classes earn TAO based on their accumulated scores
+
+---
+
+## 11. First-Time Miner Checklist
+
+Use this checklist to verify your setup before your first submission:
+
+- [ ] **Python 3.10+** installed — `python3 --version`
+- [ ] **Foundry** installed and pinned — `forge --version` shows `nightly-2024-12-01`
+- [ ] **Repository cloned** — `git clone https://github.com/suman101/VALayr.git`
+- [ ] **Dependencies installed** — `pip install -e ".[dev]"`
+- [ ] **Contracts compile** — `forge build` succeeds in `contracts/`
+- [ ] **Bittensor wallet created** — `btcli wallet new_hotkey --wallet.name miner`
+- [ ] **Subnet registered** — `btcli subnet register --netuid <NETUID> --wallet.name miner`
+- [ ] **Can list tasks** — `python3 -m miner.cli tasks` returns task list
+- [ ] **Can scaffold** — `python3 -m miner.cli scaffold --task <TASK_ID>` generates template
+- [ ] **Local test passes** — `forge test` with your exploit succeeds
+- [ ] **Can submit** — `python3 -m miner.cli submit --task <TASK_ID> --exploit Exploit.sol`
+
+**Common gotchas:**
+- Use `pragma solidity ^0.8.28;` — other versions will fail compilation
+- Only `forge-std` is available — no OpenZeppelin or other imports
+- Maximum exploit size is 64 KB
+- Rate limit: 50 submissions per epoch per miner
+
+---
+
+_For the full exploit writing tutorial with annotated examples, see [EXPLOIT_WRITING_GUIDE.md](EXPLOIT_WRITING_GUIDE.md)._
+_For developer documentation (contributing code to VALayr itself), see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)._

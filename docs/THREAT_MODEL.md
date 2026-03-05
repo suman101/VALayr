@@ -1,6 +1,6 @@
 # VALayr — Threat Model
 
-> Version 1.0 · Last updated: 2025-07
+> Version 1.1 · Last updated: 2026-03-03
 
 ## 1. Overview
 
@@ -255,12 +255,12 @@ MINER                        VALIDATOR                         EVM CHAIN
 
 | #   | Residual Risk                                                                                         | Recommendation                                                     | Priority |
 | --- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------- |
-| R-1 | **Reentrancy in `payExploitReward` / `withdrawBounty`** — uses `call{value}` without reentrancy guard | Add OpenZeppelin `ReentrancyGuard` or move to pull-payment pattern | High     |
-| R-2 | **Centralised ownership** — all contracts have a single `owner`                                       | Migrate to multi-sig or governance timelock before mainnet         | High     |
-| R-3 | **Solidity compiler pinning** — contracts compile with `0.8.28` but `foundry.toml` may auto-update    | Pin `solc_version = "0.8.28"` explicitly in `foundry.toml`         | Medium   |
-| R-4 | **Validator key rotation** — no mechanism to rotate compromised validator keys                        | Implement key rotation with grace period                           | Medium   |
-| R-5 | **Fingerprint DB pruning** — unbounded growth over time                                               | Implement time-based or size-based pruning with archival           | Low      |
-| R-6 | **Epoch overlap race** — new epoch can start before prior epoch's weights are set                     | Add epoch overlap guard in orchestrator                            | Low      |
+| R-1 | **Reentrancy in `payExploitReward` / `withdrawBounty`** — uses `call{value}` without reentrancy guard | Add OpenZeppelin `ReentrancyGuard` or move to pull-payment pattern | High — _open_ |
+| R-2 | **Centralised ownership** — all contracts have a single `owner`                                       | Migrate to multi-sig or governance timelock before mainnet. Multi-sig deploy script added (`scripts/deploy.sh`) | High — _partially mitigated_ |
+| R-3 | ~~**Solidity compiler pinning**~~ — `solc_version = "0.8.28"` now pinned in `foundry.toml`            | ~~Pin `solc_version`~~ | ✅ Resolved |
+| R-4 | ~~**Validator key rotation**~~ — key rotation runbook added (`docs/runbooks/key-rotation.md`)         | ~~Implement key rotation~~ | ✅ Resolved |
+| R-5 | ~~**Fingerprint DB pruning**~~ — time-based pruning implemented in `FingerprintEngine.prune()`        | ~~Implement pruning~~ | ✅ Resolved |
+| R-6 | ~~**Epoch overlap race**~~ — epoch overlap guard added in `orchestrator.py` and `validator.py`         | ~~Add overlap guard~~ | ✅ Resolved |
 
 ---
 

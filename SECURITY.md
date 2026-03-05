@@ -25,6 +25,15 @@ If you discover a security issue in VALayr, please report it responsibly:
 
 We will acknowledge receipt within **48 hours** and aim to release a patch within **7 days** for critical issues.
 
+### Response SLAs
+
+| Severity | Acknowledgement | Patch Target | Disclosure Window |
+| -------- | --------------- | ------------ | ----------------- |
+| Critical | 24 hours        | 3 days       | 7 days            |
+| High     | 48 hours        | 7 days       | 14 days           |
+| Medium   | 72 hours        | 14 days      | 30 days           |
+| Low      | 1 week          | Next release | 90 days           |
+
 ## Scope
 
 The following components are in scope for security reports:
