@@ -55,6 +55,22 @@ from validator.engine.adversarial import (
     ChallengeReport,
     ChallengeResult,
 )
+from validator.bounty.anti_bypass import AntiBypassEngine
+from validator.bounty.platform import (
+    BountyReport,
+    PlatformRegistry,
+    create_default_registry,
+)
+from validator.bounty.identity import IdentityStore
+from validator.bounty.reward_split import RewardSplitEngine
+from validator.scoring.uniqueness import UniquenessScorer
+from validator.utils.difficulty import (
+    get_max_difficulty,
+    get_mainnet_ratio,
+    get_min_severity,
+    get_epoch_config,
+)
+from task_generator.discovery import MainnetAutoDiscovery
 
 
 # ── Input Validation ──────────────────────────────────────────────────────────
@@ -159,6 +175,34 @@ class Orchestrator:
         self.anticollusion = AntiCollusionEngine(
             data_dir=self.data_dir / "anticollusion",
         )
+
+        # Anti-Bypass Engine — timestamps exploits and detects platform bypasses
+        self.anti_bypass = AntiBypassEngine(
+            data_dir=self.data_dir / "anti_bypass",
+        )
+
+        # Bounty Platform Registry + Identity Store
+        self.platform_registry = create_default_registry()
+        self.identity_store = IdentityStore(
+            data_dir=self.data_dir / "identities",
+            platform_registry=self.platform_registry,
+        )
+
+        # Reward Split Engine
+        self.reward_split = RewardSplitEngine(
+            data_dir=self.data_dir / "rewards",
+        )
+
+        # Anti-LLM Uniqueness Scorer
+        self.uniqueness_scorer = UniquenessScorer()
+
+        # Mainnet Auto-Discovery
+        self.mainnet_discovery = MainnetAutoDiscovery(
+            data_dir=self.data_dir / "discovery",
+        )
+
+        # Current epoch (for difficulty ramping)
+        self._current_epoch: int = 0
 
         # Epoch overlap guard
         self._last_closed_epoch: int = -1
@@ -362,7 +406,41 @@ class Orchestrator:
         else:
             result.reward_multiplier = 1.0
 
-        # Step 6: Record vote in incentive adapter
+        # Step 6: Anti-LLM uniqueness scoring
+        uniqueness = self.uniqueness_scorer.score_submission(
+            task_id=task_id,
+            exploit_source=exploit_source,
+            miner_address=miner_address,
+            gas_used=report.execution_trace.gas_used if report.execution_trace else 0,
+            selector_count=len(report.execution_trace.function_selectors) if report.execution_trace else 0,
+            difficulty=task.get("difficulty", 1),
+        )
+        if uniqueness.is_herd:
+            result.reward_multiplier *= (1.0 - uniqueness.herd_penalty)
+            logger.info(
+                "Herd penalty applied to %s: %d similar submissions",
+                miner_address[:10], uniqueness.herd_size,
+            )
+        result.reward_multiplier *= uniqueness.final_multiplier
+        result.reward_multiplier = max(0.0, min(1.0, result.reward_multiplier))
+
+        # Step 6b: Difficulty-based minimum severity filter
+        min_sev = get_min_severity(self._current_epoch)
+        if result.severity_score < min_sev:
+            logger.info(
+                "Severity %.4f below epoch minimum %.4f for %s",
+                result.severity_score, min_sev, miner_address[:10],
+            )
+
+        # Step 7: Record subnet receipt for anti-bypass tracking
+        if result.fingerprint:
+            self.anti_bypass.record_subnet_receipt(
+                task_id=task_id,
+                miner_hotkey=miner_address,
+                fingerprint=result.fingerprint,
+            )
+
+        # Step 8: Record vote in incentive adapter
         vote = ValidatorVote(
             validator_hotkey=self.validator_id,
             task_id=task_id,
@@ -375,7 +453,7 @@ class Orchestrator:
         )
         self.incentive.record_vote(vote)
 
-        # Step 7: Feed vote to anti-collusion engine for cross-validator consensus
+        # Step 9: Feed vote to anti-collusion engine for cross-validator consensus
         self.anticollusion.register_validator(self.validator_id, stake=1.0)
         consensus_vote = {
             "validator_hotkey": vote.validator_hotkey,
@@ -403,6 +481,194 @@ class Orchestrator:
             _metrics.observe("severity_score", result.severity_score)
 
         return result
+
+    # ── Bounty Platform Submission ─────────────────────────────────────────
+
+    def submit_to_bounty_platforms(
+        self,
+        task_id: str,
+        miner_address: str,
+        fingerprint: str,
+        severity_score: float,
+        exploit_source: str,
+        exploit_description: str = "",
+        target_address: str = "",
+        chain_id: int = 1,
+    ) -> list[dict]:
+        """Submit a validated exploit to all registered bounty platforms.
+
+        Only submits if:
+          - The miner has a verified identity on the platform
+          - The exploit has a valid subnet receipt (anti-bypass)
+          - The severity meets the platform's minimum threshold
+
+        Returns a list of submission receipt dicts.
+        """
+        receipts = []
+
+        # Check anti-bypass: must have subnet receipt
+        receipt = self.anti_bypass.get_receipt(fingerprint)
+        if not receipt:
+            logger.warning(
+                "No subnet receipt for fingerprint %s — skipping bounty submission",
+                fingerprint[:16],
+            )
+            return receipts
+
+        # Get miner's identity across platforms
+        identity = self.identity_store.get_identity(miner_address)
+        if not identity:
+            logger.info("Miner %s has no linked identities", miner_address[:10])
+            return receipts
+
+        for platform_name in self.platform_registry.list_platforms():
+            platform_id = identity.get_platform_id(platform_name)
+            if not platform_id:
+                continue
+
+            adapter = self.platform_registry.get(platform_name)
+            if not adapter:
+                continue
+
+            report = BountyReport(
+                task_id=task_id,
+                miner_hotkey=miner_address,
+                platform_id=platform_id,
+                target_address=target_address,
+                chain_id=chain_id,
+                vulnerability_class=self._get_task_vuln_class(task_id),
+                severity_score=severity_score,
+                exploit_description=exploit_description or f"Automated exploit for {task_id[:16]}",
+                exploit_source=exploit_source,
+                fingerprint=fingerprint,
+                subnet_timestamp=receipt.subnet_timestamp,
+            )
+
+            submission_receipt = adapter.submit_report(report)
+            receipts.append(submission_receipt.to_dict())
+            logger.info(
+                "Submitted to %s: report_id=%s status=%s",
+                platform_name, submission_receipt.report_id, submission_receipt.status.value,
+            )
+
+            _metrics.inc("bounty_submissions_total")
+
+        return receipts
+
+    def check_platform_bypass(
+        self,
+        fingerprint: str,
+        platform: str,
+        platform_timestamp: int,
+    ) -> Optional[dict]:
+        """Check if a platform submission predates the subnet receipt.
+
+        Returns violation dict if bypass detected, None otherwise.
+        """
+        violation = self.anti_bypass.check_platform_submission(
+            fingerprint=fingerprint,
+            platform=platform,
+            platform_timestamp=platform_timestamp,
+        )
+        if violation:
+            logger.warning(
+                "BYPASS DETECTED: miner=%s platform=%s delta=%ds",
+                violation.miner_hotkey[:10], platform, violation.delta_seconds,
+            )
+            _metrics.inc("bypass_violations_total")
+            return violation.to_dict()
+        return None
+
+    def process_bounty_payout(
+        self,
+        report_id: str,
+        platform: str,
+        task_id: str,
+        fingerprint: str,
+        miner_address: str,
+        bounty_amount: float,
+        currency: str = "USD",
+    ) -> dict:
+        """Process a bounty payout: compute reward split and record."""
+        split = self.reward_split.compute_split(
+            report_id=report_id,
+            platform=platform,
+            task_id=task_id,
+            fingerprint=fingerprint,
+            miner_hotkey=miner_address,
+            validator_id=self.validator_id,
+            bounty_amount=bounty_amount,
+            currency=currency,
+        )
+        logger.info(
+            "Reward split: miner=%.2f validator=%.2f treasury=%.2f (%s %s)",
+            split.miner_amount, split.validator_amount, split.treasury_amount,
+            bounty_amount, currency,
+        )
+        _metrics.inc("bounty_payouts_total")
+        _metrics.observe("bounty_payout_amount", bounty_amount)
+        return split.to_dict()
+
+    def _get_task_vuln_class(self, task_id: str) -> str:
+        """Look up vulnerability class for a task."""
+        task = self.load_task(task_id)
+        if task:
+            return task.get("vulnerability_class", "unknown")
+        return "unknown"
+
+    # ── Mainnet Discovery + Difficulty Ramping ─────────────────────────────
+
+    def refresh_corpus(self, epoch: int) -> dict:
+        """Refresh the task corpus based on current epoch difficulty.
+
+        Called at each epoch boundary to:
+          1. Ramp difficulty based on epoch schedule
+          2. Discover and fetch new mainnet contracts
+          3. Regenerate synthetic corpus at current difficulty
+
+        Returns a summary dict.
+        """
+        self._current_epoch = epoch
+        config = get_epoch_config(epoch)
+        max_diff = config["max_difficulty"]
+        mainnet_ratio = config["mainnet_ratio"]
+
+        logger.info(
+            "Epoch %d corpus refresh: difficulty=%d mainnet_ratio=%.0f%%",
+            epoch, max_diff, mainnet_ratio * 100,
+        )
+
+        # Regenerate synthetic corpus at current difficulty
+        packages = self.generate_corpus(
+            count_per_class=2, seed=42 + epoch, max_difficulty=max_diff,
+        )
+
+        # Discover and fetch mainnet contracts if ratio > 0
+        mainnet_count = 0
+        if mainnet_ratio > 0:
+            discovered = self.mainnet_discovery.discover(chain_id=1)
+            addresses = self.mainnet_discovery.get_addresses(chain_id=1)
+            target_mainnet = max(1, int(len(packages) * mainnet_ratio / (1 - mainnet_ratio + 0.001)))
+            fetch_addrs = addresses[:target_mainnet]
+            if fetch_addrs:
+                try:
+                    mainnet_pkgs = self.fetch_mainnet_tasks(
+                        addresses=fetch_addrs, chain_id=1, difficulty=max_diff,
+                    )
+                    mainnet_count = len(mainnet_pkgs)
+                except Exception as e:
+                    logger.warning("Mainnet fetch failed: %s", e)
+
+        summary = {
+            "epoch": epoch,
+            "max_difficulty": max_diff,
+            "mainnet_ratio": mainnet_ratio,
+            "synthetic_tasks": len(packages),
+            "mainnet_tasks": mainnet_count,
+            "total_tasks": len(packages) + mainnet_count,
+        }
+        logger.info("Corpus refresh: %s", json.dumps(summary))
+        return summary
 
     # ── Stage 3: Adversarial Mode ─────────────────────────────────────────
 
@@ -641,6 +907,7 @@ class Orchestrator:
                 weights={},
             )
         self._last_closed_epoch = epoch_number
+        self._current_epoch = epoch_number
         logger.info("Closing epoch %d (blocks %d-%d)", epoch_number, start_block, end_block)
         epoch = self.incentive.compute_epoch_weights(epoch_number, start_block, end_block)
 
@@ -696,6 +963,8 @@ class Orchestrator:
             data_dir=self.data_dir / "anticollusion",
         )
         self.adversarial.reset()
+        self.uniqueness_scorer.reset()
+        self._current_epoch = 0
         # Clean reports
         if self.reports_dir.exists():
             for f in self.reports_dir.glob("*.json"):
@@ -760,6 +1029,10 @@ Examples:
     chal_parser.add_argument("--exploit", type=str, required=True, help="Exploit .sol path")
     chal_parser.add_argument("--task", type=str, required=True, help="Target task ID")
 
+    # refresh — difficulty ramp + mainnet discovery
+    refresh_parser = subparsers.add_parser("refresh", help="Refresh corpus for current epoch")
+    refresh_parser.add_argument("--epoch", type=int, required=True, help="Current epoch number")
+
     args = parser.parse_args()
     orch = Orchestrator()
 
@@ -818,6 +1091,18 @@ Examples:
         print(f"Time:             {report.validation_time_ms}ms")
         if report.error_message:
             print(f"Error:            {report.error_message}")
+
+    elif args.command == "refresh":
+        summary = orch.refresh_corpus(epoch=args.epoch)
+        config = get_epoch_config(args.epoch)
+        print(f"\n{'='*60}")
+        print(f"Epoch:          {args.epoch}")
+        print(f"Max difficulty: {config['max_difficulty']}")
+        print(f"Mainnet ratio:  {config['mainnet_ratio']:.0%}")
+        print(f"Min severity:   {config['min_severity']:.2f}")
+        print(f"Synthetic:      {summary['synthetic_tasks']}")
+        print(f"Mainnet:        {summary['mainnet_tasks']}")
+        print(f"Total:          {summary['total_tasks']}")
 
     else:
         parser.print_help()

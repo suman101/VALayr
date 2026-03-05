@@ -13,14 +13,18 @@ from task_generator.mutator.rename import RenameMutator
 from task_generator.mutator.storage import StorageLayoutMutator
 from task_generator.mutator.balance import BalanceMutator
 from task_generator.mutator.deadcode import DeadCodeMutator
+from task_generator.mutator.controlflow import ControlFlowMutator
+from task_generator.mutator.interface import InterfaceMutator
 
 
-# Default ordered pipeline
+# Default ordered pipeline — cosmetic mutators run first, then semantic
 _DEFAULT_MUTATORS: list[Mutator] = [
     RenameMutator(),
     StorageLayoutMutator(),
     BalanceMutator(),
     DeadCodeMutator(),
+    ControlFlowMutator(),
+    InterfaceMutator(),
 ]
 
 
