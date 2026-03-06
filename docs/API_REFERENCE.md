@@ -1,6 +1,6 @@
 # VALayr — API Reference
 
-> Version 1.1 · Last updated: 2026-03-03
+> Version 1.2 · Last updated: 2026-03-06
 
 This document covers the public APIs of every VALayr module: Python classes and functions, Bittensor synapse formats, smart contract interfaces, CLI commands, and HTTP endpoints.
 
@@ -15,6 +15,7 @@ This document covers the public APIs of every VALayr module: Python classes and 
   - [1.4 Severity Scorer](#14-severity-scorer)
   - [1.5 Anti-Collusion Engine](#15-anti-collusion-engine)
   - [1.6 Subnet Incentive Adapter](#16-subnet-incentive-adapter)
+  - [1.7 Bounty System](#17-bounty-system)
   - [1.8 Task Generator](#18-task-generator)
   - [1.9 Metrics Server](#19-metrics-server)
   - [1.10 Utilities](#110-utilities)
@@ -514,6 +515,140 @@ raw_score = (unique × avg_severity)
 | `DUPLICATE_PENALTY`          | `0.90` |
 | `MIN_SUBMISSIONS_FOR_WEIGHT` | `1`    |
 | `MAX_SUBMISSIONS_PER_EPOCH`  | `50`   |
+
+---
+
+### 1.7 Bounty System
+
+**Modules:** `validator.bounty.reward_split`, `validator.bounty.anti_bypass`, `validator.bounty.platform`, `validator.bounty.identity`
+
+#### Dataclass: `RewardSplit`
+
+```python
+@dataclass
+class RewardSplit:
+    report_id: str
+    platform: str
+    total_amount: float           # Total payout (USD or token units)
+    currency: str                 # e.g. "USD", "USDC", "ETH"
+    miner_hotkey: str
+    validator_id: str
+    miner_amount: float = 0.0
+    validator_amount: float = 0.0
+    treasury_amount: float = 0.0
+    miner_share: float = 0.70
+    validator_share: float = 0.20
+    treasury_share: float = 0.10
+    computed_at: float = 0.0
+```
+
+#### Dataclass: `PayoutRecord`
+
+```python
+@dataclass
+class PayoutRecord:
+    report_id: str
+    platform: str
+    task_id: str
+    fingerprint: str
+    miner_hotkey: str
+    validator_id: str
+    bounty_amount: float = 0.0
+    currency: str = "USD"
+    split: Optional[RewardSplit] = None
+    status: str = "pending"       # pending | computed | distributed | failed
+    detected_at: float = 0.0
+    distributed_at: float = 0.0
+```
+
+#### Class: `RewardSplitEngine`
+
+```python
+RewardSplitEngine(data_dir: Path, treasury_address: str = "")
+```
+
+**Methods:**
+
+```python
+def compute_split(
+    report_id: str,
+    platform: str,
+    task_id: str,
+    fingerprint: str,
+    miner_hotkey: str,
+    validator_id: str,
+    bounty_amount: float,
+    currency: str = "USD",
+) -> RewardSplit
+```
+
+Compute the reward split for a bounty payout. Miner and validator amounts are computed first; treasury receives the remainder to avoid floating-point rounding loss.
+
+```python
+def mark_distributed(report_id: str) -> bool
+def mark_failed(report_id: str, reason: str = "") -> bool
+def get_payout(report_id: str) -> Optional[PayoutRecord]
+def list_payouts(miner_hotkey: str | None, status: str | None) -> list[PayoutRecord]
+def total_distributed(miner_hotkey: str | None = None) -> float
+```
+
+**Constants:**
+
+| Constant                  | Value  |
+| ------------------------- | ------ |
+| `DEFAULT_MINER_SHARE`     | `0.70` |
+| `DEFAULT_VALIDATOR_SHARE` | `0.20` |
+| `DEFAULT_TREASURY_SHARE`  | `0.10` |
+
+#### Dataclass: `SubnetReceipt`
+
+```python
+@dataclass
+class SubnetReceipt:
+    task_id: str
+    miner_hotkey: str
+    fingerprint: str
+    subnet_timestamp: int
+    bittensor_block: int = 0
+    hmac_tag: str = ""
+```
+
+**Methods:**
+
+```python
+def compute_hmac() -> str       # HMAC-SHA256 over canonical fields
+def verify_hmac() -> bool       # Verify tag integrity
+```
+
+#### Dataclass: `BypassViolation`
+
+```python
+@dataclass
+class BypassViolation:
+    miner_hotkey: str
+    task_id: str
+    fingerprint: str
+    subnet_timestamp: int
+    platform_timestamp: int
+    platform: str
+    delta_seconds: int         # platform_ts - subnet_ts (negative = bypass)
+    severity: str              # "warning" | "violation" | "critical"
+```
+
+#### Class: `AntiBypassEngine`
+
+```python
+AntiBypassEngine(data_dir: Path)
+```
+
+Monitors for miner bypass attempts — detects when miners submit to bounty platforms before routing through the subnet.
+
+**Constants:**
+
+| Constant                   | Value | Description                                    |
+| -------------------------- | ----- | ---------------------------------------------- |
+| `RELAY_GRACE_SECONDS`      | `300` | Platform submission within 5 min is legitimate |
+| `BYPASS_THRESHOLD_SECONDS` | `60`  | Pre-dating subnet by >60s = bypass             |
 
 ---
 

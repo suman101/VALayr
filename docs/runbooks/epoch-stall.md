@@ -1,5 +1,7 @@
 # Epoch Stall Runbook
 
+> Version 1.2 · Last updated: 2026-03-06
+
 ## Symptoms
 
 - Epoch number stops incrementing in metrics

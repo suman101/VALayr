@@ -1,6 +1,6 @@
 # VALayr — System Architecture
 
-> Version 1.1 · Last updated: 2026-03-03
+> Version 1.2 · Last updated: 2026-03-06
 
 ## 1. Executive Summary
 
@@ -60,25 +60,29 @@ The system is designed around three hard constraints:
 │ task-generator │  │   validator   │                 │  subnet-adapter   │
 │               │  │               │                 │                   │
 │ generate.py   │  │ engine/       │                 │ incentive.py      │
-│ mutator/      │  │   validate.py │                 │ (weight vectors)  │
-│  base.py      │  │ fingerprint/  │                 └───────────────────┘
-│  registry.py  │  │   dedup.py    │
-│  rename.py    │  │ scoring/      │                 ┌───────────────────┐
-│  storage.py   │  │   severity.py │                 │     neurons       │
-│  balance.py   │  │ anticollusion/│                 │                   │
-│  deadcode.py  │  │   consensus.py│◄────────────────│ validator.py      │
-│ templates/    │  │ metrics.py    │                 │ miner.py          │
-└───────────────┘  │ utils/        │                 │ protocol.py       │
-                   │ metrics.py    │                 └───────────────────┘
-                   │ utils/        │
-                   │   logging.py  │                 ┌───────────────────┐
-                   │   hashing.py  │                 │      miner        │
-                   └───────────────┘                 │   cli.py          │
-                                                     └───────────────────┘
+│ discovery.py  │  │   validate.py │                 │ (weight vectors)  │
+│ mainnet.py    │  │ fingerprint/  │                 └───────────────────┘
+│ mutator/      │  │   dedup.py    │
+│  base.py      │  │ scoring/      │                 ┌───────────────────┐
+│  registry.py  │  │   severity.py │                 │     neurons       │
+│  rename.py    │  │ anticollusion/│                 │                   │
+│  storage.py   │  │   consensus.py│◄────────────────│ validator.py      │
+│  balance.py   │  │ bounty/       │                 │ miner.py          │
+│  deadcode.py  │  │  anti_bypass  │                 │ protocol.py       │
+│ templates/    │  │  identity     │                 └───────────────────┘
+└───────────────┘  │  platform     │
+                   │  reward_split │                 ┌───────────────────┐
+                   │ metrics.py    │                 │      miner        │
+                   │ utils/        │                 │   cli.py          │
+                   │   logging.py  │                 └───────────────────┘
+                   │   hashing.py  │
+                   └───────────────┘
+
                    ┌───────────────┐
                    │  contracts/   │
                    │ ExploitReg    │
                    │ ProtocolReg   │
+                   │ Treasury      │
                    │ stage3/       │
                    │  Adversarial  │
                    └───────────────┘
@@ -95,6 +99,7 @@ The system is designed around three hard constraints:
 | **Fingerprint Engine**    | `validator/fingerprint/`   | Computes state-impact fingerprints and deduplicates submissions; first submitter gets full reward                                          |
 | **Severity Scorer**       | `validator/scoring/`       | Algorithmic severity scoring (funds drained, privilege escalation, invariant breakage, permanent lock)                                     |
 | **Anti-Collusion Engine** | `validator/anticollusion/` | Multi-validator consensus with quorum, agreement thresholds, divergence tracking, and slashing                                             |
+| **Bounty System**         | `validator/bounty/`        | Reward splitting (miner/protocol/Treasury), anti-bypass violation detection, identity claims, platform integration                         |
 | **Miner Neuron**          | `neurons/miner.py`         | Receives task queries, manages exploit preparation and submission                                                                          |
 | **Miner CLI**             | `miner/cli.py`             | Interactive command-line workflow: list tasks → scaffold → submit → check scores                                                           |
 | **Smart Contracts**       | `contracts/src/`           | On-chain state: exploit registry, protocol bounty registry, treasury escrow, adversarial scoring                                           |
@@ -432,8 +437,16 @@ Zero-dependency HTTP server on port 9946.
 │  │ MIN_QUORUM = 5          │     │ MAX_REWARD_BPS=9000     │    │
 │  └────────────────────────┘     │ MIN_BOUNTY=0.01 ETH     │    │
 │                                  └────────────────────────┘    │
-│  ┌──────────────────┐                                    │
-│                            └────────────────────────┘    │
+│  ┌────────────────────────┐                                    │
+│  │ Treasury.sol            │                                    │
+│  │                         │                                    │
+│  │ deposit()               │                                    │
+│  │ withdraw()              │                                    │
+│  │ getBalance()            │                                    │
+│  │                         │                                    │
+│  │ nonReentrant guard      │                                    │
+│  │ onlyOwner + Pausable    │                                    │
+│  └────────────────────────┘                                    │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 ```

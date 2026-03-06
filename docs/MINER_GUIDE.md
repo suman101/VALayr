@@ -1,6 +1,6 @@
 # VALayr — Miner Guide
 
-> Version 1.1 · Last updated: 2026-03-03
+> Version 1.2 · Last updated: 2026-03-06
 
 This guide is for **miners** who want to participate in the VALayr subnet by discovering and submitting smart contract exploits. You do not need to understand the validator internals — this guide covers everything you need to earn TAO.
 
@@ -16,8 +16,9 @@ This guide is for **miners** who want to participate in the VALayr subnet by dis
 - [6. Scoring & Rewards](#6-scoring--rewards)
 - [7. Exploit Strategies by Vulnerability Class](#7-exploit-strategies-by-vulnerability-class)
 - [8. Tips for Maximising Rewards](#8-tips-for-maximising-rewards)
-- [9. FAQ](#9-faq)
-- [10. First-Time Miner Checklist](#10-first-time-miner-checklist)
+- [9. Treasury Competitions](#9-treasury-competitions)
+- [10. FAQ](#10-faq)
+- [11. First-Time Miner Checklist](#11-first-time-miner-checklist)
 
 ---
 
@@ -429,7 +430,48 @@ Don't waste submissions on untested exploits.
 
 ---
 
-## 9. FAQ
+## 9. Treasury Competitions
+
+Treasury competitions are on-chain, winner-takes-all events funded via the `Treasury` smart contract. They offer an additional reward path beyond standard epoch-based TAO earnings.
+
+### How It Works
+
+1. **Competition created** — The contract owner (or any funder) creates a competition targeting a specific task, with an ETH prize pool and a deadline.
+2. **Miners submit exploits** — Standard submissions via the Bittensor axon. The validator automatically forwards qualifying exploit scores to the on-chain `Treasury.submitScore()` function.
+3. **Highest severity wins** — The miner whose exploit scores the highest severity when the deadline passes wins the entire prize pool (minus a 5% protocol fee).
+4. **Winner withdraws** — After the competition is settled on-chain, the winning miner calls `withdrawPrize()` to claim their ETH.
+
+### Key Parameters
+
+| Parameter    | Value    | Description                                 |
+| ------------ | -------- | ------------------------------------------- |
+| Min duration | 1 hour   | Shortest allowed competition                |
+| Max duration | 30 days  | Longest allowed competition                 |
+| Min prize    | 0.01 ETH | Minimum funded prize pool                   |
+| Protocol fee | 5%       | Deducted on settlement, goes to subnet fund |
+
+### Tips for Competitions
+
+- **Check active competitions** — Monitor the `CompetitionCreated` events or query `Treasury.isActive(id)`.
+- **Target high-severity bugs** — The winning metric is severity score, not speed.
+- **Deduplicate locally** — If your exploit fingerprint matches another miner's, only the first submission counts. Aim for novel attack vectors.
+- **Watch the deadline** — Submissions after `comp.deadline` revert on-chain.
+
+### Reward Split (Bounty Payouts)
+
+When a validated exploit is matched to a real-world bug bounty, the payout is split:
+
+| Recipient | Default Share | Configurable Via         |
+| --------- | ------------- | ------------------------ |
+| Miner     | 70%           | `VALAYR_MINER_SHARE`     |
+| Validator | 20%           | `VALAYR_VALIDATOR_SHARE` |
+| Treasury  | 10%           | `VALAYR_TREASURY_SHARE`  |
+
+Shares must sum to 1.0. The split is computed by `RewardSplitEngine` and recorded in `data/rewards/payouts.json`.
+
+---
+
+## 10. FAQ
 
 ### Q: Do I need Foundry installed to mine?
 
@@ -545,7 +587,7 @@ Class B miners write exploits targeting submitted invariants. The goal is to bre
 
 ---
 
-## 10. First-Time Miner Checklist
+## 11. First-Time Miner Checklist
 
 Use this checklist to verify your setup before your first submission:
 

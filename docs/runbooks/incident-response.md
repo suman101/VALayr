@@ -1,5 +1,7 @@
 # Incident Response Runbook
 
+> Version 1.2 · Last updated: 2026-03-06
+
 ## Detection Signals
 
 - **Metrics endpoint down**: Alertmanager fires `MetricsEndpointDown`

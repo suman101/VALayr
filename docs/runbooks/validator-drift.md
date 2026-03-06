@@ -1,5 +1,7 @@
 # Validator Drift Runbook
 
+> Version 1.2 · Last updated: 2026-03-06
+
 ## Symptoms
 
 - `verify-determinism.sh` fails one or more checks

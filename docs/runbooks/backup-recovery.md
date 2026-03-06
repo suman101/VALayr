@@ -1,5 +1,7 @@
 # Backup & Recovery Runbook
 
+> Version 1.2 · Last updated: 2026-03-06
+
 ## What to Back Up
 
 | Data                 | Location                        | Frequency        | Method          |

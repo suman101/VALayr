@@ -26,6 +26,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `DATA_SCHEMA.md` — JSON schemas for all persistent state files
 - Operational runbooks: `docs/runbooks/key-rotation.md`, `epoch-stall.md`, `consensus-failure.md`, `validator-drift.md`
 - Type annotations across Python codebase (`orchestrator.py`, `validate.py`, `severity.py`, `incentive.py`)
+- **Bounty system** — `API_REFERENCE.md` section 1.7 covering `RewardSplit`, `PayoutRecord`, `SubnetReceipt`, `BypassViolation`, and `AntiBypassEngine`
+- **Treasury documentation** — Treasury deployment and operation sections in CONTRACT_REFERENCE, MINER_GUIDE, VALIDATOR_GUIDE, and dedicated `docs/runbooks/treasury.md`
+- **Mainnet deploy runbook** — expanded `docs/runbooks/mainnet-deploy.md` with Treasury deployment steps and Bittensor registration walkthrough
+- **`.env.example`** — 18 `VALAYR_*` environment variables (orchestrator, difficulty, bounty categories)
+- **VALIDATOR_GUIDE env vars** — 22-row reference table for all `VALAYR_*` variables
+- **DEPLOYMENT.md** — consolidated environment variable reference table
+- **DATA_SCHEMA completions** — `payouts.json`, `subnet_receipts.json`, `violations.json` schemas in DATA_SCHEMA.md
+- `workflow_dispatch` trigger on CI workflow for manual runs
+- **GLOSSARY.md** — 12 new terms: AntiBypassEngine, BountyReport, BypassViolation, Discovery, IdentityClaim, MainnetContractSource, PayoutRecord, ProtocolFee, RewardSplit, RewardSplitEngine, SubnetReceipt, Treasury
 
 ### Changed
 
@@ -37,6 +46,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Consensus iteration sorted for deterministic tie-breaking (lexicographic on miner address)
 - Severity scores clamped to [0, 1] in `incentive.py`
 - Storage slot normalization (int → hex) in `severity.py`
+- `REQUIRE_SANDBOX` defaults to `true` (was implicit)
+- `EPOCH_COMPUTE_BUDGET` defaults to `10,000` (was unbounded)
+- `INVALID_SUBMISSION_PENALTY` now wired into scoring (was inert)
+- Documentation version headers bumped to v1.2 across all 11 doc files
+- **README.md** — updated project structure, components table, env vars, test counts
+- **CONTRIBUTING.md** — test counts (81→125 Solidity, 198→477 Python), symlink step, CI info
+- **SECURITY.md** — fixed scope table formatting, added `validator/bounty/` scope
+- **ARCHITECTURE.md** — added bounty subsystem to component map
 
 ### Fixed
 

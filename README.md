@@ -57,26 +57,31 @@ VALayr incentivises miners to discover vulnerabilities in opt-in smart contracts
 
 ## Components
 
-| Component           | Location                     | Status |
-| ------------------- | ---------------------------- | ------ |
-| On-chain Contracts  | `contracts/src/`             | v1     |
-| Treasury            | `contracts/src/Treasury.sol` | v1     |
-| Vulnerable Corpus   | `contracts/corpus/`          | v1     |
-| Task Generator      | `task-generator/`            | v1     |
-| Mutator Framework   | `task-generator/mutator/`    | v1     |
-| Validation Engine   | `validator/engine/`          | v1     |
-| Fingerprint / Dedup | `validator/fingerprint/`     | v1     |
-| Severity Scoring    | `validator/scoring/`         | v1     |
-| Anti-Collusion      | `validator/anticollusion/`   | v1     |
-| Metrics / Health    | `validator/metrics.py`       | v1     |
-| Structured Logging  | `validator/utils/logging.py` | v1     |
-| Subnet Adapter      | `subnet-adapter/`            | v1     |
-| Orchestrator        | `orchestrator.py`            | v1     |
-| Validator Neuron    | `neurons/validator.py`       | v1     |
-| Miner Neuron        | `neurons/miner.py`           | v1     |
-| Miner CLI           | `miner/cli.py`               | v1     |
-| Docker Infra        | `docker/`                    | v1     |
-| CI / CD             | `.github/workflows/ci.yml`   | v1     |
+| Component             | Location                           | Status |
+| --------------------- | ---------------------------------- | ------ |
+| On-chain Contracts    | `contracts/src/`                   | v1     |
+| Treasury              | `contracts/src/Treasury.sol`       | v1     |
+| Vulnerable Corpus     | `contracts/corpus/`                | v1     |
+| Task Generator        | `task-generator/`                  | v1     |
+| Mainnet Discovery     | `task-generator/discovery.py`      | v1     |
+| Mainnet Source Fetch  | `task-generator/mainnet.py`        | v1     |
+| Mutator Framework     | `task-generator/mutator/`          | v1     |
+| Validation Engine     | `validator/engine/`                | v1     |
+| Fingerprint / Dedup   | `validator/fingerprint/`           | v1     |
+| Severity Scoring      | `validator/scoring/`               | v1     |
+| Anti-Collusion        | `validator/anticollusion/`         | v1     |
+| Bounty System         | `validator/bounty/`                | v1     |
+| Reward Splitting      | `validator/bounty/reward_split.py` | v1     |
+| Anti-Bypass Detection | `validator/bounty/anti_bypass.py`  | v1     |
+| Metrics / Health      | `validator/metrics.py`             | v1     |
+| Structured Logging    | `validator/utils/logging.py`       | v1     |
+| Subnet Adapter        | `subnet-adapter/`                  | v1     |
+| Orchestrator          | `orchestrator.py`                  | v1     |
+| Validator Neuron      | `neurons/validator.py`             | v1     |
+| Miner Neuron          | `neurons/miner.py`                 | v1     |
+| Miner CLI             | `miner/cli.py`                     | v1     |
+| Docker Infra          | `docker/`                          | v1     |
+| CI / CD               | `.github/workflows/ci.yml`         | v1     |
 
 ---
 
@@ -290,15 +295,27 @@ python3 neurons/miner.py --local
 
 ## Environment Variables
 
-| Variable                | Default      | Description                              |
-| ----------------------- | ------------ | ---------------------------------------- |
-| `EXPLOIT_LOG_LEVEL`     | `INFO`       | Logging level (DEBUG/INFO/WARNING/ERROR) |
-| `EXPLOIT_LOG_FILE`      | _(none)_     | Optional log file path                   |
-| `ANVIL_BLOCK_TIMESTAMP` | `1700000000` | Fixed block timestamp for determinism    |
-| `ANVIL_BLOCK_NUMBER`    | `18000000`   | Fixed block number                       |
-| `ANVIL_GAS_LIMIT`       | `30000000`   | Block gas limit                          |
-| `ANVIL_CHAIN_ID`        | `31337`      | Chain ID                                 |
-| `PYTHONHASHSEED`        | `0`          | Must be 0 for deterministic Python       |
+| Variable                            | Default      | Description                              |
+| ----------------------------------- | ------------ | ---------------------------------------- |
+| `EXPLOIT_LOG_LEVEL`                 | `INFO`       | Logging level (DEBUG/INFO/WARNING/ERROR) |
+| `EXPLOIT_LOG_FILE`                  | _(none)_     | Optional log file path                   |
+| `ANVIL_BLOCK_TIMESTAMP`             | `1700000000` | Fixed block timestamp for determinism    |
+| `ANVIL_BLOCK_NUMBER`                | `18000000`   | Fixed block number                       |
+| `ANVIL_GAS_LIMIT`                   | `30000000`   | Block gas limit                          |
+| `ANVIL_CHAIN_ID`                    | `31337`      | Chain ID                                 |
+| `PYTHONHASHSEED`                    | `0`          | Must be 0 for deterministic Python       |
+| `VALAYR_REQUIRE_SANDBOX`            | `true`       | Require Docker sandbox for validation    |
+| `VALAYR_EPOCH_COMPUTE_BUDGET`       | `10000`      | Max compute units per epoch              |
+| `VALAYR_INVALID_SUBMISSION_PENALTY` | `0.05`       | Penalty for invalid submissions          |
+| `VALAYR_DIFFICULTY_MULTIPLIER`      | `1.0`        | Task difficulty scaling factor           |
+| `VALAYR_DISCOVERY_ENABLED`          | `false`      | Enable mainnet contract discovery        |
+| `VALAYR_DISCOVERY_INTERVAL`         | `3600`       | Discovery scan interval (seconds)        |
+| `VALAYR_BOUNTY_ENABLED`             | `false`      | Enable bounty platform integration       |
+| `VALAYR_REWARD_SPLIT_PROTOCOL_FEE`  | `0.10`       | Protocol fee on bounty payouts (10%)     |
+| `VALAYR_TREASURY_ADDRESS`           | _(none)_     | Treasury contract address                |
+| `VALAYR_ANTI_BYPASS_ENABLED`        | `true`       | Enable anti-bypass violation detection   |
+
+See [Deployment Guide](docs/DEPLOYMENT.md) for the full consolidated environment variable reference.
 
 ---
 
@@ -306,16 +323,19 @@ python3 neurons/miner.py --local
 
 ```bash
 # Unit + integration (no Anvil needed)
-python3 -m pytest tests/test_integration.py tests/test_pipeline.py tests/test_extended.py -v
+python3 -m pytest tests/ -v
 
-# Live Anvil tests (requires Foundry)
+# Contract tests only (125 Solidity tests)
+forge test --root contracts -vv
+
+# Live Anvil integration tests (requires Foundry)
 python3 -m pytest tests/test_live_anvil.py -v
 
-# Contract tests
-forge test -vv
+# All tests (125 Solidity + 477 Python)
+forge test --root contracts -vv && python3 -m pytest tests/ -v
 
-# All tests
-python3 -m pytest tests/ -v && forge test -vv
+# Determinism verification
+PYTHONHASHSEED=0 bash scripts/verify-determinism.sh
 ```
 
 Test suites:
@@ -324,26 +344,48 @@ Test suites:
 - `test_pipeline.py` — end-to-end pipeline simulation
 - `test_live_anvil.py` — real Anvil sandbox validation
 - `test_extended.py` — mutators, metrics, neurons, miner CLI, input sanitization
+- `test_adversarial.py` — Stage 3 adversarial invariant system (35 tests)
+- `test_bounty.py` — bounty platform, reward splitting, anti-bypass
+- `test_multi_tx.py` — multi-transaction exploit sequences
+- `test_security.py` — security regression tests (path traversal, injection, etc.)
+- `test_reward_split.py` — reward-split engine unit tests
+- `test_mainnet_source.py` — mainnet contract source fetching
+- `test_difficulty_discovery.py` — difficulty scaling and discovery engine
 
 ---
 
 ## Project Structure
 
 ```
-├── .github/workflows/ci.yml    # CI: Forge tests + Python tests
+├── .github/workflows/ci.yml    # CI: Forge + Python tests, lint, type-check
 ├── contracts/
-│   ├── src/                    # On-chain contracts (ExploitRegistry, ProtocolRegistry)
+│   ├── src/                    # On-chain contracts
+│   │   ├── ExploitRegistry.sol
+│   │   ├── ProtocolRegistry.sol
+│   │   ├── Treasury.sol
+│   │   ├── Ownable2Step.sol
+│   │   ├── Pausable.sol
+│   │   └── stage3/            # Adversarial mode contracts
 │   ├── corpus/                 # Generated vulnerable contract corpus
-│   └── test/                   # Foundry Solidity tests
+│   └── test/                   # Foundry Solidity tests (125 tests)
 ├── task-generator/
 │   ├── generate.py             # Deterministic corpus generator
+│   ├── discovery.py            # Mainnet contract discovery engine
+│   ├── mainnet.py              # Live mainnet contract source fetcher
 │   ├── mutator/                # Pluggable mutation framework
+│   │   ├── base.py / registry.py
+│   │   ├── rename.py / storage.py / balance.py / deadcode.py
 │   └── templates/              # Vulnerable contract templates
 ├── validator/
 │   ├── engine/validate.py      # Anvil sandbox validation engine
 │   ├── fingerprint/dedup.py    # Fingerprint engine + dedup
 │   ├── scoring/severity.py     # Severity scorer
 │   ├── anticollusion/          # Anti-collusion consensus engine
+│   ├── bounty/                 # Bounty system
+│   │   ├── anti_bypass.py      #   Anti-bypass violation detection
+│   │   ├── identity.py         #   Miner identity claims
+│   │   ├── platform.py         #   Bounty platform integration
+│   │   └── reward_split.py     #   Reward splitting engine
 │   ├── metrics.py              # Health/metrics HTTP server
 │   └── utils/                  # Logging, hashing utilities
 ├── subnet-adapter/
@@ -356,14 +398,23 @@ Test suites:
 │   └── cli.py                  # Miner CLI interface
 ├── orchestrator.py             # Central pipeline glue
 ├── docker/
-│   ├── Dockerfile.validator
-│   ├── Dockerfile.miner
-│   └── docker-compose.yml
-├── tests/
-│   ├── test_integration.py
-│   ├── test_pipeline.py
-│   ├── test_live_anvil.py
-│   └── test_extended.py
+│   ├── Dockerfile.validator / Dockerfile.miner
+│   ├── docker-compose.yml
+│   └── prometheus.yml / alertmanager.yml / alerts.yml
+├── scripts/                    # Build, deploy, backup, health-check
+├── exploits/                   # Reference exploit examples
+├── docs/                       # Full documentation suite
+│   └── runbooks/               # Operational runbooks (8 files)
+├── tests/                      # Python test suites (477 tests)
+│   ├── test_integration.py     #   Core unit + integration
+│   ├── test_pipeline.py        #   End-to-end pipeline
+│   ├── test_live_anvil.py      #   Real Anvil sandbox
+│   ├── test_extended.py        #   Mutators, metrics, neurons, CLI
+│   ├── test_adversarial.py     #   Stage 3 adversarial subsystem
+│   ├── test_bounty.py          #   Bounty / reward-split system
+│   ├── test_multi_tx.py        #   Multi-transaction exploits
+│   ├── test_security.py        #   Security regression tests
+│   └── ... (25 test files)
 └── pyproject.toml
 ```
 

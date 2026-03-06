@@ -1,6 +1,6 @@
 # Validator Guide
 
-> Version 1.1 · Last updated: 2026-03-03
+> Version 1.2 · Last updated: 2026-03-06
 
 Complete guide for running and operating a VALayr validator node.
 
@@ -23,6 +23,8 @@ Complete guide for running and operating a VALayr validator node.
 13. [Security Hardening](#security-hardening)
 14. [Troubleshooting](#troubleshooting)
 15. [FAQ](#faq)
+16. [Stage 3: Adversarial Validation](#stage-3-adversarial-validation)
+17. [Treasury Operations](#treasury-operations)
 
 ---
 
@@ -183,6 +185,38 @@ python neurons/validator.py \
 | `VALIDATOR_ID`          | `validator-0` | Unique validator identifier   |
 | `EXPLOIT_LOG_LEVEL`     | `INFO`        | Logging level                 |
 | `EXPLOIT_LOG_FILE`      | (none)        | Log file path (optional)      |
+
+**Orchestrator / Validation Settings**
+
+| Variable                            | Default | Description                                             |
+| ----------------------------------- | ------- | ------------------------------------------------------- |
+| `VALAYR_MAX_CONCURRENT_VALIDATIONS` | `4`     | Max parallel exploit validations per epoch              |
+| `VALAYR_EPOCH_COMPUTE_BUDGET`       | `10000` | CPU-seconds budget per epoch (safety cap)               |
+| `VALAYR_SUBMISSION_TIMEOUT`         | `300`   | Per-submission timeout in seconds                       |
+| `VALAYR_REQUIRE_SANDBOX`            | auto    | Force Docker sandbox (`1`); auto-enabled in Docker mode |
+
+**Difficulty / Mainnet Phasing**
+
+| Variable                    | Default | Description                                  |
+| --------------------------- | ------- | -------------------------------------------- |
+| `VALAYR_EPOCH_DIFFICULTY_2` | `51`    | Epoch number where difficulty phase 2 begins |
+| `VALAYR_EPOCH_DIFFICULTY_3` | `201`   | Epoch number where difficulty phase 3 begins |
+| `VALAYR_MAINNET_RATIO_1`    | `0.0`   | Mainnet-sourced task ratio in phase 1        |
+| `VALAYR_MAINNET_RATIO_2`    | `0.3`   | Mainnet-sourced task ratio in phase 2        |
+| `VALAYR_MAINNET_RATIO_3`    | `0.6`   | Mainnet-sourced task ratio in phase 3        |
+| `VALAYR_MIN_SEVERITY_1`     | `0.0`   | Minimum severity threshold in phase 1        |
+| `VALAYR_MIN_SEVERITY_2`     | `0.1`   | Minimum severity threshold in phase 2        |
+| `VALAYR_MIN_SEVERITY_3`     | `0.2`   | Minimum severity threshold in phase 3        |
+
+**Bounty / Treasury**
+
+| Variable                  | Default | Description                                     |
+| ------------------------- | ------- | ----------------------------------------------- |
+| `VALAYR_MINER_SHARE`      | `0.70`  | Miner's share of bounty rewards                 |
+| `VALAYR_VALIDATOR_SHARE`  | `0.20`  | Validator's share of bounty rewards             |
+| `VALAYR_TREASURY_SHARE`   | `0.10`  | Treasury's share of bounty rewards              |
+| `VALAYR_TREASURY_ADDRESS` | (none)  | On-chain Treasury contract address              |
+| `VALAYR_RECEIPT_HMAC_KEY` | —       | **Required.** 32+ byte hex key for receipt HMAC |
 
 ### Anvil Configuration
 
@@ -587,6 +621,66 @@ When a Class B miner submits an exploit targeting a Class A invariant, the valid
 
 ---
 
+## Treasury Operations
+
+Validators play a central role in Treasury competitions — they are the only addresses authorised to submit scores on-chain.
+
+### Validator Responsibilities
+
+1. **Score forwarding** — When a miner submits an exploit for a task linked to an active competition, the orchestrator calls `Treasury.submitScore(competitionId, miner, score, fingerprint)`.
+2. **Settlement** — Anyone can call `Treasury.settle(competitionId)` after the deadline, but validators typically trigger it during the epoch-close workflow.
+3. **Fee withdrawal** — The contract owner can call `withdrawFees()` to collect accumulated protocol fees (5% of each prize pool).
+
+### Configuration
+
+| Variable                  | Required | Description                                   |
+| ------------------------- | -------- | --------------------------------------------- |
+| `VALAYR_TREASURY_ADDRESS` | Yes      | Deployed `Treasury` contract address          |
+| `ETH_PRIVATE_KEY`         | Yes      | Validator's private key (for on-chain writes) |
+| `VALAYR_RECEIPT_HMAC_KEY` | Yes      | 32+ byte hex key for receipt integrity HMACs  |
+
+### Competition Lifecycle (Validator View)
+
+```
+createCompetition(taskId, duration) ← contract owner / funder
+       │
+       ▼
+  Miners submit exploits → Validator validates → submitScore() on-chain
+       │
+       ▼
+  Deadline passes → settle(competitionId) → winner determined
+       │
+       ▼
+  Winner calls withdrawPrize() / Owner calls withdrawFees()
+```
+
+### Monitoring Competitions
+
+```bash
+# Check if a competition is active
+cast call $TREASURY "isActive(uint256)" 0 --rpc-url $RPC_URL
+
+# Get competition details
+cast call $TREASURY "getCompetition(uint256)" 0 --rpc-url $RPC_URL
+
+# Check time remaining
+cast call $TREASURY "timeRemaining(uint256)" 0 --rpc-url $RPC_URL
+```
+
+### Bounty Reward Splits
+
+When validated exploits are matched to real-world bounties, the `RewardSplitEngine` distributes payouts:
+
+| Recipient | Default | Env Variable             |
+| --------- | ------- | ------------------------ |
+| Miner     | 70%     | `VALAYR_MINER_SHARE`     |
+| Validator | 20%     | `VALAYR_VALIDATOR_SHARE` |
+| Treasury  | 10%     | `VALAYR_TREASURY_SHARE`  |
+
+Payout records are stored in `data/rewards/payouts.json`.
+
+---
+
 ## Validator Onboarding Checklist
 
 Use this checklist to ensure your validator is correctly configured before going live:
@@ -646,6 +740,7 @@ Use this checklist to ensure your validator is correctly configured before going
 | [Runbook: Consensus Failure](runbooks/consensus-failure.md) | Handling consensus failures            |
 | [Runbook: Validator Drift](runbooks/validator-drift.md)     | Diagnosing determinism drift           |
 | [Runbook: Key Rotation](runbooks/key-rotation.md)           | Rotating compromised validator keys    |
+| [Runbook: Treasury](runbooks/treasury.md)                   | Treasury competition operations        |
 
 ### Emergency Pause
 

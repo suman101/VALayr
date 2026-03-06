@@ -1,6 +1,6 @@
 # Data Schema Reference
 
-> Last updated: 2026-03-03
+> Version 1.2 · Last updated: 2026-03-06
 
 This document describes the JSON schemas for all persistent state files used by VALayr.
 
@@ -111,8 +111,11 @@ This document describes the JSON schemas for all persistent state files used by 
     "ExploitRegistry": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
     "ProtocolRegistry": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
     "InvariantRegistry": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-    "AdversarialScoring": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
-  }
+    "AdversarialScoring": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    "Treasury": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853"
+  },
+  "verified": false,
+  "foundry_version": "forge Version: 1.5.1-stable"
 }
 ```
 
@@ -192,6 +195,108 @@ This document describes the JSON schemas for all persistent state files used by 
   ]
 }
 ```
+
+---
+
+## data/rewards/payouts.json
+
+**Location**: `data/rewards/payouts.json`
+**Written by**: `validator/bounty/reward_split.py` (`RewardSplitEngine`)
+
+```json
+{
+  "RPT-2026-001": {
+    "report_id": "RPT-2026-001",
+    "platform": "immunefi",
+    "task_id": "0x08fbc301...",
+    "fingerprint": "abc123...",
+    "miner_hotkey": "5F3s...",
+    "validator_id": "validator-0",
+    "bounty_amount": 10000.0,
+    "currency": "USD",
+    "split": {
+      "report_id": "RPT-2026-001",
+      "platform": "immunefi",
+      "total_amount": 10000.0,
+      "currency": "USD",
+      "miner_hotkey": "5F3s...",
+      "validator_id": "validator-0",
+      "miner_amount": 7000.0,
+      "validator_amount": 2000.0,
+      "treasury_amount": 1000.0,
+      "miner_share": 0.7,
+      "validator_share": 0.2,
+      "treasury_share": 0.1,
+      "computed_at": 1709478123.456
+    },
+    "status": "distributed",
+    "detected_at": 1709478100.0,
+    "distributed_at": 1709479200.0
+  }
+}
+```
+
+| Field            | Type   | Description                                          |
+| ---------------- | ------ | ---------------------------------------------------- |
+| `report_id`      | string | Unique report identifier                             |
+| `platform`       | string | Bounty platform (immunefi, code4rena)                |
+| `bounty_amount`  | float  | Total payout amount                                  |
+| `split.*_amount` | float  | Computed share for each party                        |
+| `status`         | string | `pending` \| `computed` \| `distributed` \| `failed` |
+
+---
+
+## data/anti_bypass/subnet_receipts.json
+
+**Location**: `data/anti_bypass/subnet_receipts.json`
+**Written by**: `validator/bounty/anti_bypass.py` (`AntiBypassEngine`)
+
+```json
+{
+  "abc123...": {
+    "task_id": "0x08fbc301...",
+    "miner_hotkey": "5F3s...",
+    "fingerprint": "abc123...",
+    "subnet_timestamp": 1709478000,
+    "bittensor_block": 4200000,
+    "hmac_tag": "e5a1b2c3d4..."
+  }
+}
+```
+
+| Field              | Type   | Description                             |
+| ------------------ | ------ | --------------------------------------- |
+| (key)              | string | Fingerprint hash (lookup key)           |
+| `subnet_timestamp` | int    | Unix timestamp of first subnet receipt  |
+| `bittensor_block`  | int    | Bittensor block number (on-chain proof) |
+| `hmac_tag`         | string | HMAC-SHA256 for tamper detection        |
+
+---
+
+## data/anti_bypass/violations.json
+
+**Location**: `data/anti_bypass/violations.json`
+**Written by**: `validator/bounty/anti_bypass.py` (`AntiBypassEngine`)
+
+```json
+[
+  {
+    "miner_hotkey": "5F3s...",
+    "task_id": "0x08fbc301...",
+    "fingerprint": "abc123...",
+    "subnet_timestamp": 1709478000,
+    "platform_timestamp": 1709477800,
+    "platform": "immunefi",
+    "delta_seconds": -200,
+    "severity": "violation"
+  }
+]
+```
+
+| Field           | Type   | Description                                   |
+| --------------- | ------ | --------------------------------------------- |
+| `delta_seconds` | int    | `platform_ts - subnet_ts` (negative = bypass) |
+| `severity`      | string | `warning` \| `violation` \| `critical`        |
 
 ---
 

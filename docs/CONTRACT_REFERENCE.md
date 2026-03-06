@@ -1,6 +1,6 @@
 # Smart Contract Reference
 
-> Version 1.1 · Last updated: 2026-03-03
+> Version 1.2 · Last updated: 2026-03-06
 
 Complete reference for all Solidity contracts in the VALayr exploit subnet.
 

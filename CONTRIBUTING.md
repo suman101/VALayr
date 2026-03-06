@@ -34,6 +34,10 @@ cd VALayr
 # Install Python dependencies
 pip install -r requirements.txt
 
+# Create symlinks for hyphenated module names
+ln -sf task-generator task_generator
+ln -sf subnet-adapter subnet_adapter
+
 # Install Foundry (pinned to nightly-2024-12-01 for deterministic builds)
 curl -L https://foundry.paradigm.xyz | bash
 foundryup --version nightly-2024-12-01
@@ -42,8 +46,8 @@ foundryup --version nightly-2024-12-01
 cd contracts && forge install && cd ..
 
 # Verify setup
-forge test --root contracts          # 81 Solidity tests
-python3 -m pytest tests/ -q          # 198 Python tests
+forge test --root contracts          # 125 Solidity tests
+python3 -m pytest tests/ -q          # 477 Python tests
 ```
 
 ### Environment Variables
@@ -59,7 +63,7 @@ export PYTHONHASHSEED=0              # Required for deterministic builds
 
 ```
 ├── contracts/              # Solidity contracts + Foundry tests
-│   ├── src/                #   Production contracts
+│   ├── src/                #   Production contracts (ExploitRegistry, ProtocolRegistry, Treasury)
 │   ├── test/               #   Foundry test suites
 │   └── foundry.toml        #   Foundry configuration
 ├── validator/              # Validator-side Python modules
@@ -67,7 +71,7 @@ export PYTHONHASHSEED=0              # Required for deterministic builds
 │   ├── fingerprint/        #   Fingerprint + dedup engine
 │   ├── anticollusion/      #   Multi-validator consensus
 │   ├── scoring/            #   Severity scoring
-
+│   ├── bounty/             #   Bounty system (reward split, anti-bypass, identity)
 │   ├── metrics.py          #   Health/metrics HTTP server
 │   └── utils/              #   Logging, helpers
 ├── neurons/                # Bittensor neuron wrappers
@@ -76,12 +80,17 @@ export PYTHONHASHSEED=0              # Required for deterministic builds
 │   └── protocol.py         #   Synapse definitions
 ├── miner/                  # Miner CLI tool
 ├── task-generator/         # Vulnerable contract corpus generator
+│   ├── generate.py         #   Deterministic corpus generator
+│   ├── discovery.py        #   Mainnet contract discovery
+│   ├── mainnet.py          #   Live contract source fetcher
+│   └── mutator/            #   Pluggable mutation framework
 ├── subnet-adapter/         # Bittensor incentive adapter
 ├── orchestrator.py         # Central pipeline orchestrator
 ├── docker/                 # Docker infrastructure
 ├── scripts/                # Build + verification scripts
-├── tests/                  # Python test suites
-└── docs/                   # Documentation (threat model, etc.)
+├── exploits/               # Reference exploit examples
+├── tests/                  # Python test suites (25 files, 477 tests)
+└── docs/                   # Documentation + runbooks
 ```
 
 ---
@@ -188,10 +197,13 @@ PYTHONHASHSEED=0 bash scripts/verify-determinism.sh
 
 Every PR triggers:
 
-1. Foundry tests (`forge test`)
-2. Python tests across 4 versions (3.10, 3.11, 3.12, 3.13)
-3. Determinism verification
+1. Foundry tests (`forge test` — 125 Solidity tests)
+2. Python tests across 4 versions (3.10, 3.11, 3.12, 3.13) — 477 tests
+3. Python lint + type-check (`ruff`, `black`, `mypy`)
 4. Solidity lint check
+5. Determinism verification
+
+The CI workflow also supports manual dispatch (`workflow_dispatch`) for on-demand runs.
 
 ---
 

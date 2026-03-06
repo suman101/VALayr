@@ -1,5 +1,7 @@
 # Glossary
 
+> Version 1.2 · Last updated: 2026-03-06
+
 Terminology used throughout the VALayr exploit subnet documentation and codebase.
 
 ---
@@ -9,6 +11,10 @@ Terminology used throughout the VALayr exploit subnet documentation and codebase
 ### AdversarialMode
 
 Stage 3 system (Month 5–6) where two miner classes compete: Class A writes invariants, Class B tries to break them. See `contracts/src/stage3/AdversarialMode.sol`.
+
+### AntiBypassEngine
+
+Validator component (`validator/bounty/anti_bypass.py`) that detects attempts to circumvent bounty payout rules—e.g., submitting the same exploit under multiple identities or bypassing the disclosure window.
 
 ### AntiCollusionEngine
 
@@ -29,6 +35,14 @@ Bittensor component that receives incoming network requests. The validator's axo
 ### Bittensor
 
 Decentralized machine intelligence network. VALayr operates as a subnet within Bittensor, using its incentive mechanism for TAO distribution.
+
+### BountyReport
+
+A record linking a validated exploit to a protocol's registered bounty. Contains the exploit fingerprint, severity score, miner address, and payout eligibility status. Managed by the bounty subsystem in `validator/bounty/`.
+
+### BypassViolation
+
+A detected attempt to circumvent bounty or scoring rules. Recorded by the `AntiBypassEngine` in `data/anti_bypass/violations.json`. Types include duplicate-identity submission, disclosure-window evasion, and reward-split manipulation.
 
 ### Bytecode Determinism
 
@@ -73,6 +87,10 @@ Bittensor component for making outgoing network requests. Used by miners to send
 ### Determinism
 
 The property that the same inputs always produce the same outputs. Essential for validator consensus. Enforced via pinned tool versions (`solc 0.8.28`, `Foundry nightly-2024-12-01`), fixed Anvil config, and `PYTHONHASHSEED=0`.
+
+### Discovery
+
+The mainnet contract discovery subsystem (`task-generator/discovery.py`). Scans live EVM chains for opt-in contracts that match registered vulnerability patterns, enabling real-world bounty targets alongside the synthetic corpus.
 
 ### Disclosure Window
 
@@ -142,6 +160,10 @@ A Bittensor wallet key used for on-chain operations. Each miner and validator ha
 
 ## I
 
+### IdentityClaim
+
+A cryptographic assertion linking a miner hotkey to an external identity (e.g., bug-bounty platform account). Managed by `validator/bounty/identity.py` to prevent Sybil attacks on bounty payouts.
+
 ### Invariant
 
 A formal property that a smart contract should satisfy (e.g., "total supply equals sum of all balances"). In Stage 3, Class A miners write invariants for Class B miners to break.
@@ -161,6 +183,10 @@ Ethereum's hash function. **Not** the same as NIST SHA-3. Used for commit hashes
 ---
 
 ## M
+
+### MainnetContractSource
+
+Verified Solidity source code fetched from a live EVM chain via `task-generator/mainnet.py`. Used by the discovery subsystem to create real-world vulnerability targets from deployed contracts.
 
 ### Metagraph
 
@@ -194,6 +220,10 @@ Central coordination module (`orchestrator.py`) that ties together task generati
 
 ## P
 
+### PayoutRecord
+
+A record of a completed bounty payout. Stored in `data/rewards/payouts.json` and includes miner address, exploit fingerprint, reward amount, protocol fee deducted, and timestamp.
+
 ### Privilege Escalation
 
 A severity category: the exploit changes ownership or admin control of the target contract (detected by monitoring known ownership storage slots).
@@ -201,6 +231,10 @@ A severity category: the exploit changes ownership or admin control of the targe
 ### ProtocolRegistry
 
 On-chain contract where protocols opt in to adversarial testing by registering contracts and depositing bounties. See `contracts/src/ProtocolRegistry.sol`.
+
+### ProtocolFee
+
+A percentage (default 10%) deducted from bounty payouts and sent to the Treasury contract. Configurable via `VALAYR_REWARD_SPLIT_PROTOCOL_FEE`. Managed by `RewardSplitEngine`.
 
 ### Proxy
 
@@ -225,6 +259,14 @@ A vulnerability class where an external call allows the callee to call back into
 ### Reward Multiplier
 
 The fraction of base reward a miner receives: 1.0 (100%) for first-of-fingerprint, 0.10 (10%) for duplicates, 0.0 for invalid submissions.
+
+### RewardSplit
+
+The decomposition of a bounty payout into miner share, protocol fee, and Treasury allocation. Computed by the `RewardSplitEngine`.
+
+### RewardSplitEngine
+
+Validator component (`validator/bounty/reward_split.py`) that calculates how bounty rewards are divided between the discovering miner, the protocol fee, and the Treasury.
 
 ---
 
@@ -262,6 +304,10 @@ Bittensor's blockchain. Validators set weights on subtensor via `subtensor.set_w
 
 Python component (`subnet-adapter/incentive.py`) that maps exploit scores to Bittensor weight vectors for on-chain reward distribution.
 
+### SubnetReceipt
+
+A record confirming that weight-setting data was successfully submitted to the Bittensor subtensor. Stored in `data/rewards/subnet_receipts.json` and used for audit trails.
+
 ### Synapse
 
 A Bittensor message type for communication between neurons. VALayr defines `ExploitSubmissionSynapse` and `ExploitQuerySynapse` in `neurons/protocol.py`.
@@ -289,6 +335,10 @@ Component (`task-generator/generate.py`) that creates deterministic vulnerable S
 ### Template
 
 A base vulnerable Solidity contract that serves as the starting point for task generation. Located in `task-generator/templates/`. Examples: `reentrancy_basic.sol`, `overflow_unchecked.sol`.
+
+### Treasury
+
+On-chain escrow contract (`contracts/src/Treasury.sol`) that holds protocol fees and manages fund disbursement. Receives a percentage of each bounty payout. Includes reentrancy protection, `onlyOwner` access control, and `Pausable` emergency stop. See [CONTRACT_REFERENCE.md](CONTRACT_REFERENCE.md).
 
 ---
 

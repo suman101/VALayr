@@ -1,5 +1,7 @@
 # Validator Key Rotation SOP
 
+> Version 1.2 · Last updated: 2026-03-06
+
 ## When to Rotate
 
 - Scheduled: every 90 days

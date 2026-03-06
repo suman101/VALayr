@@ -1,6 +1,6 @@
 # VALayr — Developer Guide
 
-> Version 1.1 · Last updated: 2026-03-03
+> Version 1.2 · Last updated: 2026-03-06
 
 This guide is for developers who want to contribute to VALayr's core codebase — adding features, fixing bugs, extending the validation engine, writing new mutators, or improving contracts.
 

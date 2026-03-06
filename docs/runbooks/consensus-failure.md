@@ -1,5 +1,7 @@
 # Consensus Failure Runbook
 
+> Version 1.2 · Last updated: 2026-03-06
+
 ## Symptoms
 
 - Submissions rejected with "quorum not reached" in logs
