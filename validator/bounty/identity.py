@@ -87,12 +87,21 @@ class IdentityStore:
         if not _PLATFORM_ID_PATTERN.match(platform_id):
             raise ValueError(f"Invalid platform_id format: {platform_id}")
 
-        # Check for conflicting claims (different miner claiming same platform_id)
+        # AG-3 fix: require signed_challenge for new claims. Without this,
+        # any miner can claim any platform identity without proof of ownership.
+        if not signed_challenge:
+            raise ValueError(
+                "signed_challenge is required to claim a platform identity. "
+                "Sign your miner hotkey with the platform account."
+            )
+
+        # Check for conflicting claims — AG-4 fix: also check UNVERIFIED
+        # claims to prevent two miners holding the same platform_id.
         for hk, identity in self._identities.items():
             if hk == miner_hotkey:
                 continue
             existing = identity.claims.get(platform)
-            if existing and existing.platform_id == platform_id and existing.verified:
+            if existing and existing.platform_id == platform_id:
                 raise ValueError(
                     f"Platform ID {platform_id} on {platform} is already "
                     f"claimed by another miner"

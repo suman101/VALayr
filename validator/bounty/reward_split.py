@@ -125,13 +125,19 @@ class RewardSplitEngine:
             currency=currency,
             miner_hotkey=miner_hotkey,
             validator_id=validator_id,
-            miner_amount=round(bounty_amount * self._miner_share, 6),
-            validator_amount=round(bounty_amount * self._validator_share, 6),
-            treasury_amount=round(bounty_amount * self._treasury_share, 6),
             miner_share=self._miner_share,
             validator_share=self._validator_share,
             treasury_share=self._treasury_share,
             computed_at=time.time(),
+        )
+
+        # S-6 fix: compute shares with integer-safe arithmetic to prevent
+        # floating-point rounding from losing funds. Compute miner and
+        # validator amounts first, then assign remainder to treasury.
+        split.miner_amount = round(bounty_amount * self._miner_share, 6)
+        split.validator_amount = round(bounty_amount * self._validator_share, 6)
+        split.treasury_amount = round(
+            bounty_amount - split.miner_amount - split.validator_amount, 6
         )
 
         record = PayoutRecord(

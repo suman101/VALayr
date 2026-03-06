@@ -34,10 +34,28 @@ from validator.utils.secrets import get_secret
 # ── Constants ──────────────────────────────────────────────────────────────────────
 
 # HMAC secret for receipt integrity.  Loaded via the unified secrets
-# manager.  Falls back to a random 32-byte key for single-validator
+# manager.  Falls back to a persistent file-backed key for single-validator
 # dev deployments (multi-validator setups MUST share the key via env).
 _hmac_str = get_secret("VALAYR_RECEIPT_HMAC_KEY", required=False)
-_RECEIPT_HMAC_KEY = _hmac_str.encode() if _hmac_str else os.urandom(32)
+if _hmac_str:
+    _RECEIPT_HMAC_KEY = _hmac_str.encode()
+else:
+    # AG-1 fix: persist the random key to disk so it survives restarts.
+    # Without this, all existing receipts fail HMAC verification after
+    # any process restart.
+    _KEY_PATH = Path(__file__).resolve().parent.parent.parent / "data" / ".hmac_key"
+    try:
+        if _KEY_PATH.exists():
+            _RECEIPT_HMAC_KEY = _KEY_PATH.read_bytes()
+        else:
+            _KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _RECEIPT_HMAC_KEY = os.urandom(32)
+            _KEY_PATH.write_bytes(_RECEIPT_HMAC_KEY)
+            # Restrict permissions so only the owner can read the key
+            os.chmod(_KEY_PATH, 0o600)
+    except OSError:
+        # Last resort: in-memory only (container w/ read-only filesystem)
+        _RECEIPT_HMAC_KEY = os.urandom(32)
 
 # Grace window: platform submission within this many seconds AFTER subnet
 # submission is considered legitimate (accounts for relay latency).
@@ -119,6 +137,8 @@ class AntiBypassEngine:
         )
         receipt.hmac_tag = receipt.compute_hmac()
         self._receipts[fingerprint] = receipt
+        # AG-5 fix: prune old receipts to prevent unbounded memory growth
+        self._prune_receipts()
         self._save_receipts()
         return receipt
 
@@ -184,6 +204,29 @@ class AntiBypassEngine:
 
     def get_receipt(self, fingerprint: str) -> Optional[SubnetReceipt]:
         return self._receipts.get(fingerprint)
+
+    # Maximum number of receipts to keep in memory / on disk
+    _MAX_RECEIPTS = 50_000
+    # Receipts older than 30 days are eligible for pruning
+    _RECEIPT_MAX_AGE = 30 * 24 * 3600
+
+    def _prune_receipts(self) -> None:
+        """Remove oldest receipts when the store exceeds _MAX_RECEIPTS."""
+        if len(self._receipts) <= self._MAX_RECEIPTS:
+            return
+        cutoff = int(time.time()) - self._RECEIPT_MAX_AGE
+        stale = [
+            fp for fp, r in self._receipts.items()
+            if r.subnet_timestamp < cutoff
+        ]
+        for fp in stale:
+            del self._receipts[fp]
+        # If still over limit, drop oldest by timestamp
+        if len(self._receipts) > self._MAX_RECEIPTS:
+            by_time = sorted(self._receipts.items(), key=lambda kv: kv[1].subnet_timestamp)
+            to_drop = len(self._receipts) - self._MAX_RECEIPTS
+            for fp, _ in by_time[:to_drop]:
+                del self._receipts[fp]
 
     # ── Persistence ──────────────────────────────────────────────────────
 

@@ -95,6 +95,44 @@ class BountyPlatform(ABC):
         """Verify that a miner's platform identity is valid."""
         ...
 
+    def validate_report(self, report: BountyReport) -> Optional[str]:
+        """AG-6 fix: validate exploit source before platform submission.
+
+        Returns None if valid, or an error message string if invalid.
+        """
+        if not report.exploit_source or not report.exploit_source.strip():
+            return "Exploit source is empty"
+        if len(report.exploit_source) < 20:
+            return "Exploit source too short to be valid Solidity"
+        if "pragma solidity" not in report.exploit_source and "function" not in report.exploit_source:
+            return "Exploit source does not appear to be valid Solidity"
+        # Check for obvious corruption: unterminated strings, unbalanced braces
+        if report.exploit_source.count("{") != report.exploit_source.count("}"):
+            return "Exploit source has unbalanced braces (possibly corrupted)"
+        return None
+
+
+# ── Retry Helper ──────────────────────────────────────────────────────────────
+
+_MAX_RETRIES = 3
+_RETRY_BACKOFF_BASE = 2.0  # seconds
+
+
+def _retry_api_call(fn, max_retries: int = _MAX_RETRIES):
+    """AG-7 fix: retry transient API failures with exponential backoff."""
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            result = fn()
+            if result is not None:
+                return result
+        except (urllib.error.URLError, OSError, ConnectionError) as e:
+            last_error = e
+        if attempt < max_retries - 1:
+            import time as _time
+            _time.sleep(_RETRY_BACKOFF_BASE ** attempt)
+    return None
+
 
 # ── Immunefi Adapter ─────────────────────────────────────────────────────────
 
@@ -115,6 +153,17 @@ class ImmunefiAdapter(BountyPlatform):
         return "immunefi"
 
     def submit_report(self, report: BountyReport) -> SubmissionReceipt:
+        # AG-6 fix: validate exploit source before submission
+        validation_error = self.validate_report(report)
+        if validation_error:
+            return SubmissionReceipt(
+                platform=self.name,
+                report_id="",
+                status=SubmissionStatus.REJECTED,
+                submitted_at=int(time.time()),
+                error=f"Source validation failed: {validation_error}",
+            )
+
         payload = {
             "target": report.target_address,
             "chain_id": report.chain_id,
@@ -130,7 +179,8 @@ class ImmunefiAdapter(BountyPlatform):
             },
         }
 
-        result = self._api_post("/reports", payload)
+        # AG-7 fix: retry transient API failures
+        result = _retry_api_call(lambda: self._api_post("/reports", payload))
         if result is None:
             return SubmissionReceipt(
                 platform=self.name,

@@ -13,6 +13,8 @@ services:
       dockerfile: docker/Dockerfile.validator
     image: ghcr.io/exploit-subnet/validator:v0.1.0
     container_name: exploit-validator
+    # I-2 fix: run as non-root user created in Dockerfile
+    user: "appuser"
     # NOTE: Validator neuron needs network to communicate with Bittensor,
     # miners, and consensus relay. The validation sandbox is isolated separately.
     environment:
@@ -43,6 +45,12 @@ services:
         delay: 30s
         window: 120s
     restart: unless-stopped
+    # I-8 fix: prevent unbounded log growth
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     healthcheck:
       test:
         [
@@ -84,6 +92,12 @@ services:
         delay: 10s
         window: 60s
     restart: unless-stopped
+    # I-8 fix: prevent unbounded log growth
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1:9946/health"]
       interval: 30s
@@ -97,6 +111,8 @@ services:
       dockerfile: docker/Dockerfile.miner
     image: ghcr.io/exploit-subnet/miner:v0.1.0
     container_name: exploit-miner
+    # I-2 fix: run as non-root user
+    user: "appuser"
     environment:
       - PYTHONHASHSEED=0
       - BITTENSOR_NETWORK=${BITTENSOR_NETWORK:-finney}
@@ -119,6 +135,12 @@ services:
         delay: 30s
         window: 120s
     restart: unless-stopped
+    # I-8 fix: prevent unbounded log growth
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     healthcheck:
       test: ["CMD", "python3", "-c", "import miner; print('ok')"]
       interval: 60s

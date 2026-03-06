@@ -170,8 +170,13 @@ class AntiCollusionEngine:
         if len(active) < MIN_QUORUM:
             raise ValueError(f"Insufficient active validators: {len(active)} < {MIN_QUORUM}")
 
-        # Seed RNG with task_id for deterministic but unpredictable assignment
-        task_seed = int(hashlib.sha256(task_id.encode()).hexdigest()[:16], 16)
+        # AG-2 fix: add the global seed and current epoch timestamp as
+        # additional entropy so assignment is unpredictable even if task_ids
+        # are published in advance. The attacker would need to know both
+        # the task_id AND the engine's seed AND the epoch time.
+        epoch_time = int(time.time()) // 3600  # hourly epoch bucket
+        combined = f"{task_id}:{self.rng.getstate()[1][0]}:{epoch_time}"
+        task_seed = int(hashlib.sha256(combined.encode()).hexdigest()[:16], 16)
         task_rng = random.Random(task_seed)
 
         # Weighted selection by reliability
@@ -266,11 +271,13 @@ class AntiCollusionEngine:
                 break
 
         if majority_result is None:
-            # No consensus — find plurality with deterministic tie-breaking
-            # On equal vote count, pick lexicographically first result
+            # No consensus — find plurality with deterministic tie-breaking.
+            # Tie-break by highest vote count, then lexicographically
+            # *smallest* name so an attacker cannot craft result names to
+            # win ties (S-10 fix).
             majority_result = max(
                 result_tally,
-                key=lambda r: (len(result_tally[r]), r),
+                key=lambda r: (len(result_tally[r]), [-ord(c) for c in r]),
             )
             majority_validators = result_tally[majority_result]
             result.agreement_ratio = len(majority_validators) / total_votes
@@ -451,7 +458,7 @@ class AntiCollusionEngine:
             if v.total_validations < MIN_QUORUM:
                 continue  # Not enough data
 
-            if v.divergence_rate > DIVERGENCE_SLASH_THRESHOLD:
+            if v.divergence_rate >= DIVERGENCE_SLASH_THRESHOLD:
                 to_slash.append(hotkey)
 
         for hotkey in to_slash:

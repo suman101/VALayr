@@ -63,6 +63,19 @@ cd "$BACKUP_DIR"
 tar czf "${BACKUP_NAME}.tar.gz" "$BACKUP_NAME"
 rm -rf "$BACKUP_NAME"
 
+# I-5 fix: verify archive integrity after creation
+echo "  Verifying archive integrity ..."
+if tar tzf "${BACKUP_NAME}.tar.gz" >/dev/null 2>&1; then
+    echo "  ✓ Archive integrity verified"
+else
+    echo "  ✗ Archive verification failed — backup may be corrupt!"
+    exit 1
+fi
+
+# Record SHA-256 checksum for later verification
+sha256sum "${BACKUP_NAME}.tar.gz" > "${BACKUP_NAME}.tar.gz.sha256"
+echo "  ✓ Checksum: $BACKUP_DIR/${BACKUP_NAME}.tar.gz.sha256"
+
 echo ""
 echo "  ✓ Backup complete: $BACKUP_DIR/${BACKUP_NAME}.tar.gz"
 echo "  Size: $(du -h "$BACKUP_DIR/${BACKUP_NAME}.tar.gz" | cut -f1)"

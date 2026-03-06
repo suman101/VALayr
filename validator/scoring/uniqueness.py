@@ -153,7 +153,9 @@ class UniquenessScorer:
             multiplier -= result.herd_penalty
         multiplier += result.timing_bonus
         if not result.complexity_pass:
-            multiplier *= 0.5  # Halve reward for below-complexity exploits
+            # S-8 fix: reject below-complexity exploits entirely instead of
+            # giving them 50% reward. Trivial exploits should not earn.
+            multiplier = 0.0
         result.final_multiplier = max(0.0, min(1.5, multiplier))
 
         return result
@@ -193,11 +195,28 @@ class UniquenessScorer:
         selectors = re.findall(r'\b\w+\s*\(', source_clean)
         profile.selector_count = len(set(selectors))
 
-        # Structural hash: normalise away names and compute hash
-        # Replace all identifiers with generic tokens
+        # Structural hash: normalise away variable names but KEEP function
+        # names and Solidity keywords. S-5 fix: the prior approach of
+        # replacing ALL identifiers with 'ID' collapsed semantically
+        # different exploits (reentrancy vs overflow) into the same hash.
         normalised = re.sub(r'\b0x[0-9a-fA-F]+\b', 'HEX', source_clean)
         normalised = re.sub(r'\b\d+\b', 'NUM', normalised)
-        normalised = re.sub(r'\b[a-zA-Z_]\w*\b', 'ID', normalised)
+        # Preserve function names, Solidity keywords, and type names
+        keywords = {
+            'function', 'contract', 'import', 'pragma', 'if', 'else', 'for',
+            'while', 'return', 'require', 'assert', 'revert', 'emit', 'event',
+            'mapping', 'struct', 'modifier', 'constructor', 'public', 'private',
+            'internal', 'external', 'view', 'pure', 'payable', 'memory',
+            'storage', 'calldata', 'address', 'uint256', 'int256', 'bool',
+            'bytes', 'bytes32', 'string', 'call', 'transfer', 'send',
+            'delegatecall', 'assembly', 'sstore', 'sload', 'selfdestruct',
+        }
+        def _replace_id(m):
+            word = m.group(0)
+            if word in keywords or word.startswith('test_'):
+                return word
+            return 'ID'
+        normalised = re.sub(r'\b[a-zA-Z_]\w*\b', _replace_id, normalised)
         normalised = re.sub(r'\s+', ' ', normalised).strip()
 
         profile.structural_hash = hashlib.sha256(normalised.encode()).hexdigest()[:16]

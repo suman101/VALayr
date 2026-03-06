@@ -124,18 +124,23 @@ class SeverityScorer:
             return breakdown
 
         # ── 1. Funds Drained Score ────────────────────────────────────────
-        # For multi-tx: use aggregate gas as a complexity proxy.
-        # Funds drained must still reflect a real net outflow from target,
-        # so we only score drain when balance_delta is negative.
+        # S-3 fix: For multi-tx exploits, compute the maximum absolute
+        # per-step balance delta. This prevents masking when an exploit
+        # deposits in step 1 and drains in step 2 (net zero).
         if is_multi_tx and test_results:
-            # Multi-tx: total gas across steps indicates attack complexity
             total_gas = sum(
                 r.get("gas_used", 0) for r in test_results.values()
                 if isinstance(r, dict)
             )
-            wei_drained = abs(balance_delta) if balance_delta < 0 else 0
-            # Complexity bonus: multi-step exploits with high total gas
-            # get a small bonus (up to 10%) to incentivize discovery
+            # Use max per-step delta if available, else fall back to aggregate
+            per_step_deltas = [
+                abs(r.get("balance_delta", 0))
+                for r in test_results.values()
+                if isinstance(r, dict) and r.get("balance_delta", 0) != 0
+            ]
+            wei_drained = max(per_step_deltas) if per_step_deltas else (
+                abs(balance_delta) if balance_delta < 0 else 0
+            )
             complexity_bonus = min(0.10, math.log10(max(total_gas, 1)) / 80.0)
         else:
             wei_drained = abs(balance_delta) if balance_delta < 0 else 0
@@ -151,11 +156,16 @@ class SeverityScorer:
 
         # ── 2. Privilege Escalation Score ─────────────────────────────────
         # Check if any ownership/admin slots changed
+        # S-7 fix: normalize slot format to strip leading zeros for comparison
         for diff in storage_diffs:
             slot = diff.get("slot", "") if isinstance(diff, dict) else diff.slot
             if isinstance(slot, int):
                 slot = hex(slot)
-            if slot in OWNER_SLOT_INDICES or slot == EIP1967_ADMIN_SLOT:
+            # Normalize: strip leading zeros after 0x for comparison
+            slot_norm = "0x" + slot.lstrip("0x").lstrip("0") if isinstance(slot, str) and slot.startswith("0x") else slot
+            if not slot_norm or slot_norm == "0x":
+                slot_norm = "0x0"
+            if slot_norm in OWNER_SLOT_INDICES or slot == EIP1967_ADMIN_SLOT:
                 breakdown.privilege_escalation_score = 1.0
                 break
 
@@ -163,7 +173,7 @@ class SeverityScorer:
         # Invariant is considered broken if:
         # - Storage changed in unexpected ways (proxy impl slot modified)
         # - Balance drained (any amount)
-        # - Multiple storage slots changed simultaneously
+        # - Multiple *meaningful* storage slots changed simultaneously
         for diff in storage_diffs:
             slot = diff.get("slot", "") if isinstance(diff, dict) else diff.slot
             if slot == EIP1967_IMPL_SLOT:
@@ -173,7 +183,15 @@ class SeverityScorer:
         if wei_drained > 0:
             breakdown.invariant_broken_score = 1.0
 
-        if len(storage_diffs) >= 3:
+        # S-2 fix: only count storage diffs where before != after and
+        # the change is non-trivial (not just writing the same value).
+        # This prevents gaming via 3 harmless writes to inflate severity.
+        meaningful_diffs = [
+            d for d in storage_diffs
+            if (d.get("before", "") if isinstance(d, dict) else d.before)
+            != (d.get("after", "") if isinstance(d, dict) else d.after)
+        ]
+        if len(meaningful_diffs) >= 3:
             breakdown.invariant_broken_score = 1.0
 
         # ── 4. Permanent Lock Score ───────────────────────────────────────

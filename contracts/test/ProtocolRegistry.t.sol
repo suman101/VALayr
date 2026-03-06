@@ -28,14 +28,13 @@ contract ProtocolRegistryTest is Test {
         registry.registerContract{value: 0.01 ether}(address(dummy), 0);
 
         bytes32 contractHash = registry.getContractHash(address(dummy));
-        assert(registry.isRegistered(contractHash));
+        assertTrue(registry.isRegistered(contractHash));
     }
 
     function test_registerContract_insufficientBounty() public {
         DummyTarget dummy = new DummyTarget();
-        try registry.registerContract{value: 0.001 ether}(address(dummy), 0) {
-            revert("Should have reverted");
-        } catch {}
+        vm.expectRevert();
+        registry.registerContract{value: 0.001 ether}(address(dummy), 0);
     }
 
     function test_addBounty() public {
@@ -47,7 +46,7 @@ contract ProtocolRegistryTest is Test {
         registry.addBounty{value: 1 ether}(contractHash);
 
         (, , , uint256 bounty, , , ) = registry.registry(contractHash);
-        assert(bounty == 1.01 ether);
+        assertEq(bounty, 1.01 ether);
     }
 
     // ── Exploit Claim Tests ──────────────────────────────────────────────
@@ -65,7 +64,7 @@ contract ProtocolRegistryTest is Test {
         uint256 severity = 0.5e18; // 50% severity
         registry.recordExploit(contractHash, fingerprint, MINER, severity);
 
-        assert(registry.getExploitCount(contractHash) == 1);
+        assertEq(registry.getExploitCount(contractHash), 1);
     }
 
     // ── Deactivation Tests ───────────────────────────────────────────────
@@ -76,7 +75,7 @@ contract ProtocolRegistryTest is Test {
         bytes32 contractHash = registry.getContractHash(address(dummy));
 
         registry.deactivateContract(contractHash);
-        assert(!registry.isRegistered(contractHash));
+        assertFalse(registry.isRegistered(contractHash));
     }
 
     // ── Expiry Tests ─────────────────────────────────────────────────────────────────

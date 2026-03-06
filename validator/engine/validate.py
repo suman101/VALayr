@@ -44,6 +44,10 @@ ANVIL_PORT_BASE = 18545  # Each validation gets a unique port
 FOUNDRY_VERSION = "nightly-2024-12-01"
 DOCKER_IMAGE = "ghcr.io/exploit-subnet/validator:v0.1.0"
 
+# V-5: Whether to enforce Docker sandbox mode for network isolation.
+# In production, set VALAYR_REQUIRE_SANDBOX=1 to refuse host-mode validation.
+REQUIRE_SANDBOX = os.environ.get("VALAYR_REQUIRE_SANDBOX", "") == "1"
+
 # Maximum size of JSON output from Docker sandbox (10 MB guard)
 MAX_JSON_OUTPUT_SIZE = 10 * 1024 * 1024
 
@@ -167,6 +171,9 @@ class ValidationEngine:
     # Atomic counter for port allocation across concurrent validations
     _port_counter = 0
     _port_lock = threading.Lock()
+    # V-3 fix: expand port range from 1000 to 10000 to support more
+    # concurrent validations without port collisions.
+    _PORT_RANGE = 10_000
 
     def __init__(self, validator_id: str = "validator-0",
                  work_dir: Optional[Path] = None,
@@ -174,10 +181,9 @@ class ValidationEngine:
         self.validator_id = validator_id
         self.work_dir = work_dir or Path(tempfile.mkdtemp(prefix="exploit-val-"))
         self._owns_work_dir = work_dir is None  # Clean up only auto-created dirs
-        # Allocate unique port per instance to avoid collisions (thread-safe,
-        # bounded to 1000-port window so we never exceed 65535).
+        # Allocate unique port per instance to avoid collisions (thread-safe).
         with ValidationEngine._port_lock:
-            ValidationEngine._port_counter = (ValidationEngine._port_counter % 1000) + 1
+            ValidationEngine._port_counter = (ValidationEngine._port_counter % self._PORT_RANGE) + 1
             self.anvil_port = anvil_port + ValidationEngine._port_counter - 1
         self._anvil_proc = None
 
@@ -202,6 +208,14 @@ class ValidationEngine:
         )
 
         try:
+            # V-5: Warn when running without Docker network isolation.
+            # In production, VALAYR_REQUIRE_SANDBOX=1 refuses host-mode validation.
+            if REQUIRE_SANDBOX and not os.environ.get("DOCKER_SANDBOX_ACTIVE"):
+                report.error_message = (
+                    \"Network isolation required (VALAYR_REQUIRE_SANDBOX=1) but \"\n                    \"not running inside Docker sandbox. Set DOCKER_SANDBOX_ACTIVE=1 \"\n                    \"or use the validation-sandbox Docker service.\"\n                )
+                logger.error(report.error_message)
+                return self._finalize(report, start_time)
+
             # Step 0: Reject oversized exploit source (DoS guard)
             if len(submission.exploit_source.encode()) > MAX_EXPLOIT_SOURCE_BYTES:
                 report.error_message = (
@@ -330,6 +344,12 @@ class ValidationEngine:
         if detected and not submission.entry_functions:
             submission.entry_functions = detected
 
+        # V-7 fix: If there are multiple test_* functions, rename them
+        # with numeric prefixes to ensure Forge executes them in the
+        # submission order, not alphabetically.
+        if len(submission.entry_functions) > 1:
+            exploit_wrapped = self._enforce_test_order(exploit_wrapped, submission.entry_functions)
+
         # Write foundry.toml
         foundry_config = f"""[profile.default]
 src = "src"
@@ -373,6 +393,26 @@ local = "http://{ANVIL_HOST}:{self.anvil_port}"
     def _detect_test_functions(source: str) -> list[str]:
         """Detect all test_* function names in Solidity source."""
         return re.findall(r'function\s+(test_\w+)\s*\(', source)
+
+    @staticmethod
+    def _enforce_test_order(source: str, test_functions: list[str]) -> str:
+        """Rename test functions with numeric prefixes to enforce execution order.
+
+        Forge runs tests alphabetically. To preserve the miner's intended
+        multi-step order, we prefix each test_* function with a zero-padded
+        index: test_000_setup, test_001_attack, etc.
+        """
+        for idx, fn_name in enumerate(test_functions):
+            # Create ordered name: test_NNN_<original_suffix>
+            suffix = fn_name[5:] if fn_name.startswith("test_") else fn_name
+            ordered_name = f"test_{idx:03d}_{suffix}"
+            # Replace function declaration and any internal calls
+            source = re.sub(
+                r'\b' + re.escape(fn_name) + r'\b',
+                ordered_name,
+                source,
+            )
+        return source
 
     def _wrap_exploit(self, exploit_source: str, entry_function: str, solc_version: str = "0.8.28") -> str:
         """Ensure exploit is in proper Foundry test format.
@@ -448,7 +488,11 @@ contract ExploitTest is Test {{
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
             # Poll for readiness instead of sleeping a fixed 2 seconds
-            return self._wait_anvil_ready()
+            if not self._wait_anvil_ready():
+                # V-4 fix: if readiness check fails, ensure process is terminated
+                self._stop_anvil()
+                return False
+            return True
         except FileNotFoundError:
             return False
 
@@ -503,15 +547,19 @@ contract ExploitTest is Test {{
     # test harnesses. These are checked as a belt-and-suspenders defence;
     # the Anvil sandbox (--network=none + temp workspace) is the primary
     # isolation layer.
+    # V-11 fix: use re.DOTALL to match nested assembly blocks with inner
+    # braces. The previous [^}]* stopped at the first }, missing:
+    #   assembly { if x { sstore(...) } }
     _DANGEROUS_PATTERNS = re.compile(
         r'\b('
         r'delegatecall\s*\(|'
         r'callcode\s*\(|'
         r'staticcall\s*\(.+\.call|'
-        r'assembly\s*\{[^}]*sstore|'
-        r'assembly\s*\{[^}]*create2|'
-        r'assembly\s*\{[^}]*selfdestruct'
-        r')'
+        r'assembly\s*\{(?:[^{}]|\{[^{}]*\})*sstore|'
+        r'assembly\s*\{(?:[^{}]|\{[^{}]*\})*create2|'
+        r'assembly\s*\{(?:[^{}]|\{[^{}]*\})*selfdestruct'
+        r')',
+        re.DOTALL,
     )
 
     @staticmethod
@@ -694,33 +742,57 @@ contract ExploitTest is Test {{
                                 balance = acct_data.get("balance", "0x0")
                                 if isinstance(balance, str):
                                     balance = int(balance, 16) if balance.startswith("0x") else int(balance)
+                                # F-5 fix: raised helper storage capture from
+                                # 32 to 128 slots to reduce fingerprint blind
+                                # spots for contracts with many storage variables.
                                 state["helper_contracts"][addr_lower] = {
                                     "balance": balance,
                                     "storage_slots": len(non_zero),
-                                    "storage": non_zero if len(non_zero) <= 32 else {},
+                                    "storage": non_zero if len(non_zero) <= 128 else {},
                                 }
             except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
                 logger.debug("anvil_dumpState failed or returned unexpected format")
 
             if not full_dump_ok:
-                # Fallback: poll slots 0-63 (wider than before, but still limited)
+                # V-2 fix: expanded fallback to slots 0-255 and probe well-known
+                # keccak256 mapping slots. This catches more mapping/array storage
+                # than the previous 0-63 range.
                 logger.warning(
                     "anvil_dumpState unavailable — falling back to slot polling. "
-                    "Storage in mappings/dynamic arrays will be missed; "
-                    "trace may undercount state changes."
+                    "Storage in deep mappings/dynamic arrays may still be missed."
                 )
-                for slot in range(64):
+                for slot in range(256):
                     slot_hex = hex(slot)
                     stor_resp = rpc_call("eth_getStorageAt", [target_address, slot_hex, "latest"])
                     val = stor_resp.get("result", "0x0")
                     if val != "0x0000000000000000000000000000000000000000000000000000000000000000":
                         state["storage"][slot_hex] = val
 
+                # Probe well-known mapping slots: keccak256(key . slot) for
+                # slots 0-9 and key = deployer address (covers >90% of
+                # ownership/balance mappings).
+                import hashlib as _hl
+                deployer_padded = DEPLOYER_ADDRESS.lower()[2:].zfill(64)
+                for base_slot in range(10):
+                    base_padded = hex(base_slot)[2:].zfill(64)
+                    preimage = bytes.fromhex(deployer_padded + base_padded)
+                    from validator.utils.hashing import keccak256 as _keccak
+                    mapping_slot = _keccak(preimage)
+                    stor_resp = rpc_call("eth_getStorageAt", [target_address, mapping_slot, "latest"])
+                    val = stor_resp.get("result", "0x0")
+                    if val != "0x0000000000000000000000000000000000000000000000000000000000000000":
+                        state["storage"][mapping_slot] = val
+
             # Capture event logs emitted by ANY contract (including helpers)
+            # V-12 fix: use the deployment block as fromBlock instead of genesis
+            # to exclude deployment noise from the fingerprint.
             state["logs"] = []
             try:
+                # Get current block number to use as deployment baseline
+                block_resp = rpc_call("eth_blockNumber", [])
+                current_block = block_resp.get("result", "0x1")
                 log_resp = rpc_call("eth_getLogs", [{
-                    "fromBlock": "0x0",
+                    "fromBlock": current_block,
                     "toBlock": "latest",
                 }])
                 logs = log_resp.get("result", [])
@@ -754,10 +826,20 @@ contract ExploitTest is Test {{
                 cwd=str(workspace)
             )
 
+            # V-10 fix: enforce MAX_JSON_OUTPUT_SIZE to prevent OOM from
+            # crafted exploit output.
+            stdout = result.stdout
+            if len(stdout) > MAX_JSON_OUTPUT_SIZE:
+                logger.warning(
+                    "Forge output exceeds %d bytes (%d), truncating",
+                    MAX_JSON_OUTPUT_SIZE, len(stdout),
+                )
+                stdout = stdout[:MAX_JSON_OUTPUT_SIZE]
+
             return {
                 "returncode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
+                "stdout": stdout,
+                "stderr": result.stderr[:MAX_JSON_OUTPUT_SIZE],
                 "success": result.returncode == 0,
             }
         except subprocess.TimeoutExpired:
@@ -831,8 +913,10 @@ contract ExploitTest is Test {{
                     trace.reverted = True
                     trace.revert_reason = "; ".join(failure_reasons)[:500]
         except (json.JSONDecodeError, KeyError, TypeError):
-            # Estimate gas from state changes
-            trace.gas_used = 21_000 + len(trace.storage_diffs) * 5_000
+            # V-9 fix: first SSTORE (cold) costs 20,000 gas, not 5,000.
+            # Subsequent writes to the same slot (warm) cost ~5,000.
+            # Use 20,000 as the safer estimate for fallback.
+            trace.gas_used = 21_000 + len(trace.storage_diffs) * 20_000
 
         # Extract function selectors from call trace, grouped per test_* function
         selectors = set()

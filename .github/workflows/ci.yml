@@ -93,6 +93,31 @@ jobs:
       - name: Run extended tests (pytest)
         run: PYTHONHASHSEED=0 python -m pytest tests/test_extended.py -v --timeout=60
 
+      # TC-7 fix: run remaining test suites that were only covered by
+      # the coverage job, not the per-version matrix.
+      - name: Run security tests
+        run: PYTHONHASHSEED=0 python -m pytest tests/test_security.py -v --timeout=120
+
+      - name: Run adversarial tests
+        run: PYTHONHASHSEED=0 python -m pytest tests/test_adversarial.py -v --timeout=120
+
+      - name: Run e2e pipeline tests
+        run: PYTHONHASHSEED=0 python -m pytest tests/test_e2e_pipeline.py -v --timeout=120
+
+      - name: Run bounty, uniqueness, multi-tx, reward-split tests
+        run: |
+          PYTHONHASHSEED=0 python -m pytest \
+            tests/test_bounty.py \
+            tests/test_uniqueness.py \
+            tests/test_multi_tx.py \
+            tests/test_reward_split.py \
+            tests/test_key_rotation.py \
+            tests/test_difficulty_discovery.py \
+            tests/test_round2.py \
+            tests/test_mainnet_source.py \
+            tests/test_validate_engine_unit.py \
+            -v --timeout=120
+
   # ── Determinism Verification ─────────────────────────────────────────────
   determinism:
     name: Determinism Checks

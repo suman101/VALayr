@@ -313,8 +313,39 @@ class CorpusGenerator:
         return pkg
 
     def _apply_mutations(self, source: str, mutations: dict) -> str:
-        """Apply deterministic mutations to source code via the mutator registry."""
-        return self._mutation_registry.apply(source, mutations)
+        """Apply deterministic mutations to source code via the mutator registry.
+
+        TG-1/TG-2 fix: verify the mutated source still compiles by running
+        a quick ``solc --stop-after parsing`` check.  If it fails, return the
+        original (unmutated) source and log a warning so the task is still
+        usable.
+        """
+        import logging
+        import subprocess
+        import shutil
+
+        mutated = self._mutation_registry.apply(source, mutations)
+
+        solc = shutil.which("solc") or shutil.which("solc-0.8.28")
+        if solc:
+            try:
+                proc = subprocess.run(
+                    [solc, "--stop-after", "parsing", "-"],
+                    input=mutated,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if proc.returncode != 0:
+                    logging.getLogger(__name__).warning(
+                        "Mutated source failed parse check — reverting to original. "
+                        "solc stderr: %.200s", proc.stderr,
+                    )
+                    return source
+            except (subprocess.TimeoutExpired, OSError):
+                pass  # If solc unavailable, skip check
+
+        return mutated
 
     def generate_batch(self, count_per_class: int = 3, seed: int = 42,
                         max_difficulty: int = 1) -> list[TaskPackage]:
@@ -409,6 +440,39 @@ class CorpusGenerator:
                         idx += 1
 
         return packages
+
+    @staticmethod
+    def mutation_diversity(packages: list[TaskPackage]) -> dict:
+        """TG-6 fix: compute a diversity metric for the generated batch.
+
+        Returns a dict with:
+          - ``unique_source_hashes``: number of distinct source hashes
+          - ``total``: total packages
+          - ``ratio``: unique / total  (1.0 = fully diverse)
+          - ``per_class``: breakdown by vuln class
+        """
+        from collections import defaultdict
+
+        hashes: set[str] = set()
+        per_class: dict[str, set[str]] = defaultdict(set)
+
+        for pkg in packages:
+            h = hashlib.sha256(pkg.source_code.encode()).hexdigest()
+            hashes.add(h)
+            per_class[pkg.vulnerability_class].add(h)
+
+        total = len(packages) or 1
+        return {
+            "unique_source_hashes": len(hashes),
+            "total": len(packages),
+            "ratio": len(hashes) / total,
+            "per_class": {
+                cls: {"unique": len(hs), "total": sum(
+                    1 for p in packages if p.vulnerability_class == cls
+                )}
+                for cls, hs in per_class.items()
+            },
+        }
 
     def save_batch(self, packages: list[TaskPackage]) -> list[Path]:
         """Save all packages and return their directories."""

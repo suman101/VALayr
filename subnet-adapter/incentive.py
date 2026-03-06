@@ -243,7 +243,9 @@ class SubnetIncentiveAdapter:
 
         # Check for consensus
         total_votes = len(votes)
-        threshold = CONSENSUS_THRESHOLD if not below_quorum else 0.51
+        # S-4 fix: raise below-quorum threshold from 0.51 to 0.75 so that
+        # a 2-validator cartel cannot approve arbitrary submissions at launch.
+        threshold = CONSENSUS_THRESHOLD if not below_quorum else 0.75
         for result, count in result_counts.items():
             if count / total_votes >= threshold:
                 consensus = {
@@ -259,6 +261,10 @@ class SubnetIncentiveAdapter:
                     top_fp = max(fingerprints, key=fingerprints.get)
                     consensus["fingerprint"] = top_fp
                     consensus["fingerprint_agreement"] = fingerprints[top_fp] / total_votes
+                    # S-1 fix: determine if this is the first time this fingerprint
+                    # was seen. The caller (compute_epoch_weights) uses this to
+                    # distinguish unique vs duplicate exploit submissions.
+                    consensus["is_first_fingerprint"] = fingerprints[top_fp] == 1
 
                 return consensus
 

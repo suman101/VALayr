@@ -57,7 +57,12 @@ class ControlFlowMutator(Mutator):
         return source
 
     def _extract_modifier(self, source: str, seed: int) -> str:
-        """Convert first inline require() into a modifier."""
+        """Convert first inline require() into a modifier.
+
+        TG-8 fix: after extracting the require we must also attach the
+        new modifier to the enclosing function's signature, otherwise the
+        guard is silently dropped.
+        """
         match = self._REQUIRE_PAT.search(source)
         if not match:
             return source
@@ -72,10 +77,44 @@ class ControlFlowMutator(Mutator):
             f"    }}\n"
         )
 
+        # Find the function signature containing this require so we can
+        # attach the modifier to it.
+        func_sig_pat = re.compile(
+            r'(function\s+\w+\s*\([^)]*\)\s*'       # function name(args)
+            r'(?:(?:public|external|internal|private)\s*)*'  # visibility
+            r'(?:(?:view|pure|payable)\s*)*'          # mutability
+            r'(?:(?:virtual|override)\s*)*'           # extras
+            r'(?:returns\s*\([^)]*\)\s*)?)'           # returns(...)
+            r'(\{)',                                   # opening brace
+            re.DOTALL,
+        )
+        # Walk backwards from the require match to find its enclosing function
+        enclosing_func = None
+        for fm in func_sig_pat.finditer(source):
+            if fm.start() < match.start():
+                enclosing_func = fm
+            else:
+                break
+
+        if enclosing_func is None:
+            return source  # Can't safely extract — skip
+
         # Remove the require from original location
         source = source[:match.start()] + "// guard extracted" + source[match.end():]
 
-        # Find the function containing the require and add modifier
+        # Attach modifier to the function signature (before the opening brace)
+        # Recompute the enclosing function match position in the modified source
+        enclosing_func = None
+        for fm in func_sig_pat.finditer(source):
+            if fm.start() < match.start():
+                enclosing_func = fm
+            else:
+                break
+
+        if enclosing_func:
+            brace_pos = enclosing_func.start(2)
+            source = source[:brace_pos] + f" {mod_name} " + source[brace_pos:]
+
         # Insert modifier definition before last closing brace
         last_brace = source.rfind("}")
         if last_brace > 0:

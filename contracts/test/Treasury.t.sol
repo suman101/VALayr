@@ -253,6 +253,33 @@ contract TreasuryTest is Test {
 
     // ── Fuzz ─────────────────────────────────────────────────────────────
 
+    // ── SC-7: Edge Cases ─────────────────────────────────────────────────
+
+    function test_submitScore_zeroAddressMiner_reverts() public {
+        treasury.createCompetition{value: 1 ether}(bytes32(0), 1 days);
+        vm.prank(validatorAddr);
+        vm.expectRevert(Ownable2Step.ZeroAddress.selector);
+        treasury.submitScore(0, address(0), 5e17, keccak256("fp0"));
+    }
+
+    function test_submitScore_nonExistentCompetition_reverts() public {
+        vm.prank(validatorAddr);
+        vm.expectRevert(Treasury.CompetitionNotActive.selector);
+        treasury.submitScore(999, miner1, 5e17, keccak256("fp0"));
+    }
+
+    function test_settle_noSubmissions_noWinnerWithdraw() public {
+        treasury.createCompetition{value: 1 ether}(bytes32(0), 1 days);
+        vm.warp(block.timestamp + 1 days + 1);
+        treasury.settle(0);
+
+        vm.prank(miner1);
+        vm.expectRevert(Treasury.NoWinner.selector);
+        treasury.withdrawPrize(0);
+    }
+
+    // ── Fuzz ─────────────────────────────────────────────────────────────
+
     function testFuzz_prizeDistribution(uint256 prize) public {
         prize = bound(prize, 0.01 ether, 1000 ether);
 
@@ -272,6 +299,63 @@ contract TreasuryTest is Test {
         treasury.withdrawPrize(0);
         assertEq(miner1.balance - preBal, expectedReward);
         assertEq(treasury.accumulatedFees(), expectedFee);
+    }
+
+    /// @notice Fuzz: any valid duration creates a competition whose deadline math is correct.
+    function testFuzz_createCompetition_duration(uint256 duration) public {
+        duration = bound(duration, 1 hours, 30 days);
+        uint256 t0 = block.timestamp;
+        uint256 id = treasury.createCompetition{value: 1 ether}(
+            bytes32(0),
+            duration
+        );
+        Treasury.Competition memory comp = treasury.getCompetition(id);
+        assertEq(comp.deadline, t0 + duration);
+        assertEq(comp.prizePool, 1 ether);
+        assertTrue(treasury.isActive(id));
+    }
+
+    /// @notice Fuzz: highest-scoring miner always wins regardless of submission order.
+    function testFuzz_highestScoreWins(uint256 scoreA, uint256 scoreB) public {
+        scoreA = bound(scoreA, 1, 1e18);
+        scoreB = bound(scoreB, 1, 1e18);
+
+        treasury.createCompetition{value: 1 ether}(bytes32(0), 1 days);
+
+        vm.startPrank(validatorAddr);
+        treasury.submitScore(0, miner1, scoreA, keccak256("fpA"));
+        treasury.submitScore(0, miner2, scoreB, keccak256("fpB"));
+        vm.stopPrank();
+
+        Treasury.Competition memory comp = treasury.getCompetition(0);
+        if (scoreB > scoreA) {
+            assertEq(comp.winner, miner2);
+            assertEq(comp.winnerScore, scoreB);
+        } else {
+            assertEq(comp.winner, miner1);
+            assertEq(comp.winnerScore, scoreA);
+        }
+    }
+
+    /// @notice Fuzz: fee + reward always equals prizePool (no rounding loss beyond 1 wei).
+    function testFuzz_feeRewardSumMatchesPrize(uint256 prize) public {
+        prize = bound(prize, 0.01 ether, 1000 ether);
+
+        treasury.createCompetition{value: prize}(bytes32(0), 1 days);
+
+        vm.prank(validatorAddr);
+        treasury.submitScore(0, miner1, 1e18, keccak256("fp1"));
+
+        vm.warp(block.timestamp + 1 days + 1);
+        treasury.settle(0);
+
+        uint256 fee = treasury.accumulatedFees();
+        uint256 preBal = miner1.balance;
+        vm.prank(miner1);
+        treasury.withdrawPrize(0);
+        uint256 reward = miner1.balance - preBal;
+
+        assertEq(fee + reward, prize);
     }
 
     receive() external payable {}

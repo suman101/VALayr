@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import "forge-std/Test.sol";
 import "../src/ProtocolRegistry.sol";
 
 /// @title ReentrancyGuardTest — Verifies that nonReentrant modifiers block reentrancy.
-contract ReentrancyGuardTest {
+contract ReentrancyGuardTest is Test {
     ProtocolRegistry public registry;
 
     address constant VALIDATOR = address(0x2222);
@@ -56,7 +57,7 @@ contract ReentrancyGuardTest {
         // This should revert with "ReentrancyGuard: reentrant call"
         // We cannot easily fast-forward in plain Foundry without vm.warp.
         // For this test, we verify the attacker contract exists and the guard is present.
-        assert(address(attackerPay) != address(0));
+        assertTrue(address(attackerPay) != address(0));
     }
 
     // ── withdrawBounty reentrancy test ───────────────────────────────────
@@ -73,7 +74,7 @@ contract ReentrancyGuardTest {
 
         // The nonReentrant modifier prevents reentrancy
         // We verify the guard exists by confirming the _locked storage pattern
-        assert(address(registry) != address(0));
+        assertTrue(address(registry) != address(0));
     }
 
     // ── Verify guard reverts on reentrant call ──────────────────────────
@@ -93,9 +94,8 @@ contract ReentrancyGuardTest {
         );
 
         // Cannot pay before disclosure window
-        try registry.payExploitReward(contractHash, fingerprint) {
-            revert("Should revert: disclosure window active");
-        } catch {}
+        vm.expectRevert();
+        registry.payExploitReward(contractHash, fingerprint);
     }
 
     receive() external payable {}

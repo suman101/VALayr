@@ -23,6 +23,9 @@ class DeadCodeMutator(Mutator):
     Inject deterministic dead-code snippets to change source hash
     without altering exploitable semantics.
 
+    TG-3/TG-7 fix: injected identifiers use a ``__dc_`` prefix that is
+    unlikely to shadow contract state variables.
+
     Parameters (``params``)
     -----------------------
     dead_code_count : int
@@ -41,9 +44,11 @@ class DeadCodeMutator(Mutator):
 
         for i in range(count):
             val = rng.randint(1, 2**64)
+            # TG-7 fix: use __dc_ prefix to avoid shadowing contract variables
+            idx_tag = f"__dc_{seed}_{i}"
             pool = _DEAD_FUNCTIONS if rng.random() > 0.5 else _DEAD_VARIABLES
             template = rng.choice(pool)
-            snippets.append(template.format(idx=i, val=val))
+            snippets.append(template.format(idx=idx_tag, val=val))
 
         block = "\n".join(snippets) + "\n"
 

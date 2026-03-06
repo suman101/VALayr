@@ -20,6 +20,7 @@ Ambiguity creates governance wars. This engine has none.
 """
 
 import hashlib
+import logging
 import threading
 try:
     import fcntl
@@ -32,6 +33,8 @@ import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -76,7 +79,16 @@ class FingerprintComponents:
             for fn_name in self.test_function_order:
                 fn_sels = sorted(set(self.per_function_selectors.get(fn_name, [])))
                 seq_parts.append(f"{fn_name}={','.join(fn_sels)}")
-            parts.append("selector_sequence:" + "|".join(seq_parts))
+            parts.append("selector_sequence:" + "|".join(seq_parts))        elif self.per_function_selectors:
+            # F-1 fix: per_function_selectors present but test_function_order
+            # is empty. Use sorted function names to produce a deterministic
+            # (though order-unaware) fingerprint instead of falling through
+            # to the flat selector hash that loses multi-TX information.
+            seq_parts = []
+            for fn_name in sorted(self.per_function_selectors.keys()):
+                fn_sels = sorted(set(self.per_function_selectors.get(fn_name, [])))
+                seq_parts.append(f"{fn_name}={',' .join(fn_sels)}")
+            parts.append("selector_sequence_unordered:" + "|".join(seq_parts))
         else:
             # Single-tx fallback: sorted flat selectors
             parts.append("selectors:" + ",".join(sorted(self.function_selectors)))
@@ -208,16 +220,22 @@ class FingerprintEngine:
             fc.call_graph_hash = keccak256(
                 "|".join(chain_parts).encode()
             )[2:34]
+        elif fc.function_selectors:
+            # F-2 fix: incorporate storage diff slots into the fallback hash
+            # to reduce collisions when call_trace is missing.
+            from validator.utils.hashing import keccak256
+            diff_slots = [d.get("slot", "") for d in fc.storage_slot_diffs]
+            fallback_data = "->".join(fc.function_selectors) + "||" + ",".join(diff_slots)
+            fc.call_graph_hash = keccak256(fallback_data.encode())[2:34]
         else:
             from validator.utils.hashing import keccak256
-            fc.call_graph_hash = keccak256(
-                "->".join(fc.function_selectors).encode()
-            )[2:34]
+            fc.call_graph_hash = keccak256(b"empty")[2:34]
 
         return fc
 
     def check_duplicate(self, task_id: str, fingerprint: str,
-                        miner_address: str) -> DedupResult:
+                        miner_address: str,
+                        uniqueness_score: float | None = None) -> DedupResult:
         """
         Check if a fingerprint already exists for this task.
 
@@ -225,6 +243,11 @@ class FingerprintEngine:
         Rules are deterministic and published:
           - First: 100% reward
           - Subsequent: 10% reward
+
+        If *uniqueness_score* is provided and the fingerprint is a duplicate
+        yet the uniqueness score is high (>0.7), a warning is logged since
+        this indicates a contradiction between dedup and the uniqueness scorer
+        (F-3 fix).
         """
         with self._lock:
             task_db = self._db.get(task_id, {})
@@ -233,6 +256,14 @@ class FingerprintEngine:
                 record = task_db[fingerprint]
                 record.submission_count += 1
                 self._save_db_unlocked()
+
+                # F-3 fix: flag contradiction between dedup and uniqueness
+                if uniqueness_score is not None and uniqueness_score > 0.7:
+                    logger.warning(
+                        "Dedup/uniqueness contradiction: fingerprint %s is duplicate "
+                        "but uniqueness_score=%.2f (task=%s, miner=%s)",
+                        fingerprint[:16], uniqueness_score, task_id, miner_address,
+                    )
 
                 return DedupResult(
                     fingerprint=fingerprint,
@@ -278,7 +309,12 @@ class FingerprintEngine:
     # ── Persistence (concurrency-safe) ──────────────────────────────────
 
     def _load_db(self):
-        """Load fingerprint database from disk with shared (read) lock."""
+        """Load fingerprint database from disk with shared (read) lock.
+
+        .. warning:: F-4: The JSON file DB is adequate for early-stage
+           operation but will not scale to thousands of tasks/fingerprints.
+           Plan migration to SQLite or a KV store before mainnet launch.
+        """
         if not self.db_path.exists():
             return
         lock_path = self.db_path.with_suffix(".lock")

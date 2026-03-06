@@ -123,6 +123,45 @@ fi
 
 echo ""
 
+# ── 7. Check data directory (I-6 fix) ────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DATA_DIR="$PROJECT_ROOT/data"
+
+echo "Data Directory:"
+if [ -d "$DATA_DIR" ]; then
+    pass "data/ exists"
+
+    # I-7 fix: report fingerprint DB size
+    FP_DB="$DATA_DIR/fingerprints.json"
+    if [ -f "$FP_DB" ]; then
+        FP_SIZE=$(du -h "$FP_DB" | cut -f1)
+        FP_LINES=$(wc -l < "$FP_DB")
+        if [ "$FP_LINES" -lt 100000 ]; then
+            pass "fingerprints.json: $FP_SIZE ($FP_LINES lines)"
+        else
+            warn "fingerprints.json: $FP_SIZE ($FP_LINES lines) — consider pruning"
+        fi
+    else
+        warn "fingerprints.json not found (first run?)"
+    fi
+
+    # Check anticollusion state
+    AC_STATE="$DATA_DIR/anticollusion_state.json"
+    if [ -f "$AC_STATE" ]; then
+        AC_SIZE=$(du -h "$AC_STATE" | cut -f1)
+        pass "anticollusion_state.json: $AC_SIZE"
+    fi
+
+    # Check data dir total size
+    TOTAL_DATA=$(du -sh "$DATA_DIR" | cut -f1)
+    pass "Total data/ size: $TOTAL_DATA"
+else
+    warn "data/ directory not found (first run?)"
+fi
+
+echo ""
+
 # ── Summary ──────────────────────────────────────────────────────────────
 if [ "$FAILURES" -eq 0 ]; then
     echo -e "${GREEN}All health checks passed.${NC}"

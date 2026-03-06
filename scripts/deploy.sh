@@ -263,6 +263,26 @@ check_validator() {
 check_validator "ProtocolRegistry" "$PROTOCOL_REGISTRY"
 check_validator "ExploitRegistry" "$EXPLOIT_REGISTRY"
 
+# I-4 fix: auto-register deployer as validator if not already set
+set_validator_if_needed() {
+    local label="$1"
+    local addr="$2"
+    if [[ -z "$addr" ]]; then return 1; fi
+
+    local is_val
+    is_val=$(cast call "$addr" "validators(address)(bool)" "$DEPLOYER_ADDR" --rpc-url "$RPC_URL" 2>/dev/null || echo "false")
+    if [[ "$is_val" != "true" ]]; then
+        echo "  → Setting deployer as validator on $label ..."
+        cast send "$addr" "setValidator(address,bool)" "$DEPLOYER_ADDR" true \
+            --private-key "$DEPLOYER_KEY" --rpc-url "$RPC_URL" 2>/dev/null && \
+            echo "  ✓ $label: deployer registered as validator" || \
+            echo "  ✗ $label: setValidator call failed (may need owner rights)"
+    fi
+}
+
+set_validator_if_needed "ProtocolRegistry" "$PROTOCOL_REGISTRY"
+set_validator_if_needed "ExploitRegistry" "$EXPLOIT_REGISTRY"
+
 # Check AdversarialScoring has InvariantRegistry wired
 if [[ -n "$ADVERSARIAL_SCORING" && -n "$INVARIANT_REGISTRY" ]]; then
     WIRED_REG=$(cast call "$ADVERSARIAL_SCORING" "registry()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")

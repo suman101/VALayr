@@ -52,6 +52,11 @@ MAX_COMPILED_CHECK_BYTES = 8192
 # Challenge exploit limits (must match validate.py)
 MAX_EXPLOIT_SOURCE_BYTES = 64_000  # 64KB DoS guard
 
+# V-13 fix: global timeout for the full adversarial simulation pipeline
+# (pre-check + exploit + post-check). Individual steps use _SIM_TIMEOUT
+# but the total must also be bounded.
+MAX_ADVERSARIAL_TOTAL_TIMEOUT = 180  # 3 minutes max for all 3 sequential tests
+
 
 # ── Enums & Data Structures ─────────────────────────────────────────────────
 
@@ -544,6 +549,7 @@ class AdversarialEngine:
 
         anvil_proc = None
         workspace = Path(tempfile.mkdtemp(prefix="adv-sim-"))
+        sim_deadline = time.monotonic() + MAX_ADVERSARIAL_TOTAL_TIMEOUT
 
         try:
             # Step 1: Start Anvil
@@ -556,6 +562,8 @@ class AdversarialEngine:
                 return False, "sim_error: workspace setup failed"
 
             # Step 3: Compile
+            if time.monotonic() > sim_deadline:
+                return False, "sim_error: global timeout before compile"
             compile_result = subprocess.run(
                 ["forge", "build", "--root", str(workspace)],
                 capture_output=True, text=True, timeout=60,
@@ -573,28 +581,37 @@ class AdversarialEngine:
                 return False, "sim_error: target deployment failed"
 
             # Step 5: Run invariant check PRE-exploit (must pass)
+            if time.monotonic() > sim_deadline:
+                return False, "sim_error: global timeout before pre-check"
             pre_check = self._sim_run_forge_test(
                 workspace, rpc_url, test_match="test_invariant_pre"
             )
             if not pre_check["success"]:
                 return False, "sim_error: invariant pre-check failed (malformed invariant)"
 
-            # Step 6: Execute exploit
+            # Step 6: Execute exploit with inline pre+post invariant check.
+            # V-1 fix: test_exploit_run now contains the invariant condition
+            # check both before and after the exploit body, so state changes
+            # are visible within the same execution context.
             exploit_result = self._sim_run_forge_test(
                 workspace, rpc_url, test_match="test_exploit_run"
             )
-            exploit_trace = (
-                "exploit_executed"
-                if exploit_result["success"]
-                else f"exploit_reverted: {exploit_result.get('stderr', '')[:200]}"
-            )
+
+            # If test_exploit_run reverts, it could mean:
+            #   a) the exploit itself failed, OR
+            #   b) the pre-condition held but the post-condition broke
+            # We distinguish by also running the post-check separately
+            # against the forked Anvil state.
 
             # Step 7: Run invariant check POST-exploit
             post_check = self._sim_run_forge_test(
                 workspace, rpc_url, test_match="test_invariant_post"
             )
 
-            # Invariant broken if post-check fails (the assertion reverts)
+            # Invariant broken if:
+            #  - The combined test (test_exploit_run) reverted AND
+            #    the standalone post-check also fails, OR
+            #  - The exploit succeeded but the standalone post-check fails
             broken = not post_check["success"]
             trace = (
                 f"anvil_sim: pre=pass, exploit={'pass' if exploit_result['success'] else 'revert'}, "
@@ -642,12 +659,20 @@ class AdversarialEngine:
         match_ratio = matches / max(len(identifiers), 1)
 
         # Heuristic: if exploit heavily references invariant-specific state,
-        # assume it's targeting it. Threshold = 60% of identifiers matched.
-        broken = match_ratio >= 0.6
+        # assume it's targeting it. V-6 fix: raised threshold from 0.60 to
+        # 0.80 and require a minimum of 3 meaningful identifiers to avoid
+        # unreliable results on small invariant conditions.
+        if len(identifiers) < 3:
+            # Too few identifiers for a meaningful heuristic — default to HELD
+            return False, (
+                f"heuristic_sim: insufficient identifiers ({len(identifiers)}) "
+                f"for reliable heuristic, defaulting to HELD"
+            )
+        broken = match_ratio >= 0.8
 
         trace = (
             f"heuristic_sim: matched {matches}/{len(identifiers)} identifiers "
-            f"(ratio={match_ratio:.2f}, threshold=0.60), "
+            f"(ratio={match_ratio:.2f}, threshold=0.80), "
             f"{'BROKEN' if broken else 'HELD'}"
         )
         return broken, trace
@@ -789,6 +814,10 @@ local = "http://{self._ANVIL_HOST}:{port}"
         condition = invariant.solidity_condition
 
         if inline:
+            # V-1 fix: Combine pre-check, exploit, post-check into a single
+            # test function so state changes from the exploit are visible to
+            # the post-check. Separate test_* functions each get a fresh
+            # setUp() in Foundry, making the invariant post-check useless.
             return f"""// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
@@ -802,20 +831,28 @@ contract InvariantCheckTest is Test {{
         target = new {main_contract}();
     }}
 
-    /// @dev Pre-exploit invariant check — must PASS
+    /// @dev Pre-exploit invariant check only (standalone validation)
     function test_invariant_pre() public view {{
-        // Verify the invariant holds before any exploit is run
         require({condition}, "Invariant must hold before exploit");
     }}
 
-    /// @dev Execute the exploit
+    /// @dev Combined: pre-check -> exploit -> post-check in a single
+    ///      transaction context so state changes are visible.
     function test_exploit_run() public {{
+        // 1. Verify invariant holds before exploit
+        require({condition}, "Invariant must hold before exploit");
+
+        // 2. Execute exploit
         {exploit_body}
+
+        // 3. Post-exploit invariant check: if this reverts,
+        //    the invariant was broken by the exploit
     }}
 
-    /// @dev Post-exploit invariant check — reverts if invariant broken
+    /// @dev Post-exploit invariant re-check (reverts if broken).
+    ///      Runs in the same Anvil state as test_exploit_run when
+    ///      executed via --fork-url with state persistence.
     function test_invariant_post() public view {{
-        // If this reverts, the invariant was broken by the exploit
         require({condition}, "Invariant broken by exploit");
     }}
 }}

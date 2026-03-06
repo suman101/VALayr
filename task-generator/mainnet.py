@@ -165,7 +165,33 @@ class MainnetContractSource:
         difficulty: int = 3,
         vulnerability_class: str = "mainnet-unknown",
     ) -> TaskPackage:
-        """Convert a fetched mainnet contract into a TaskPackage."""
+        """Convert a fetched mainnet contract into a TaskPackage.
+
+        TG-4 fix: run a quick ``solc --stop-after parsing`` check on the source
+        to catch obvious incompatibilities before producing a task.  Raises
+        ``ValueError`` if the source fails to parse.
+        """
+        import subprocess
+        import shutil
+
+        solc = shutil.which("solc") or shutil.which("solc-0.8.28")
+        if solc:
+            try:
+                proc = subprocess.run(
+                    [solc, "--stop-after", "parsing", "-"],
+                    input=contract.source_code,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                if proc.returncode != 0:
+                    raise ValueError(
+                        f"Mainnet source for {contract.address} fails parse: "
+                        f"{proc.stderr[:200]}"
+                    )
+            except subprocess.TimeoutExpired:
+                pass  # Treat timeout as non-blocking
+
         pkg = TaskPackage(
             source_code=contract.source_code,
             solc_version=SOLC_VERSION,
