@@ -790,3 +790,28 @@ class TestOnChainPrivateKeyRequirement:
                 class_b_miner="0xB",
                 broken=True,
             )
+
+
+# ── P2 Test: H-2 _sim_start_anvil uses DEVNULL ──────────────────────────────
+
+class TestSimStartAnvilDevnull:
+    """H-2: _sim_start_anvil passes DEVNULL for stdout/stderr."""
+
+    def test_popen_uses_devnull(self, tmp_path):
+        import subprocess
+        from unittest.mock import patch, MagicMock
+
+        engine = AdversarialEngine(data_dir=tmp_path, rpc_url="http://localhost:8545")
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0  # exits immediately
+
+        with patch("subprocess.Popen", return_value=mock_proc) as mock_popen:
+            engine._sim_start_anvil(port=19999)
+            mock_popen.assert_called_once()
+            call_kwargs = mock_popen.call_args
+            # Verify stdout and stderr are DEVNULL
+            assert call_kwargs.kwargs.get("stdout") == subprocess.DEVNULL or \
+                   call_kwargs[1].get("stdout") == subprocess.DEVNULL
+            assert call_kwargs.kwargs.get("stderr") == subprocess.DEVNULL or \
+                   call_kwargs[1].get("stderr") == subprocess.DEVNULL

@@ -74,7 +74,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 19 bugs/vulnerabilities fixed across two security audit rounds
 - See `docs/THREAT_MODEL.md` for updated residual risk status (R-3 through R-6 resolved)
 
-## [0.1.0] — 2026-03-03
+## [0.1.0-alpha] — 2026-03-03
 
 ### Added
 

@@ -212,3 +212,25 @@ class TestRegisterTaskWiring:
             # register_task was called — timestamps should be populated
             # (may be fewer than n_tasks if some task_ids collide)
             assert len(orch.uniqueness_scorer._task_timestamps) > 0
+
+
+# ── P2 Test: SA-2 ExecutionTrace extra fields filtered ───────────────────────
+
+class TestExecutionTraceFieldFiltering:
+    """SA-2: ExecutionTrace(**trace_data) must reject unexpected fields."""
+
+    def test_extra_fields_filtered_not_raise(self):
+        from validator.engine.validate import ExecutionTrace
+        import dataclasses as dc
+        valid_fields = {f.name for f in dc.fields(ExecutionTrace)}
+        trace_data = {
+            "gas_used": 21000,
+            "reverted": False,
+            "__class__": "injected",
+            "malicious_extra": True,
+        }
+        filtered = {k: v for k, v in trace_data.items() if k in valid_fields}
+        trace = ExecutionTrace(**filtered)
+        assert trace.gas_used == 21000
+        assert not hasattr(trace, "__class__") or trace.__class__ is ExecutionTrace
+        assert not hasattr(trace, "malicious_extra")

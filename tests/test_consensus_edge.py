@@ -197,3 +197,24 @@ class TestAdversarialTieBreak:
             invariant_id=0, challenge_id="challenge-tie-2", votes=votes,
         )
         assert result.consensus_outcome == result2.consensus_outcome
+
+
+# ── P2 Test: M-6 Consensus History Cap ───────────────────────────────────────
+
+class TestConsensusHistoryCap:
+    """M-6: consensus_history is pruned at _MAX_HISTORY (10,000)."""
+
+    def test_history_pruned_at_max(self, tmp_path):
+        from validator.anticollusion.consensus import ConsensusResult
+        engine = ConsensusEngine(seed=42, data_dir=tmp_path)
+        # Directly feed records via _record_and_persist
+        for i in range(10_050):
+            engine._record_and_persist(ConsensusResult(
+                task_id=f"task_{i:06d}",
+                submission_hash=f"hash_{i:06d}",
+            ))
+        assert len(engine.consensus_history) <= 10_000
+        # Oldest entries should be evicted
+        task_ids = [r.task_id for r in engine.consensus_history]
+        assert "task_000000" not in task_ids
+        assert "task_010049" in task_ids

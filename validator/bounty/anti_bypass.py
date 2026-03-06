@@ -84,10 +84,17 @@ class SubnetReceipt:
         return hmac.new(_RECEIPT_HMAC_KEY, message.encode(), hashlib.sha256).hexdigest()
 
     def verify_hmac(self) -> bool:
-        """Verify the HMAC tag is valid."""
+        """Verify the HMAC tag is valid.
+
+        Always computes the expected HMAC to avoid timing side-channels
+        that could leak whether an hmac_tag was present.
+        """
+        expected = self.compute_hmac()
         if not self.hmac_tag:
+            # Still ran compute_hmac above so timing is constant regardless
+            # of whether hmac_tag is empty.
             return False
-        return hmac.compare_digest(self.hmac_tag, self.compute_hmac())
+        return hmac.compare_digest(self.hmac_tag, expected)
 
 
 @dataclass

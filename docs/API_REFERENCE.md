@@ -19,6 +19,9 @@ This document covers the public APIs of every VALayr module: Python classes and 
   - [1.8 Task Generator](#18-task-generator)
   - [1.9 Metrics Server](#19-metrics-server)
   - [1.10 Utilities](#110-utilities)
+  - [1.11 Adversarial Engine](#111-adversarial-engine-stage-3)
+  - [1.12 Uniqueness Scorer](#112-uniqueness-scorer)
+  - [1.13 Mainnet Contract Source](#113-mainnet-contract-source)
 - [2. Bittensor Synapses](#2-bittensor-synapses)
 - [3. Smart Contracts](#3-smart-contracts)
 - [4. CLI Commands](#4-cli-commands)
@@ -845,6 +848,85 @@ Returns `0x`-prefixed 64-char hex string.
 If `data` is a `str`, it is UTF-8 encoded before hashing.
 
 > **Warning:** This is Ethereum keccak256, NOT NIST SHA-3 (`hashlib.sha3_256`). Using `hashlib.sha3_256` will produce different hashes and break determinism.
+
+---
+
+### 1.11 Adversarial Engine (Stage 3)
+
+**Module:** `validator.engine.adversarial`
+
+#### Class: `AdversarialEngine`
+
+Manages invariant registration, challenge execution, and score tracking for Stage 3 adversarial mode.
+
+```python
+AdversarialEngine(
+    mode: str = "local",            # "local" (in-memory) or "onchain" (via cast)
+    registry_address: str = "",     # On-chain InvariantRegistry address
+    scoring_address: str = "",      # On-chain AdversarialScoring address
+    rpc_url: str = "http://127.0.0.1:8545",
+    data_dir: Optional[Path] = None,
+)
+```
+
+| Method | Returns | Description |
+| ------ | ------- | ----------- |
+| `submit_invariant(submission)` | `int` | Register a Class A invariant; returns ID |
+| `get_invariant(invariant_id)` | `Optional[InvariantRecord]` | Retrieve invariant by ID |
+| `list_active_invariants(target_contract_hash=None)` | `list[InvariantRecord]` | List active invariants, optionally filtered |
+| `deactivate_invariant(invariant_id)` | `None` | Deactivate an invariant |
+| `process_challenge(challenge, validation_fn=None)` | `ChallengeReport` | Process a Class B challenge |
+| `get_class_a_score(miner)` | `int` | Get Class A score for a miner |
+| `get_class_b_score(miner)` | `int` | Get Class B score for a miner |
+| `get_all_scores()` | `dict` | Get all scores `{"class_a": {…}, "class_b": {…}}` |
+| `get_challenge_history(invariant_id=None, limit=100)` | `list[ChallengeReport]` | Get challenge history |
+| `compute_adversarial_weights()` | `dict[str, float]` | Compute normalised weight contributions |
+| `reset()` | `None` | Reset all state (testing only) |
+
+---
+
+### 1.12 Uniqueness Scorer
+
+**Module:** `validator.scoring.uniqueness`
+
+#### Class: `UniquenessScorer`
+
+Scores exploit submissions for uniqueness using fuzzy hashing and timing analysis.
+
+```python
+UniquenessScorer()
+```
+
+| Method | Returns | Description |
+| ------ | ------- | ----------- |
+| `register_task(task_id, published_at=None)` | `None` | Record task publication time for timing analysis |
+| `score_submission(task_id, exploit_source, miner_address, gas_used=0, selector_count=0, difficulty=1)` | `UniquenessResult` | Score a submission's uniqueness |
+| `reset()` | `None` | Clear all state (testing only) |
+
+---
+
+### 1.13 Mainnet Contract Source
+
+**Module:** `task_generator.mainnet`
+
+#### Class: `MainnetContractSource`
+
+Fetches verified contract source code from block explorers and converts to task packages.
+
+```python
+MainnetContractSource(
+    api_key: str = "",                        # Etherscan/explorer API key
+    output_dir: Optional[Path] = None,        # Corpus output directory
+    allowed_chains: Optional[set[int]] = None, # Permitted chain IDs (default: {1, 137, 42161, 10, 8453})
+)
+```
+
+| Method | Returns | Description |
+| ------ | ------- | ----------- |
+| `fetch_contract(address, chain_id=1)` | `Optional[MainnetContract]` | Fetch verified source for a single contract |
+| `fetch_batch(addresses, chain_id=1)` | `list[MainnetContract]` | Fetch multiple contracts with rate-limiting |
+| `to_task_package(contract, difficulty=3, vulnerability_class="mainnet-unknown")` | `TaskPackage` | Convert fetched contract into a TaskPackage |
+| `fetch_and_save(addresses, chain_id=1, difficulty=3)` | `list[TaskPackage]` | Fetch, convert, and save to corpus |
 
 ---
 

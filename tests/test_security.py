@@ -411,3 +411,69 @@ class TestEd25519Verification:
         challenge = key.verify_key.encode().hex() + "00" * 64
         with pytest.raises(ValueError, match="signature verification failed"):
             store.claim_identity(hotkey, platform, pid, signed_challenge=challenge)
+
+
+# ── P2 Test: SA-5 verify_hmac constant-time (timing leak fix) ───────────────
+
+class TestVerifyHmacConstantTime:
+    """SA-5: verify_hmac must compute expected digest even when hmac_tag is empty."""
+
+    def test_empty_hmac_tag_returns_false(self):
+        receipt = SubnetReceipt(
+            task_id="task1", miner_hotkey=VALID_HOTKEY,
+            fingerprint="fp1", subnet_timestamp=100,
+        )
+        assert receipt.hmac_tag == ""
+        assert receipt.verify_hmac() is False
+
+    def test_valid_hmac_tag_returns_true(self):
+        receipt = SubnetReceipt(
+            task_id="task1", miner_hotkey=VALID_HOTKEY,
+            fingerprint="fp1", subnet_timestamp=100,
+        )
+        receipt.hmac_tag = receipt.compute_hmac()
+        assert receipt.verify_hmac() is True
+
+    def test_tampered_hmac_tag_returns_false(self):
+        receipt = SubnetReceipt(
+            task_id="task1", miner_hotkey=VALID_HOTKEY,
+            fingerprint="fp1", subnet_timestamp=100,
+        )
+        receipt.hmac_tag = "deadbeef" * 8
+        assert receipt.verify_hmac() is False
+
+
+# ── P2 Test: C-5 Deploy.s.sol wiring static assertion ───────────────────────
+
+class TestDeployScriptWiring:
+    """C-5: Deploy.s.sol must wire adversarialScoring as validator on invariantRegistry."""
+
+    def test_deploy_script_has_adversarial_validator_wiring(self):
+        deploy_path = Path(__file__).resolve().parent.parent / "contracts" / "script" / "Deploy.s.sol"
+        source = deploy_path.read_text()
+        assert "invariantRegistry.setValidator(address(adversarialScoring), true)" in source, \
+            "Deploy.s.sol missing C-5 wiring: invariantRegistry.setValidator(adversarialScoring)"
+
+
+# ── P2 Test: SA-7 claim_identity without registry accepts any platform ──────
+
+class TestIdentityNoRegistryPlatform:
+    """SA-7: Without a PlatformRegistry, claim_identity accepts any platform name."""
+
+    def test_unknown_platform_allowed_without_registry(self, tmp_path):
+        store = IdentityStore(data_dir=tmp_path)
+        # No registry wired — store._registry is None
+        assert store._registry is None
+        # Should NOT raise for a fabricated platform (just requires valid sig)
+        try:
+            from nacl.signing import SigningKey
+        except ImportError:
+            pytest.skip("pynacl not installed")
+        import hashlib as hl
+        hotkey, platform, pid = VALID_HOTKEY, "fake_platform_xyz", "user42"
+        key = SigningKey.generate()
+        msg = hl.sha256(f"{hotkey}:{platform}:{pid}".encode()).digest()
+        sig = key.sign(msg)
+        challenge = key.verify_key.encode().hex() + sig.signature.hex()
+        # Should succeed (no ValueError about unsupported platform)
+        store.claim_identity(hotkey, platform, pid, signed_challenge=challenge)
