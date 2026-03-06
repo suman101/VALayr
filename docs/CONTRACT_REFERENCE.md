@@ -285,7 +285,7 @@ create (fund prize pool) → miners submit scores → deadline passes → settle
 
 ### Inheritance
 
-- `Ownable2Step` — two-step ownership transfer
+- `Ownable2Step(transferDelay)` — two-step ownership transfer with configurable timelock (use 172800 for mainnet = 48h)
 - `Pausable` — emergency circuit breaker
 - Custom `nonReentrant` modifier (inline reentrancy guard)
 
@@ -356,16 +356,19 @@ struct Invariant {
 
 ### Functions
 
-#### `submitInvariant(...)` — Any miner (Class A)
+#### `submitInvariant(...)` — Validators (on behalf of Class A miner)
 
 ```solidity
 function submitInvariant(
+    address miner,
     bytes32 targetContractHash,
     string calldata description,
     string calldata solidityCondition,
     bytes calldata compiledCheck
-) external returns (uint256 id)
+) external onlyValidator returns (uint256 id)
 ```
+
+The `miner` parameter attributes the invariant to the Class A miner who created it. Reverts with `ZeroAddress()` if `miner` is `address(0)`.
 
 #### `recordChallenge(uint256 id, bool broken)` — Validators only
 

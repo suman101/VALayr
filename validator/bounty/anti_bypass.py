@@ -22,6 +22,7 @@ Limitations:
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass, field, asdict
@@ -236,15 +237,21 @@ class AntiBypassEngine:
                 data = json.loads(self._receipts_path.read_text())
                 for fp, r in data.items():
                     self._receipts[fp] = SubnetReceipt(**r)
-            except (json.JSONDecodeError, OSError, TypeError):
-                pass
+            except (json.JSONDecodeError, OSError, TypeError) as exc:
+                logging.getLogger(__name__).warning(
+                    "Failed to load receipts from %s: %s — starting empty",
+                    self._receipts_path, exc,
+                )
 
         if self._violations_path.exists():
             try:
                 data = json.loads(self._violations_path.read_text())
                 self._violations = [BypassViolation(**v) for v in data]
-            except (json.JSONDecodeError, OSError, TypeError):
-                pass
+            except (json.JSONDecodeError, OSError, TypeError) as exc:
+                logging.getLogger(__name__).warning(
+                    "Failed to load violations from %s: %s — starting empty",
+                    self._violations_path, exc,
+                )
 
     def _save_receipts(self) -> None:
         data = {fp: asdict(r) for fp, r in self._receipts.items()}

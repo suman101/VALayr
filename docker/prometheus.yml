@@ -32,7 +32,7 @@ scrape_configs:
     scrape_interval: 10s
     static_configs:
       - targets:
-          - "localhost:9946"
+          - "validator:9946"
         labels:
           service: "validator"
           subnet: "valayr"
@@ -43,7 +43,7 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets:
-          - "localhost:9946"
+          - "consensus:9946"
         labels:
           service: "consensus-relay"
           subnet: "valayr"

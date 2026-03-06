@@ -49,23 +49,25 @@ contract InvariantRegistry is Pausable {
     error InvariantInactive();
     error InvalidPropertyId();
 
-    constructor() Ownable2Step() {}
+    constructor() Ownable2Step(0) {}
 
     modifier onlyValidator() {
         if (!validators[msg.sender]) revert Unauthorized();
         _;
     }
 
-    /// @notice Class A miner submits an invariant.
+    /// @notice Class A miner submits an invariant (called by validator on miner's behalf).
     function submitInvariant(
+        address miner,
         bytes32 targetContractHash,
         string calldata description,
         string calldata solidityCondition,
         bytes calldata compiledCheck
     ) external onlyValidator whenNotPaused returns (uint256 id) {
+        if (miner == address(0)) revert ZeroAddress();
         id = propertyCount++;
         properties[id] = Invariant({
-            submitter: msg.sender,
+            submitter: miner,
             targetContractHash: targetContractHash,
             description: description,
             solidityCondition: solidityCondition,
@@ -76,7 +78,7 @@ contract InvariantRegistry is Pausable {
             holdCount: 0,
             active: true
         });
-        emit InvariantSubmitted(id, msg.sender, targetContractHash);
+        emit InvariantSubmitted(id, miner, targetContractHash);
     }
 
     /// @notice Record challenge result (from validator consensus).
@@ -146,7 +148,7 @@ contract AdversarialScoring is Pausable {
     event ScoreUpdated(address indexed miner, string class_, int256 newScore);
     event ValidatorUpdated(address indexed validator, bool status);
 
-    constructor(address _registry) Ownable2Step() {
+    constructor(address _registry) Ownable2Step(0) {
         registry = InvariantRegistry(_registry);
     }
 

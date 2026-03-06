@@ -22,7 +22,7 @@ If validation logs are private, collusion becomes undetectable.
 
 import hashlib
 import json
-import math
+import os
 import random
 import secrets
 import time
@@ -536,15 +536,16 @@ class AntiCollusionEngine:
     # ── Persistence ───────────────────────────────────────────────────────
 
     def _save_state(self):
-        """Persist state to disk."""
+        """Persist state to disk (atomic write)."""
         state = {
             "validators": {k: asdict(v) for k, v in self.validators.items()},
             "slash_events": [asdict(e) for e in self.slash_events],
             "consensus_history": [asdict(c) for c in self.consensus_history],
         }
-        (self.data_dir / "anticollusion_state.json").write_text(
-            json.dumps(state, indent=2, sort_keys=True)
-        )
+        target = self.data_dir / "anticollusion_state.json"
+        tmp = target.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
+        os.replace(str(tmp), str(target))
 
     def _load_state(self):
         """Load state from disk."""
@@ -560,8 +561,11 @@ class AntiCollusionEngine:
                 self.slash_events.append(SlashEvent(**edata))
             for cdata in state.get("consensus_history", []):
                 self.consensus_history.append(ConsensusResult(**cdata))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to load anticollusion state: %s — starting fresh", exc,
+            )
 
 
 # ── CLI / Docker Entry Point ─────────────────────────────────────────────────

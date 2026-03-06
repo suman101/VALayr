@@ -10,6 +10,7 @@ These are v1 defaults.  Governance can adjust via config.
 """
 
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass, field, asdict
@@ -209,8 +210,11 @@ class RewardSplitEngine:
                 split_data = entry.pop("split", None)
                 split = RewardSplit(**split_data) if split_data else None
                 self._payouts[rid] = PayoutRecord(**entry, split=split)
-        except (json.JSONDecodeError, OSError, TypeError):
-            pass
+        except (json.JSONDecodeError, OSError, TypeError) as exc:
+            logging.getLogger(__name__).warning(
+                "Failed to load payouts from %s: %s — starting empty",
+                self._payouts_path, exc,
+            )
 
     def _save(self) -> None:
         data = {rid: r.to_dict() for rid, r in self._payouts.items()}

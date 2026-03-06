@@ -275,6 +275,17 @@ class Code4renaAdapter(BountyPlatform):
         return "code4rena"
 
     def submit_report(self, report: BountyReport) -> SubmissionReceipt:
+        # AG-6 fix: validate exploit source before submission
+        validation_error = self.validate_report(report)
+        if validation_error:
+            return SubmissionReceipt(
+                platform=self.name,
+                report_id="",
+                status=SubmissionStatus.REJECTED,
+                submitted_at=int(time.time()),
+                error=f"Source validation failed: {validation_error}",
+            )
+
         payload = {
             "contest_id": report.metadata.get("contest_id", ""),
             "severity": self._map_severity(report.severity_score),
@@ -284,7 +295,8 @@ class Code4renaAdapter(BountyPlatform):
             "warden_id": report.platform_id,
         }
 
-        result = self._api_post("/findings", payload)
+        # AG-7 fix: retry transient API failures
+        result = _retry_api_call(lambda: self._api_post("/findings", payload))
         if result is None:
             return SubmissionReceipt(
                 platform=self.name,

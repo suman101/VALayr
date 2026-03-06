@@ -10,7 +10,6 @@ The feed runs periodically and adds discovered contracts to the corpus.
 """
 
 import json
-import logging
 import os
 import time
 import urllib.error
@@ -19,7 +18,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from validator.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -167,8 +168,8 @@ class MainnetAutoDiscovery:
             self._last_refresh = data.get("last_refresh", 0)
             for key, entry in data.get("discovered", {}).items():
                 self._discovered[key] = DiscoveredContract(**entry)
-        except (json.JSONDecodeError, OSError, TypeError):
-            pass
+        except (json.JSONDecodeError, OSError, TypeError) as exc:
+            logger.warning("Failed to load discovery state from %s: %s — starting empty", self._state_path, exc)
 
     def _save(self) -> None:
         data = {

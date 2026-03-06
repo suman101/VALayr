@@ -37,7 +37,7 @@ contract AdversarialModeTest is Test {
 
     function test_submitInvariant() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "Balance must never decrease",
             "balanceOf(address) >= initial",
@@ -49,7 +49,7 @@ contract AdversarialModeTest is Test {
 
     function test_recordChallenge_hold() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -65,7 +65,7 @@ contract AdversarialModeTest is Test {
 
     function test_recordChallenge_broken() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -81,7 +81,7 @@ contract AdversarialModeTest is Test {
 
     function test_recordChallenge_nonValidator_reverts() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -96,7 +96,7 @@ contract AdversarialModeTest is Test {
 
     function test_deactivateInvariant() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -114,7 +114,7 @@ contract AdversarialModeTest is Test {
 
     function test_invariantScore_untested() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -135,7 +135,7 @@ contract AdversarialModeTest is Test {
         address nobody = address(0x999);
         vm.prank(nobody);
         vm.expectRevert(Ownable2Step.Unauthorized.selector);
-        registry.submitInvariant(TARGET_HASH, "inv", "cond", hex"");
+        registry.submitInvariant(classA, TARGET_HASH, "inv", "cond", hex"");
     }
 
     function test_transferOwnership_zeroAddress_reverts() public {
@@ -168,7 +168,7 @@ contract AdversarialModeTest is Test {
 
     function test_processChallenge_broken() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -183,7 +183,7 @@ contract AdversarialModeTest is Test {
 
     function test_processChallenge_held() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -198,7 +198,7 @@ contract AdversarialModeTest is Test {
 
     function test_processChallenge_nonValidator_reverts() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -220,7 +220,7 @@ contract AdversarialModeTest is Test {
         registry.setValidator(address(freshScoring), true);
 
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -234,7 +234,7 @@ contract AdversarialModeTest is Test {
 
     function test_processChallenge_succeeds_for_registered_validator() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -256,7 +256,7 @@ contract AdversarialModeTest is Test {
 
     function test_scoring_removeValidator_blocks_processChallenge() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -278,7 +278,7 @@ contract AdversarialModeTest is Test {
 
     function test_multipleRounds_scoring() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -305,7 +305,7 @@ contract AdversarialModeTest is Test {
 
     function test_scoreFloor_classA() public {
         vm.prank(classA);
-        uint256 id = registry.submitInvariant(
+        uint256 id = registry.submitInvariant(classA,
             TARGET_HASH,
             "inv",
             "cond",
@@ -345,7 +345,7 @@ contract AdversarialModeTest is Test {
     function testFuzz_recordChallenge_outOfBounds(uint256 id) public {
         // Submit one invariant so propertyCount == 1
         vm.prank(classA);
-        registry.submitInvariant(TARGET_HASH, "inv", "cond", hex"");
+        registry.submitInvariant(classA, TARGET_HASH, "inv", "cond", hex"");
 
         if (id >= 1) {
             vm.prank(validator1);

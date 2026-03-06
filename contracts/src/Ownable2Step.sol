@@ -13,8 +13,8 @@ abstract contract Ownable2Step {
     address public pendingOwner;
     uint256 public ownershipTransferTimestamp;
 
-    /// @dev Override in production subclass for a non-zero delay (e.g., 48 hours).
-    uint256 public constant TRANSFER_DELAY = 0;
+    /// @dev Set via constructor. Use 48 hours (172_800) for production.
+    uint256 public immutable TRANSFER_DELAY;
 
     event OwnershipTransferStarted(
         address indexed previousOwner,
@@ -36,8 +36,9 @@ abstract contract Ownable2Step {
         _;
     }
 
-    constructor() {
+    constructor(uint256 transferDelay) {
         owner = msg.sender;
+        TRANSFER_DELAY = transferDelay;
     }
 
     /// @notice Initiate ownership transfer. New owner must call `acceptOwnership()`.

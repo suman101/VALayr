@@ -20,7 +20,6 @@ Ambiguity creates governance wars. This engine has none.
 """
 
 import hashlib
-import logging
 import threading
 try:
     import fcntl
@@ -34,7 +33,9 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from validator.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -336,7 +337,8 @@ class FingerprintEngine:
                 self._db[task_id] = {}
                 for fp, rec in fps.items():
                     self._db[task_id][fp] = FingerprintRecord(**rec)
-        except (json.JSONDecodeError, TypeError, OSError):
+        except (json.JSONDecodeError, TypeError, OSError) as exc:
+            logger.warning("Failed to load fingerprint DB from %s: %s — starting empty", self.db_path, exc)
             self._db = {}
 
     def _save_db(self):

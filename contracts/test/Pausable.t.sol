@@ -8,6 +8,8 @@ import "../src/Pausable.sol";
 contract PausableHarness is Pausable {
     uint256 public counter;
 
+    constructor() Ownable2Step(0) {}
+
     function increment() external whenNotPaused {
         counter++;
     }

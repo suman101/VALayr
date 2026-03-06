@@ -85,13 +85,14 @@ Compute epoch weights, prune stale fingerprints, persist results.
 class SubmissionResult:
     task_id: str
     miner_address: str
-    result: ValidationResult        # Enum: VALID or REJECT_*
-    fingerprint: str | None         # keccak256 hex or None
+    validation_result: str          # "valid" or "reject_*"
+    fingerprint: str                # keccak256 hex or ""
     is_duplicate: bool
-    severity: float                 # [0.0, 1.0]
-    reward_multiplier: float        # 1.0 (original) or 0.1 (duplicate)
-    execution_time_ms: float
-    error: str | None
+    reward_multiplier: float        # 1.0 (original) or 0.0 (rejected)
+    severity_score: float           # [0.0, 1.0]
+    severity_detail: str
+    validation_time_ms: int
+    error: str
 ```
 
 ---

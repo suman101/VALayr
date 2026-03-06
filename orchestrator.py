@@ -488,9 +488,10 @@ class Orchestrator:
         min_sev = get_min_severity(self._current_epoch)
         if result.severity_score < min_sev:
             logger.info(
-                "Severity %.4f below epoch minimum %.4f for %s",
+                "Severity %.4f below epoch minimum %.4f for %s — zeroing reward",
                 result.severity_score, min_sev, miner_address[:10],
             )
+            result.reward_multiplier = 0.0
 
         # Step 7: Record subnet receipt for anti-bypass tracking
         if result.fingerprint:

@@ -25,12 +25,12 @@ route:
 receivers:
   - name: "default-webhook"
     webhook_configs:
-      - url: "http://localhost:9095/webhook"
+      - url: "http://validator:9095/webhook"
         send_resolved: true
 
   - name: "critical-webhook"
     webhook_configs:
-      - url: "http://localhost:9095/webhook"
+      - url: "http://validator:9095/webhook"
         send_resolved: true
     # Uncomment and configure for Slack:
     # slack_configs:

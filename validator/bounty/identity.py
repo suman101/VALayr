@@ -11,6 +11,7 @@ Identity claims are verified via the platform's API before being stored.
 """
 
 import json
+import logging
 import os
 import re
 import time
@@ -178,7 +179,11 @@ class IdentityStore:
             return
         try:
             data = json.loads(self._db_path.read_text())
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as exc:
+            logging.getLogger(__name__).warning(
+                "Failed to load identity DB from %s: %s — starting empty",
+                self._db_path, exc,
+            )
             return
 
         for hotkey, entry in data.items():

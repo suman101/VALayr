@@ -15,7 +15,6 @@ CRITICAL: Tasks must be reproducible across validators byte-for-byte.
 import hashlib
 import json
 import os
-import re
 import sys
 import time
 from dataclasses import dataclass, field, asdict
@@ -343,7 +342,7 @@ class CorpusGenerator:
                     )
                     return source
             except (subprocess.TimeoutExpired, OSError):
-                pass  # If solc unavailable, skip check
+                pass  # If solc unavailable, skip parse check (non-critical)
 
         return mutated
 

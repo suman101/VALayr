@@ -6,7 +6,7 @@ import "../src/Ownable2Step.sol";
 
 /// @dev Concrete implementation for testing the abstract Ownable2Step.
 contract OwnableTestHarness is Ownable2Step {
-    constructor() Ownable2Step() {}
+    constructor() Ownable2Step(0) {}
 }
 
 /// @title Ownable2StepTest — Foundry tests for the Ownable2Step base contract.

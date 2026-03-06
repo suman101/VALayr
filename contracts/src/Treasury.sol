@@ -104,7 +104,7 @@ contract Treasury is Ownable2Step, Pausable {
 
     // ── Constructor ──────────────────────────────────────────────────────
 
-    constructor(address _validator) {
+    constructor(address _validator) Ownable2Step(0) {
         if (_validator == address(0)) revert ZeroAddress();
         validator = _validator;
     }
@@ -254,5 +254,8 @@ contract Treasury is Ownable2Step, Pausable {
         return comp.deadline - block.timestamp;
     }
 
-    receive() external payable {}
+    /// @notice Reject unsolicited ETH to prevent funds becoming trapped.
+    receive() external payable {
+        revert("Treasury: use deposit functions");
+    }
 }

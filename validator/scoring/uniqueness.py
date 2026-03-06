@@ -58,6 +58,7 @@ class StructuralProfile:
     call_count: int = 0
     state_write_count: int = 0
     structural_hash: str = ""     # Hash of normalised structure
+    normalised_tokens: frozenset = field(default_factory=frozenset)  # Token set for Jaccard
 
 
 @dataclass
@@ -79,8 +80,8 @@ class UniquenessScorer:
     """Tracks and scores submission uniqueness per task."""
 
     def __init__(self):
-        # task_id → list of (structural_hash, miner, timestamp)
-        self._submissions: dict[str, list[tuple[str, str, float]]] = {}
+        # task_id → list of (structural_hash, miner, timestamp, normalised_tokens)
+        self._submissions: dict[str, list[tuple[str, str, float, frozenset]]] = {}
         # task_id → publication timestamp
         self._task_timestamps: dict[str, float] = {}
 
@@ -109,13 +110,14 @@ class UniquenessScorer:
         if task_id not in self._submissions:
             self._submissions[task_id] = []
         self._submissions[task_id].append(
-            (profile.structural_hash, miner_address, now)
+            (profile.structural_hash, miner_address, now, profile.normalised_tokens)
         )
 
-        # 1. Herd detection
+        # 1. Herd detection — use Jaccard similarity on normalised token sets
         same_structure = [
             s for s in self._submissions[task_id]
-            if s[0] == profile.structural_hash and s[1] != miner_address
+            if s[1] != miner_address
+            and self._jaccard_similarity(s[3], profile.normalised_tokens) >= HERD_SIMILARITY
         ]
         result.herd_size = len(same_structure) + 1  # Including this submission
 
@@ -220,8 +222,19 @@ class UniquenessScorer:
         normalised = re.sub(r'\s+', ' ', normalised).strip()
 
         profile.structural_hash = hashlib.sha256(normalised.encode()).hexdigest()[:16]
+        profile.normalised_tokens = frozenset(normalised.split())
 
         return profile
+
+    @staticmethod
+    def _jaccard_similarity(a: frozenset, b: frozenset) -> float:
+        """Jaccard index between two token sets."""
+        if not a and not b:
+            return 1.0
+        union = a | b
+        if not union:
+            return 1.0
+        return len(a & b) / len(union)
 
     def reset(self) -> None:
         """Clear all state. For testing."""

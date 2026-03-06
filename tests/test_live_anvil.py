@@ -627,10 +627,11 @@ def test_adversarial_onchain_integration(anvil: AnvilInstance):
     cast_send(anvil.rpc_url, scoring_addr,
               "setValidator(address,bool)", [DEPLOYER_ADDR, "true"])
 
-    # 1. Submit an invariant (any address can submit)
+    # 1. Submit an invariant (validator calls on behalf of miner)
+    miner_addr = "0x" + "a1" * 20
     cast_send(anvil.rpc_url, registry_addr,
-              "submitInvariant(bytes32,string,string,bytes)",
-              ["0x" + "ab" * 32, "Balance never decreases",
+              "submitInvariant(address,bytes32,string,string,bytes)",
+              [miner_addr, "0x" + "ab" * 32, "Balance never decreases",
                "balance >= initial", "0xdeadbeef"])
 
     # Verify on-chain: propertyCount == 1

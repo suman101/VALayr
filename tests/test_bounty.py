@@ -24,8 +24,10 @@ from validator.bounty.platform import (
     create_default_registry,
     ImmunefiAdapter,
     Code4renaAdapter,
+    BountyPlatform,
     BountyReport,
     SubmissionStatus,
+    _retry_api_call,
 )
 from validator.utils.secrets import get_secret, clear_cache, validate_environment
 
@@ -349,3 +351,86 @@ class TestSecretsManager:
 
     def teardown_method(self):
         clear_cache()
+
+
+# ── validate_report unit tests ───────────────────────────────────────────────
+
+
+class TestValidateReport:
+    """Tests for BountyPlatform.validate_report (AG-6 fix)."""
+
+    def _make_adapter(self):
+        return ImmunefiAdapter(api_key="")
+
+    def _make_report(self, source="pragma solidity ^0.8.0;\ncontract X { function exploit() public {} }"):
+        return BountyReport(
+            task_id="t1", miner_hotkey="A" * 48, platform_id="alice",
+            target_address="0x" + "ab" * 20, chain_id=1,
+            vulnerability_class="reentrancy", severity_score=0.8,
+            exploit_description="desc", exploit_source=source,
+            fingerprint="fp1", subnet_timestamp=1000,
+        )
+
+    def test_valid_source_returns_none(self):
+        assert self._make_adapter().validate_report(self._make_report()) is None
+
+    def test_empty_source_rejected(self):
+        err = self._make_adapter().validate_report(self._make_report(source=""))
+        assert err is not None and "empty" in err.lower()
+
+    def test_whitespace_only_rejected(self):
+        err = self._make_adapter().validate_report(self._make_report(source="   \n  "))
+        assert err is not None and "empty" in err.lower()
+
+    def test_too_short_rejected(self):
+        err = self._make_adapter().validate_report(self._make_report(source="short"))
+        assert err is not None and "too short" in err.lower()
+
+    def test_no_solidity_markers_rejected(self):
+        err = self._make_adapter().validate_report(self._make_report(source="x" * 50))
+        assert err is not None and "valid Solidity" in err
+
+    def test_unbalanced_braces_rejected(self):
+        err = self._make_adapter().validate_report(
+            self._make_report(source="pragma solidity ^0.8.0;\ncontract X { function f() {")
+        )
+        assert err is not None and "unbalanced" in err.lower()
+
+    def test_source_with_function_keyword_accepted(self):
+        """function keyword alone (without pragma) passes the Solidity check."""
+        source = "// no pragma\nfunction exploit_something() public { return; }"
+        assert self._make_adapter().validate_report(self._make_report(source=source)) is None
+
+
+# ── _retry_api_call unit tests ───────────────────────────────────────────────
+
+
+class TestRetryApiCall:
+    """Tests for _retry_api_call (AG-7 fix)."""
+
+    def test_succeeds_on_first_try(self):
+        result = _retry_api_call(lambda: {"ok": True}, max_retries=3)
+        assert result == {"ok": True}
+
+    def test_retries_on_oserror(self):
+        calls = {"count": 0}
+
+        def fn():
+            calls["count"] += 1
+            if calls["count"] < 3:
+                raise OSError("transient")
+            return {"ok": True}
+
+        with patch("validator.bounty.platform.time.sleep"):
+            result = _retry_api_call(fn, max_retries=3)
+        assert result == {"ok": True}
+
+    def test_returns_none_after_all_retries_fail(self):
+        with patch("validator.bounty.platform.time.sleep"):
+            result = _retry_api_call(lambda: (_ for _ in ()).throw(OSError("fail")), max_retries=2)
+        assert result is None
+
+    def test_returns_none_when_fn_returns_none(self):
+        with patch("validator.bounty.platform.time.sleep"):
+            result = _retry_api_call(lambda: None, max_retries=2)
+        assert result is None

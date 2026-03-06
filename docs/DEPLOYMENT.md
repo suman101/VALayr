@@ -356,7 +356,31 @@ cast send $EXPLOIT_REGISTRY "addValidator(address)" $VALIDATOR_ADDRESS \
   --rpc-url $RPC_URL --private-key $OWNER_KEY
 ```
 
-### 5.3 Verify Determinism
+### 5.3 Ownership Transfer Delay
+
+All VALayr contracts inherit `Ownable2Step` with a configurable `TRANSFER_DELAY`.
+
+| Environment | Recommended Delay | Seconds |
+|-------------|-------------------|---------|
+| Local/Test  | 0 (instant)       | `0`     |
+| Testnet     | 1 hour            | `3600`  |
+| Mainnet     | 48 hours          | `172800`|
+
+The delay is set as a constructor argument and is **immutable** after deployment.
+Modify your deploy script to pass the appropriate value:
+
+```solidity
+// In Deploy.s.sol — change the constructor arg for production
+new ExploitRegistry(172_800);   // 48 hours
+new ProtocolRegistry(172_800);
+new Treasury(validatorAddr, 172_800);
+```
+
+> **WARNING**: Deploying with `TRANSFER_DELAY=0` on mainnet allows instant
+> ownership transfers with no cooling-off period. Always use ≥ 48 hours for
+> production contracts.
+
+### 5.4 Verify Determinism
 
 ```bash
 # Build contracts and check bytecode hash

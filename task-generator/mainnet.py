@@ -13,9 +13,7 @@ Or via the CLI:
     python -m task_generator.mainnet --address 0x... --chain 1
 """
 
-import hashlib
 import json
-import logging
 import os
 import re
 import sys
@@ -27,7 +25,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from validator.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
