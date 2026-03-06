@@ -148,7 +148,10 @@ contract AdversarialScoring is Pausable {
     event ScoreUpdated(address indexed miner, string class_, int256 newScore);
     event ValidatorUpdated(address indexed validator, bool status);
 
-    constructor(address _registry, uint256 transferDelay) Ownable2Step(transferDelay) {
+    constructor(
+        address _registry,
+        uint256 transferDelay
+    ) Ownable2Step(transferDelay) {
         registry = InvariantRegistry(_registry);
     }
 

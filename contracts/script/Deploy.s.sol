@@ -28,9 +28,12 @@ contract Deploy is Script {
         ExploitRegistry exploitRegistry = new ExploitRegistry(transferDelay);
 
         // Deploy Stage 3: AdversarialMode (InvariantRegistry + AdversarialScoring)
-        InvariantRegistry invariantRegistry = new InvariantRegistry(transferDelay);
+        InvariantRegistry invariantRegistry = new InvariantRegistry(
+            transferDelay
+        );
         AdversarialScoring adversarialScoring = new AdversarialScoring(
-            address(invariantRegistry), transferDelay
+            address(invariantRegistry),
+            transferDelay
         );
 
         // Wire up: set deployer as validator on all registries

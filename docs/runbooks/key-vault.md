@@ -33,11 +33,13 @@ forge script script/Deploy.s.sol --broadcast --rpc-url "$RPC_URL"
 ```json
 {
   "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": ["secretsmanager:GetSecretValue"],
-    "Resource": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:valayr/deployer-*"
-  }]
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:valayr/deployer-*"
+    }
+  ]
 }
 ```
 
