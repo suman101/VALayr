@@ -32,6 +32,7 @@ python3 -c "import json; json.load(open('data/anti_bypass/subnet_receipts.json')
 **Symptom**: `WARNING  Failed to load fingerprint DB from data/fingerprints.json`
 
 **Resolution**:
+
 1. The validator auto-recovers by starting with an empty DB.
 2. Historical duplicates will not be detected until the DB rebuilds.
 3. If a backup exists:
@@ -47,6 +48,7 @@ python3 -c "import json; json.load(open('data/anti_bypass/subnet_receipts.json')
 **Symptom**: `WARNING  Failed to load anticollusion state`
 
 **Resolution**:
+
 1. Auto-recovers with empty state (all validators reset to clean slate).
 2. Historical divergence records are lost — validators with prior infractions start fresh.
 3. Restore from backup if available:
@@ -59,6 +61,7 @@ python3 -c "import json; json.load(open('data/anti_bypass/subnet_receipts.json')
 ## 4. Mid-Epoch Crash Recovery
 
 **Steps**:
+
 1. Restart the validator:
    ```bash
    docker-compose up -d validator
@@ -78,12 +81,13 @@ python3 -c "import json; json.load(open('data/anti_bypass/subnet_receipts.json')
 **Symptom**: `docker inspect` shows `OOMKilled: true`
 
 **Resolution**:
+
 1. Increase memory limit in `docker-compose.yml`:
    ```yaml
    deploy:
      resources:
        limits:
-         memory: 12G  # was 8G
+         memory: 12G # was 8G
    ```
 2. Check if VALAYR_MAX_CONCURRENT_VALIDATIONS is too high.
 3. Restart: `docker-compose up -d validator`

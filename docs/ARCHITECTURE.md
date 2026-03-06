@@ -458,6 +458,7 @@ Zero-dependency HTTP server on port 9946.
 | **ExploitRegistry**  | `onlyValidator` records exploits                                                                          | Minimum quorum of 5 validators; duplicate detection via fingerprint                                     |
 | **ProtocolRegistry** | Protocols register with bounty; `onlyValidator` records exploits; anyone triggers payout after disclosure | 72-hour disclosure window; 90% max reward cap; bounty withdrawal blocked during active claims           |
 | **AdversarialMode**  | `onlyValidator` on InvariantRegistry + AdversarialScoring; `onlyOwner` for admin                          | Invariant writers vs. breakers — evolutionary pressure; score floor at MIN_SCORE; Pausable in emergency |
+| **Treasury**         | `onlyOwner` creates/settles competitions; `onlyValidator` submits scores; winner withdraws own prize      | nonReentrant on all ETH transfers; Pausable; MIN_DURATION / MAX_DURATION bounds; PROTOCOL_FEE_BPS cap   |
 
 ### 6.3 Stage 3 Pipeline — Adversarial Invariant Discovery
 

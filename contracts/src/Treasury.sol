@@ -13,6 +13,8 @@ contract Treasury is Ownable2Step, Pausable {
 
     uint256 private _locked = 1;
 
+    /// @dev Prevents re-entrant calls to ETH-transferring functions.
+    ///      Uses the lock-before-unlock pattern (status 1 = unlocked, 2 = locked).
     modifier nonReentrant() {
         require(_locked == 1, "ReentrancyGuard: reentrant call");
         _locked = 2;

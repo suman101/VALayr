@@ -360,11 +360,11 @@ cast send $EXPLOIT_REGISTRY "addValidator(address)" $VALIDATOR_ADDRESS \
 
 All VALayr contracts inherit `Ownable2Step` with a configurable `TRANSFER_DELAY`.
 
-| Environment | Recommended Delay | Seconds |
-|-------------|-------------------|---------|
-| Local/Test  | 0 (instant)       | `0`     |
-| Testnet     | 1 hour            | `3600`  |
-| Mainnet     | 48 hours          | `172800`|
+| Environment | Recommended Delay | Seconds  |
+| ----------- | ----------------- | -------- |
+| Local/Test  | 0 (instant)       | `0`      |
+| Testnet     | 1 hour            | `3600`   |
+| Mainnet     | 48 hours          | `172800` |
 
 The delay is set as a constructor argument and is **immutable** after deployment.
 Modify your deploy script to pass the appropriate value:
