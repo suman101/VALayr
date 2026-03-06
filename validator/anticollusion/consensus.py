@@ -382,8 +382,12 @@ class AntiCollusionEngine:
                 break
 
         if majority_outcome is None:
-            # No consensus — use plurality
-            majority_outcome = max(outcome_tally, key=lambda o: len(outcome_tally[o]))
+            # No consensus — use plurality with deterministic tie-breaking.
+            # H-6 fix: match the exploit consensus path's secondary key.
+            majority_outcome = max(
+                outcome_tally,
+                key=lambda o: (len(outcome_tally[o]), [-ord(c) for c in o]),
+            )
             majority_validators = outcome_tally[majority_outcome]
             result.agreement_ratio = len(majority_validators) / total_votes
 

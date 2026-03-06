@@ -248,7 +248,7 @@ class TestCheckKeyRotation:
         config = {
             "contracts": ["0x" + "ab" * 20],
             "rpc_url": "http://127.0.0.1:8545",
-            "owner_key_env": "TEST_ROTATION_KEY",
+            "owner_key_env": "DEPLOYER_KEY",
             "old_validator": "0x" + "cc" * 20,
             "new_validator": "0x" + "dd" * 20,
         }
@@ -259,7 +259,7 @@ class TestCheckKeyRotation:
         neuron = ValidatorNeuron(mode="local")
         neuron._rotation_config = config_path
 
-        with patch.dict(os.environ, {"TEST_ROTATION_KEY": "0x" + "11" * 32}):
+        with patch.dict(os.environ, {"DEPLOYER_KEY": "0x" + "11" * 32}):
             neuron._check_key_rotation()
 
         assert mock_batch.called

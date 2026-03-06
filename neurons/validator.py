@@ -369,6 +369,15 @@ class ValidatorNeuron:
             # Read owner_key from env (never store private keys in JSON).
             # The JSON config specifies which env var holds the key.
             owner_key_env = config.get("owner_key_env", "DEPLOYER_KEY")
+            # H-1 fix: only allow a strict allowlist of env var names to
+            # prevent arbitrary environment variable exfiltration.
+            _ALLOWED_KEY_ENVS = {"DEPLOYER_KEY", "OWNER_KEY", "ETH_PRIVATE_KEY"}
+            if owner_key_env not in _ALLOWED_KEY_ENVS:
+                logger.error(
+                    "Rejected owner_key_env=%r — must be one of %s",
+                    owner_key_env, _ALLOWED_KEY_ENVS,
+                )
+                return
             if "owner_key" in config:
                 logger.warning(
                     "Ignoring 'owner_key' in rotation config — private keys "

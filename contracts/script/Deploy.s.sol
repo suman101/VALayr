@@ -42,6 +42,11 @@ contract Deploy is Script {
         invariantRegistry.setValidator(deployer, true);
         adversarialScoring.setValidator(deployer, true);
 
+        // C-5 fix: AdversarialScoring.processChallenge() calls
+        // registry.recordChallenge() which requires msg.sender to be a
+        // validator on InvariantRegistry.
+        invariantRegistry.setValidator(address(adversarialScoring), true);
+
         // Deploy Treasury (winner-takes-all competitions)
         Treasury treasury = new Treasury(deployer, transferDelay);
 

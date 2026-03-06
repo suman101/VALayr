@@ -726,14 +726,14 @@ Validator                SubnetAdapter           AntiCollusion        Chain
 
 ## 13. Future Roadmap
 
-| Priority | Item                      | Description                                                                                                            | Status        |
-| -------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
-| P3       | ~~Consensus caching~~     | ~~O(v×t) voting optimization~~ — Scoped `_check_slashing` to participants, extracted shared `_record_and_persist`      | **Done**      |
-| P3       | ~~Stage 3 integration tests~~ | ~~Full adversarial-mode integration tests~~ — `test_live_anvil.py:test_adversarial_onchain_integration`            | **Done**      |
-| P3       | ~~UUPS upgrade strategy~~ | ~~Document upgrade path~~ — Added to DEPLOYMENT.md §9.2 (immutable-by-design rationale + migrate-and-swap procedure)  | **Done**      |
-| P3       | ~~Key vault integration~~ | ~~Runbook for HashiCorp Vault / AWS Secrets Manager / GCP~~ — `docs/runbooks/key-vault.md`                             | **Done**      |
-| P3       | Fingerprint DB migration  | Migrate JSON-file fingerprint storage to SQLite or KV store before 100k+ exploits (see `dedup.py` F-4 comment)         | Future        |
-| P3       | Docker image signing      | Add Cosign/Sigstore attestation to CI for published container images                                                   | Future        |
+| Priority | Item                          | Description                                                                                                          | Status   |
+| -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------- |
+| P3       | ~~Consensus caching~~         | ~~O(v×t) voting optimization~~ — Scoped `_check_slashing` to participants, extracted shared `_record_and_persist`    | **Done** |
+| P3       | ~~Stage 3 integration tests~~ | ~~Full adversarial-mode integration tests~~ — `test_live_anvil.py:test_adversarial_onchain_integration`              | **Done** |
+| P3       | ~~UUPS upgrade strategy~~     | ~~Document upgrade path~~ — Added to DEPLOYMENT.md §9.2 (immutable-by-design rationale + migrate-and-swap procedure) | **Done** |
+| P3       | ~~Key vault integration~~     | ~~Runbook for HashiCorp Vault / AWS Secrets Manager / GCP~~ — `docs/runbooks/key-vault.md`                           | **Done** |
+| P3       | Fingerprint DB migration      | Migrate JSON-file fingerprint storage to SQLite or KV store before 100k+ exploits (see `dedup.py` F-4 comment)       | Future   |
+| P3       | Docker image signing          | Add Cosign/Sigstore attestation to CI for published container images                                                 | Future   |
 
 ---
 

@@ -612,11 +612,11 @@ VALayr contracts are **non-upgradeable by design** — there is no UUPS proxy,
 transparent proxy, or `delegatecall`-based upgrade mechanism. This is a
 deliberate architectural choice:
 
-| Approach          | Chosen? | Rationale                                                                 |
-| ----------------- | ------- | ------------------------------------------------------------------------- |
-| Immutable deploy  | **Yes** | Auditable, no admin key can alter logic, simpler threat model             |
+| Approach          | Chosen? | Rationale                                                                             |
+| ----------------- | ------- | ------------------------------------------------------------------------------------- |
+| Immutable deploy  | **Yes** | Auditable, no admin key can alter logic, simpler threat model                         |
 | UUPS proxy        | No      | Adds storage-layout risk, admin-key attack surface, and upgrade governance complexity |
-| Transparent proxy | No      | Same risks as UUPS plus larger gas overhead from proxy dispatch           |
+| Transparent proxy | No      | Same risks as UUPS plus larger gas overhead from proxy dispatch                       |
 
 #### Migration Procedure (deploy-and-swap)
 

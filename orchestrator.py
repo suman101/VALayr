@@ -255,6 +255,11 @@ class Orchestrator:
             json.dumps(manifest, indent=2, sort_keys=True)
         )
         logger.info("Generated %d tasks across %d classes", len(packages), len(set(p.vulnerability_class for p in packages)))
+
+        # C-8 fix: register tasks with uniqueness scorer so timing bonuses work
+        for pkg in packages:
+            self.uniqueness_scorer.register_task(pkg.task_id)
+
         return packages
 
     def fetch_mainnet_tasks(

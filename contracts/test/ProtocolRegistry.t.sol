@@ -297,8 +297,9 @@ contract ProtocolRegistryTest is Test {
         // Warp past disclosure window
         vm.warp(block.timestamp + 73 hours);
 
-        // Valid startIndex: 0, 1, 2; invalid: >= 3
-        if (startIndex >= 3) {
+        // C-4 fix: withdrawBounty now requires sequential pagination
+        // (startIndex must equal withdrawVerifiedUpTo which starts at 0).
+        if (startIndex != 0) {
             vm.expectRevert(ProtocolRegistry.InvalidStartIndex.selector);
         }
         registry.withdrawBounty(contractHash, startIndex);

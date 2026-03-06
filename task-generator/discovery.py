@@ -200,6 +200,10 @@ class MainnetAutoDiscovery:
             },
         }
         payload = json.dumps(data, indent=2, sort_keys=True)
+        # H-8 fix: use atomic temp + fsync + replace pattern
         tmp = self._state_path.with_suffix(self._state_path.suffix + ".tmp")
         tmp.write_text(payload)
+        fd = os.open(str(tmp), os.O_RDONLY)
+        os.fsync(fd)
+        os.close(fd)
         os.replace(tmp, self._state_path)

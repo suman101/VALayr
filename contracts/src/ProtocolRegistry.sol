@@ -57,6 +57,8 @@ contract ProtocolRegistry is Pausable {
     mapping(bytes32 => mapping(bytes32 => ExploitClaim)) public claims;
     // contractHash => list of exploit fingerprints (for enumeration)
     mapping(bytes32 => bytes32[]) public exploitHistory;
+    // contractHash => highest claim index verified for withdrawal (C-4 fix)
+    mapping(bytes32 => uint256) public withdrawVerifiedUpTo;
     // Whitelist of validator addresses
     mapping(address => bool) public validators;
 
@@ -142,6 +144,14 @@ contract ProtocolRegistry is Pausable {
         bytes32 contractHash = keccak256(abi.encodePacked(target, codeHash));
         if (registry[contractHash].active) revert AlreadyRegistered();
 
+        // H-14 fix: reject EOA targets — extcodehash for an EOA is
+        // keccak256(""), not a valid contract hash.
+        if (codeHash == keccak256("")) revert NotRegistered();
+
+        // H-12 fix: prevent re-registration when previous bountyPool has
+        // stranded ETH.  Protocol must withdraw first.
+        if (registry[contractHash].bountyPool > 0) revert InsufficientBounty();
+
         registry[contractHash] = RegisteredContract({
             protocol: msg.sender,
             target: target,
@@ -185,16 +195,15 @@ contract ProtocolRegistry is Pausable {
         RegisteredContract storage reg = registry[contractHash];
         if (reg.active) revert ContractStillActive();
 
+        // C-4 fix: enforce sequential page processing so disclosure windows
+        // on earlier claims cannot be skipped.
+        if (startIndex != withdrawVerifiedUpTo[contractHash])
+            revert InvalidStartIndex();
+
         // Enforce: all existing claims must be paid or disclosure window expired
         // Process up to MAX_CLAIMS_PER_WITHDRAWAL at a time to bound gas
         uint256 maxPerCall = 20;
         bytes32[] storage history = exploitHistory[contractHash];
-
-        // When there are claims, startIndex must be within bounds
-        if (history.length > 0 && startIndex >= history.length)
-            revert InvalidStartIndex();
-        // When there are no claims, startIndex must be 0
-        if (history.length == 0 && startIndex != 0) revert InvalidStartIndex();
 
         uint256 end = startIndex + maxPerCall;
         if (end > history.length) end = history.length;
@@ -206,6 +215,9 @@ contract ProtocolRegistry is Pausable {
                     revert DisclosureWindowActive();
             }
         }
+
+        // Advance the watermark so the next call must continue from here
+        withdrawVerifiedUpTo[contractHash] = end;
 
         // Only transfer if all claims verified (final page)
         if (end >= history.length) {
@@ -301,7 +313,7 @@ contract ProtocolRegistry is Pausable {
     ///      Reverts if history exceeds MAX_CLAIMS_PER_CONTRACT (use paginated version instead).
     function withdrawBountyAll(
         bytes32 contractHash
-    ) external onlyProtocol(contractHash) nonReentrant {
+    ) external onlyProtocol(contractHash) nonReentrant whenNotPaused {
         RegisteredContract storage reg = registry[contractHash];
         if (reg.active) revert ContractStillActive();
 

@@ -10,6 +10,7 @@ This is critical for:
 Identity claims are verified via the platform's API before being stored.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -18,6 +19,13 @@ import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
+
+try:
+    from nacl.signing import VerifyKey
+    from nacl.exceptions import BadSignatureError
+    _HAS_NACL = True
+except ImportError:
+    _HAS_NACL = False
 
 from validator.bounty.platform import BountyPlatform, PlatformRegistry
 
@@ -103,6 +111,36 @@ class IdentityStore:
             raise ValueError(
                 "signed_challenge is required to claim a platform identity. "
                 "Sign your miner hotkey with the platform account."
+            )
+
+        # C-2 fix: cryptographically verify the signed challenge.
+        # The expected message is sha256(hotkey + platform + platform_id).
+        # This prevents one miner from claiming another's platform account.
+        expected_msg = hashlib.sha256(
+            f"{miner_hotkey}:{platform}:{platform_id}".encode()
+        ).digest()
+        if _HAS_NACL:
+            try:
+                # signed_challenge is hex-encoded: first 64 hex = 32-byte pubkey,
+                # remainder = 128 hex = 64-byte Ed25519 signature.
+                raw = bytes.fromhex(signed_challenge)
+                if len(raw) < 96:
+                    raise ValueError("signed_challenge too short for Ed25519 verification")
+                pubkey_bytes = raw[:32]
+                sig_bytes = raw[32:96]
+                verify_key = VerifyKey(pubkey_bytes)
+                verify_key.verify(expected_msg, sig_bytes)
+            except (BadSignatureError, ValueError, Exception) as exc:
+                raise ValueError(
+                    f"Identity signature verification failed: {exc}"
+                ) from exc
+        else:
+            # Fallback: require non-empty (existing behaviour) when PyNaCl
+            # is not installed, but log a warning so operators install it.
+            logging.getLogger(__name__).warning(
+                "PyNaCl not installed — identity signature verification "
+                "is degraded to non-empty check only.  Install pynacl "
+                "for full Ed25519 verification."
             )
 
         # Check for conflicting claims — AG-4 fix: also check UNVERIFIED
@@ -215,4 +253,8 @@ class IdentityStore:
         payload = json.dumps(data, indent=2, sort_keys=True)
         tmp_path = self._db_path.with_suffix(self._db_path.suffix + ".tmp")
         tmp_path.write_text(payload)
+        # H-9 fix: fsync before rename to prevent data loss on crash
+        fd = os.open(str(tmp_path), os.O_RDONLY)
+        os.fsync(fd)
+        os.close(fd)
         os.replace(tmp_path, self._db_path)

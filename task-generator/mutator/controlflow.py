@@ -99,7 +99,9 @@ class ControlFlowMutator(Mutator):
         if enclosing_func is None:
             return source  # Can't safely extract — skip
 
-        # Remove the require from original location
+        # H-10 fix: remove the require from original location ONLY after we
+        # confirmed an enclosing function exists.  Previously the require was
+        # removed before re-checking, silently dropping the guard.
         source = source[:match.start()] + "// guard extracted" + source[match.end():]
 
         # Attach modifier to the function signature (before the opening brace)
@@ -111,9 +113,12 @@ class ControlFlowMutator(Mutator):
             else:
                 break
 
-        if enclosing_func:
-            brace_pos = enclosing_func.start(2)
-            source = source[:brace_pos] + f" {mod_name} " + source[brace_pos:]
+        if not enclosing_func:
+            # Could not re-locate function after edit — restore original source
+            return self._REQUIRE_PAT.sub(match.group(0), source, count=1)
+
+        brace_pos = enclosing_func.start(2)
+        source = source[:brace_pos] + f" {mod_name} " + source[brace_pos:]
 
         # Insert modifier definition before last closing brace
         last_brace = source.rfind("}")

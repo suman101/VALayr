@@ -120,6 +120,7 @@ contract InvariantRegistry is Pausable {
     }
 
     function setValidator(address v, bool status) external onlyOwner {
+        if (v == address(0)) revert ZeroAddress();
         validators[v] = status;
         emit ValidatorUpdated(v, status);
     }
@@ -162,6 +163,7 @@ contract AdversarialScoring is Pausable {
 
     /// @notice Add or remove a validator address.
     function setValidator(address v, bool status) external onlyOwner {
+        if (v == address(0)) revert ZeroAddress();
         validators[v] = status;
         emit ValidatorUpdated(v, status);
     }
@@ -173,6 +175,11 @@ contract AdversarialScoring is Pausable {
         address classBMiner, // Exploit submitter
         bool broken
     ) external onlyValidator whenNotPaused {
+        // H-13 fix: verify classAMiner matches the actual invariant submitter
+        // to prevent validators from penalising the wrong miner.
+        (address submitter, , , , , , , , , ) = registry.properties(invariantId);
+        require(classAMiner == submitter, "classA mismatch");
+
         // Record challenge result in the invariant registry
         registry.recordChallenge(invariantId, broken);
 

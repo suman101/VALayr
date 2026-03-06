@@ -70,6 +70,7 @@ TASK_DEFINITION_SCHEMA = {
             "type": "string",
         },
     },
+    "additionalProperties": False,
 }
 
 # ── Execution Trace Schema ───────────────────────────────────────────────────
@@ -97,6 +98,7 @@ EXECUTION_TRACE_SCHEMA = {
         "reverted": {"type": "boolean"},
         "revert_reason": {"type": "string"},
     },
+    "additionalProperties": False,
 }
 
 

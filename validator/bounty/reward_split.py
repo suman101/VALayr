@@ -221,4 +221,8 @@ class RewardSplitEngine:
         payload = json.dumps(data, indent=2, sort_keys=True)
         tmp_path = self._payouts_path.with_suffix(self._payouts_path.suffix + ".tmp")
         tmp_path.write_text(payload)
+        # H-7 fix: fsync before rename to prevent data loss on crash
+        fd = os.open(str(tmp_path), os.O_RDONLY)
+        os.fsync(fd)
+        os.close(fd)
         os.replace(tmp_path, self._payouts_path)

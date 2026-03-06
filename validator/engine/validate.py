@@ -1021,13 +1021,20 @@ contract ExploitTest is Test {{
         return False
 
     def _compute_fingerprint(self, trace: ExecutionTrace) -> str:
-        """Compute canonical exploit fingerprint via shared dedup engine logic."""
+        """Compute canonical exploit fingerprint via shared dedup engine logic.
+
+        C-7 fix: reuse a single FingerprintEngine instance instead of
+        creating a new one per call (which loaded the entire JSON DB
+        from disk each time and created disconnected dedup state).
+        """
         from validator.fingerprint.dedup import FingerprintEngine
 
+        if not hasattr(self, '_fp_engine'):
+            self._fp_engine = FingerprintEngine()
+
         trace_dict = asdict(trace)
-        engine = FingerprintEngine()
-        components = engine.extract_components(trace_dict)
-        return engine.compute_fingerprint(components)
+        components = self._fp_engine.extract_components(trace_dict)
+        return self._fp_engine.compute_fingerprint(components)
 
     def _finalize(self, report: ValidationReport, start_time: float) -> ValidationReport:
         """Add timing info to report."""

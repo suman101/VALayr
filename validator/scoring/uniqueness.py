@@ -17,6 +17,7 @@ more valuable than copy-paste LLM output.
 
 import hashlib
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -44,6 +45,10 @@ MIN_SELECTORS_BY_DIFFICULTY = {
     2: 2,
     3: 3,
 }
+
+
+# C-6 fix: cap tracked submissions to prevent unbounded memory growth.
+MAX_TRACKED_TASKS = 10_000
 
 
 # ── Data Structures ──────────────────────────────────────────────────────────
@@ -84,6 +89,8 @@ class UniquenessScorer:
         self._submissions: dict[str, list[tuple[str, str, float, frozenset]]] = {}
         # task_id → publication timestamp
         self._task_timestamps: dict[str, float] = {}
+        # H-11 fix: protect concurrent access to _submissions
+        self._lock = threading.Lock()
 
     def register_task(self, task_id: str, published_at: Optional[float] = None) -> None:
         """Record when a task was published (for timing analysis)."""
@@ -105,20 +112,29 @@ class UniquenessScorer:
         profile = self._compute_profile(exploit_source)
         result = UniquenessResult(structural_hash=profile.structural_hash)
 
-        # Register this submission
+        # Register this submission (H-11: under lock for thread safety)
         now = time.time()
-        if task_id not in self._submissions:
-            self._submissions[task_id] = []
-        self._submissions[task_id].append(
-            (profile.structural_hash, miner_address, now, profile.normalised_tokens)
-        )
+        with self._lock:
+            if task_id not in self._submissions:
+                self._submissions[task_id] = []
+            self._submissions[task_id].append(
+                (profile.structural_hash, miner_address, now, profile.normalised_tokens)
+            )
 
-        # 1. Herd detection — use Jaccard similarity on normalised token sets
-        same_structure = [
-            s for s in self._submissions[task_id]
-            if s[1] != miner_address
-            and self._jaccard_similarity(s[3], profile.normalised_tokens) >= HERD_SIMILARITY
-        ]
+            # C-6 fix: prune oldest tasks if we exceed the cap
+            if len(self._submissions) > MAX_TRACKED_TASKS:
+                oldest_task = min(self._submissions, key=lambda t: (
+                    self._submissions[t][0][2] if self._submissions[t] else 0
+                ))
+                del self._submissions[oldest_task]
+                self._task_timestamps.pop(oldest_task, None)
+
+            # 1. Herd detection — use Jaccard similarity on normalised token sets
+            same_structure = [
+                s for s in self._submissions[task_id]
+                if s[1] != miner_address
+                and self._jaccard_similarity(s[3], profile.normalised_tokens) >= HERD_SIMILARITY
+            ]
         result.herd_size = len(same_structure) + 1  # Including this submission
 
         if result.herd_size > HERD_THRESHOLD:
@@ -230,10 +246,10 @@ class UniquenessScorer:
     def _jaccard_similarity(a: frozenset, b: frozenset) -> float:
         """Jaccard index between two token sets."""
         if not a and not b:
-            return 1.0
+            return 0.0  # No information = no similarity (not identical)
         union = a | b
         if not union:
-            return 1.0
+            return 0.0
         return len(a & b) / len(union)
 
     def reset(self) -> None:

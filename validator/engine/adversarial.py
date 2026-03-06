@@ -57,6 +57,22 @@ MAX_EXPLOIT_SOURCE_BYTES = 64_000  # 64KB DoS guard
 # but the total must also be bounded.
 MAX_ADVERSARIAL_TOTAL_TIMEOUT = 180  # 3 minutes max for all 3 sequential tests
 
+# C-1 fix: patterns forbidden in solidity_condition to prevent code injection.
+# The condition is interpolated into generated Solidity via f-string — an
+# attacker could inject arbitrary code (selfdestruct, infinite loops, etc.).
+_FORBIDDEN_CONDITION_PATTERNS = re.compile(
+    r'[;{}]'
+    r'|\bselfdestruct\b'
+    r'|\bdelegatecall\b'
+    r'|\bassembly\b'
+    r'|\bcall\s*\{'
+    r'|\bsuicide\b'
+    r'|\bnew\s+\w'
+    r'|\bimport\b'
+    r'|\bpragma\b',
+    re.IGNORECASE,
+)
+
 
 # ── Enums & Data Structures ─────────────────────────────────────────────────
 
@@ -176,6 +192,7 @@ class AdversarialEngine:
         self._class_a_scores: dict[str, int] = {}  # miner → score
         self._class_b_scores: dict[str, int] = {}  # miner → score
         self._challenge_history: list[ChallengeReport] = []
+        self._MAX_CHALLENGE_HISTORY = 10_000  # H-3 fix: prevent unbounded growth
 
     # ── Invariant Management (Class A) ────────────────────────────────────
 
@@ -343,6 +360,8 @@ class AdversarialEngine:
                     validation_time_ms=elapsed_ms,
                 )
                 self._challenge_history.append(report)
+                if len(self._challenge_history) > self._MAX_CHALLENGE_HISTORY:
+                    self._challenge_history = self._challenge_history[-self._MAX_CHALLENGE_HISTORY:]
                 return report
         else:
             # Built-in simulation: attempt to compile and run the exploit
@@ -372,6 +391,8 @@ class AdversarialEngine:
             validation_time_ms=elapsed_ms,
         )
         self._challenge_history.append(report)
+        if len(self._challenge_history) > self._MAX_CHALLENGE_HISTORY:
+            self._challenge_history = self._challenge_history[-self._MAX_CHALLENGE_HISTORY:]
 
         logger.info(
             "Challenge on invariant #%d: %s (A=%s, B=%s)",
@@ -449,12 +470,17 @@ class AdversarialEngine:
         # If one class is empty, the other gets 100%
         if a_total > 0 and b_total == 0:
             for miner in a_scores:
-                if a_total > 0:
-                    weights[miner] = a_scores[miner] / a_total
+                weights[miner] = a_scores[miner] / a_total
         elif b_total > 0 and a_total == 0:
             for miner in b_scores:
-                if b_total > 0:
-                    weights[miner] = b_scores[miner] / b_total
+                weights[miner] = b_scores[miner] / b_total
+        elif a_total > 0 and b_total > 0:
+            # H-5 fix: re-normalise so weights sum to 1.0 even when
+            # miners appear in both classes.
+            total_weight = sum(weights.values())
+            if total_weight > 0:
+                for miner in weights:
+                    weights[miner] /= total_weight
 
         return weights
 
@@ -691,7 +717,7 @@ class AdversarialEngine:
             "--quiet",
         ]
         try:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             # Poll for readiness
             rpc_url = f"http://{self._ANVIL_HOST}:{port}"
             payload = json.dumps({
@@ -807,6 +833,14 @@ local = "http://{self._ANVIL_HOST}:{port}"
         # We wrap it in a require() that should pass pre-exploit and
         # may fail post-exploit if the invariant is broken.
         condition = invariant.solidity_condition
+
+        # C-1 fix: reject conditions containing dangerous patterns that
+        # could inject arbitrary Solidity code when interpolated.
+        if _FORBIDDEN_CONDITION_PATTERNS.search(condition):
+            raise ValueError(
+                f"Invariant condition contains forbidden pattern — "
+                f"must be a pure boolean expression"
+            )
 
         if inline:
             # V-1 fix: Combine pre-check, exploit, post-check into a single
@@ -989,11 +1023,19 @@ contract InvariantCheckTest is Test {{
 
     def _submit_invariant_onchain(self, submission: InvariantSubmission) -> int:
         """Submit invariant to InvariantRegistry via cast."""
+        # C-3 fix: require ETH_PRIVATE_KEY for on-chain transactions.
+        private_key = os.environ.get("ETH_PRIVATE_KEY", "")
+        if not private_key:
+            raise RuntimeError(
+                "ETH_PRIVATE_KEY environment variable is required for "
+                "on-chain invariant submission"
+            )
         try:
             result = subprocess.run(
                 [
                     "cast", "send",
                     "--rpc-url", self.rpc_url,
+                    "--private-key-stdin",
                     self.registry_address,
                     "submitInvariant(bytes32,string,string,bytes)",
                     submission.target_contract_hash,
@@ -1001,6 +1043,7 @@ contract InvariantCheckTest is Test {{
                     submission.solidity_condition,
                     "0x" + submission.compiled_check.hex(),
                 ],
+                input=private_key,
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -1036,11 +1079,17 @@ contract InvariantCheckTest is Test {{
         broken: bool,
     ) -> None:
         """Record challenge result on-chain via AdversarialScoring.processChallenge."""
+        # C-3 fix: require ETH_PRIVATE_KEY for on-chain transactions.
+        private_key = os.environ.get("ETH_PRIVATE_KEY", "")
+        if not private_key:
+            logger.error("ETH_PRIVATE_KEY not set — cannot record challenge on-chain")
+            return
         try:
             result = subprocess.run(
                 [
                     "cast", "send",
                     "--rpc-url", self.rpc_url,
+                    "--private-key-stdin",
                     self.scoring_address,
                     "processChallenge(uint256,address,address,bool)",
                     str(invariant_id),
@@ -1048,6 +1097,7 @@ contract InvariantCheckTest is Test {{
                     class_b_miner,
                     "true" if broken else "false",
                 ],
+                input=private_key,
                 capture_output=True,
                 text=True,
                 timeout=30,
