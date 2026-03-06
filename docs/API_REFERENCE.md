@@ -436,7 +436,6 @@ class MinerScore:
     unique_fingerprints: int
     duplicate_fingerprints: int
     average_severity: float
-    earliest_commits: int           # number of first-to-commit submissions
     raw_score: float
     normalized_weight: float
 ```
@@ -504,7 +503,6 @@ Convert hotkey→weight map to `(uids, weights)` tuple for `subtensor.set_weight
 ```
 raw_score = (unique × avg_severity)
           + (duplicates × avg_severity × 0.1)
-          + (earliest_commits × 0.05)
           - (invalid × 0.05)
 ```
 

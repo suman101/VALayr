@@ -12,11 +12,12 @@ Complete reference for all Solidity contracts in the VALayr exploit subnet.
 2. [Deployment](#deployment)
 3. [ExploitRegistry](#exploitregistry)
 4. [ProtocolRegistry](#protocolregistry)
-5. [InvariantRegistry (Stage 3)](#invariantregistry-stage-3)
-6. [AdversarialScoring (Stage 3)](#adversarialscoring-stage-3)
-7. [Custom Errors Reference](#custom-errors-reference)
-8. [Build & Test](#build--test)
-9. [Foundry Configuration](#foundry-configuration)
+5. [Treasury](#treasury)
+6. [InvariantRegistry (Stage 3)](#invariantregistry-stage-3)
+7. [AdversarialScoring (Stage 3)](#adversarialscoring-stage-3)
+8. [Custom Errors Reference](#custom-errors-reference)
+9. [Build & Test](#build--test)
+10. [Foundry Configuration](#foundry-configuration)
 
 ---
 
@@ -26,6 +27,7 @@ Complete reference for all Solidity contracts in the VALayr exploit subnet.
 | ------------------ | ------------------------------------------ | --------------------------------- | ------- |
 | ExploitRegistry    | `contracts/src/ExploitRegistry.sol`        | On-chain exploit records + dedup  | v1      |
 | ProtocolRegistry   | `contracts/src/ProtocolRegistry.sol`       | Protocol opt-in + bounty escrow   | v1      |
+| Treasury           | `contracts/src/Treasury.sol`               | Timed competition escrow          | v1      |
 | InvariantRegistry  | `contracts/src/stage3/AdversarialMode.sol` | Invariant submission + challenges | Stage 3 |
 | AdversarialScoring | `contracts/src/stage3/AdversarialMode.sol` | Class A/B miner scoring           | Stage 3 |
 
@@ -265,6 +267,61 @@ event BountyAdded(bytes32 indexed contractHash, uint256 amount);
 event ExploitClaimed(bytes32 indexed contractHash, bytes32 indexed exploitFingerprint, address miner, uint256 reward);
 event ExploitRewardPaid(bytes32 indexed contractHash, bytes32 indexed exploitFingerprint, address miner, uint256 amount);
 event BountyWithdrawn(bytes32 indexed contractHash, uint256 amount);
+```
+
+---
+
+## Treasury
+
+**File:** `contracts/src/Treasury.sol`
+
+Winner-takes-all competition escrow. Manages timed competitions where miners compete to find the highest-severity exploit for a given task. The best submission wins the entire prize pool.
+
+### Lifecycle
+
+```
+create (fund prize pool) → miners submit scores → deadline passes → settle → winner withdraws
+```
+
+### Inheritance
+
+- `Ownable2Step` — two-step ownership transfer
+- `Pausable` — emergency circuit breaker
+- Custom `nonReentrant` modifier (inline reentrancy guard)
+
+### Constants
+
+| Constant           | Value      | Description                  |
+| ------------------ | ---------- | ---------------------------- |
+| `MIN_DURATION`     | 1 hour     | Minimum competition duration |
+| `MAX_DURATION`     | 30 days    | Maximum competition duration |
+| `MIN_PRIZE`        | 0.01 ether | Minimum prize pool           |
+| `PROTOCOL_FEE_BPS` | 500 (5%)   | Fee deducted on settlement   |
+| `BPS_DENOMINATOR`  | 10,000     | Basis points denominator     |
+
+### Functions
+
+| Function              | Access          | Description                                         |
+| --------------------- | --------------- | --------------------------------------------------- |
+| `createCompetition()` | `payable`       | Create and fund a new timed competition             |
+| `submitScore()`       | `onlyValidator` | Submit a miner's severity score for a competition   |
+| `settle()`            | Anyone          | Settle competition after deadline; deducts fee      |
+| `withdrawPrize()`     | Winner only     | Winner claims prize (`nonReentrant`)                |
+| `withdrawFees()`      | `onlyOwner`     | Withdraw accumulated protocol fees (`nonReentrant`) |
+| `setValidator()`      | `onlyOwner`     | Update authorised validator address                 |
+| `getCompetition()`    | `view`          | Get full competition details                        |
+| `isActive()`          | `view`          | Check if competition is accepting submissions       |
+| `timeRemaining()`     | `view`          | Time remaining before deadline                      |
+
+### Events
+
+```solidity
+event CompetitionCreated(uint256 indexed id, bytes32 indexed taskId, uint256 prizePool, uint256 deadline);
+event ScoreSubmitted(uint256 indexed id, address indexed miner, uint256 score, bytes32 fingerprint);
+event CompetitionSettled(uint256 indexed id, address indexed winner, uint256 reward);
+event PrizeWithdrawn(uint256 indexed id, address indexed winner, uint256 amount);
+event ValidatorUpdated(address indexed oldValidator, address indexed newValidator);
+event FeesWithdrawn(address indexed to, uint256 amount);
 ```
 
 ---

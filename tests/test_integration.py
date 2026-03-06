@@ -277,7 +277,7 @@ class TestAntiCollusion:
     """Test validator consensus and divergence tracking."""
 
     def test_validator_assignment(self):
-        """Validator assignment must be deterministic for same task."""
+        """Validator assignment must be deterministic for same task within one engine instance."""
         from validator.anticollusion.consensus import AntiCollusionEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -288,7 +288,7 @@ class TestAntiCollusion:
             assigned1 = engine.assign_validators("task-001")
             assigned2 = engine.assign_validators("task-001")
 
-            assert assigned1 == assigned2, "Assignment must be deterministic"
+            assert assigned1 == assigned2, "Assignment must be deterministic within same instance"
 
     def test_validator_assignment_varies_by_task(self):
         """Different tasks should get different validator sets."""

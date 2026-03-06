@@ -119,7 +119,7 @@ contract Treasury is Ownable2Step, Pausable {
     }
 
     /// @notice Withdraw accumulated protocol fees.
-    function withdrawFees(address payable to) external onlyOwner {
+    function withdrawFees(address payable to) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
         uint256 amount = accumulatedFees;
         accumulatedFees = 0;

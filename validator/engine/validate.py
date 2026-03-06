@@ -618,8 +618,10 @@ contract ExploitTest is Test {{
             # Check import lines AND string literals containing paths
             if stripped.startswith("import") or (stripped.startswith("from") and "import" in stripped):
                 # Allow standard Foundry single-parent traversal (../src/*)
-                # but block deeper traversals (../../, ../../../, etc.)
-                if "../../" in stripped:
+                # but block deeper traversals or chained ../ sequences.
+                # Count total traversal depth to catch ../lib/../../../etc
+                traversal_depth = stripped.count("../")
+                if traversal_depth > 1:
                     return False
                 # Disallow absolute paths (Unix + Windows)
                 if re.search(r'["\']/', stripped) or re.search(r'["\'][A-Za-z]:\\\\?', stripped):
@@ -627,10 +629,10 @@ contract ExploitTest is Test {{
                 # Disallow URL-based imports
                 if re.search(r'["\']https?://', stripped):
                     return False
-
-            # Check for deep path traversal in string literals (not just imports)
-            if '"../../' in stripped or "'../../" in stripped:
-                return False
+            else:
+                # Non-import lines: block any path traversal in string literals
+                if '"../' in stripped or "'../" in stripped:
+                    return False
 
         # Reject dangerous assembly-level opcode patterns in the source body
         # (not import lines). These are valid exploit techniques against the

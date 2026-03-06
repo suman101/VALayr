@@ -491,19 +491,14 @@ class AdversarialEngine:
 
     @staticmethod
     def _sanitize_exploit_source(source: str) -> bool:
-        """Reject exploit source with dangerous patterns (mirrors validate.py)."""
-        for line in source.split("\n"):
-            stripped = line.strip()
-            if stripped.startswith("import") or (
-                stripped.startswith("from") and "import" in stripped
-            ):
-                if ".." in stripped:
-                    return False
-                if re.search(r'["\']/', stripped) or re.search(
-                    r'["\'][A-Za-z]:\\\\', stripped
-                ):
-                    return False
-        return True
+        """Reject exploit source with dangerous patterns.
+
+        Delegates to ValidationEngine._sanitize_source() to ensure
+        identical security checks (path traversal, URL imports,
+        dangerous assembly opcodes).
+        """
+        from validator.engine.validate import ValidationEngine
+        return ValidationEngine._sanitize_source(source)
 
     # Port allocator for concurrent Anvil instances (same pattern as ValidationEngine)
     _sim_port_counter = 0

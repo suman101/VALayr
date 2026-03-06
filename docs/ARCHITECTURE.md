@@ -97,7 +97,7 @@ The system is designed around three hard constraints:
 | **Anti-Collusion Engine** | `validator/anticollusion/` | Multi-validator consensus with quorum, agreement thresholds, divergence tracking, and slashing                                             |
 | **Miner Neuron**          | `neurons/miner.py`         | Receives task queries, manages exploit preparation and submission                                                                          |
 | **Miner CLI**             | `miner/cli.py`             | Interactive command-line workflow: list tasks → scaffold → submit → check scores                                                           |
-| **Smart Contracts**       | `contracts/src/`           | On-chain state: exploit registry, protocol bounty registry, adversarial scoring                                                            |
+| **Smart Contracts**       | `contracts/src/`           | On-chain state: exploit registry, protocol bounty registry, treasury escrow, adversarial scoring                                           |
 
 ---
 
@@ -646,13 +646,7 @@ Miner                    Validator                  Anvil         Chain
   │── list tasks ──────────▶│                         │             │
   │◀── task list ───────────│                         │             │
   │                         │                         │             │
-  │── prepare_commit() ─────│                         │             │
-  │── submit_commit(hash) ──│─────────────────────────│────────────▶│
-  │                         │                         │             │
-  │   [2h commit window]    │                         │             │
-  │                         │                         │             │
   │── submit exploit ──────▶│                         │             │
-  │                         │── reveal() ─────────────│────────────▶│
   │                         │                         │             │
   │                         │── setup workspace ─────▶│             │
   │                         │── forge build ─────────▶│             │

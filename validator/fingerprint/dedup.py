@@ -329,6 +329,9 @@ class FingerprintEngine:
                 finally:
                     if fcntl:
                         fcntl.flock(lf, fcntl.LOCK_UN)
+            if not isinstance(raw, dict):
+                self._db = {}
+                return
             for task_id, fps in raw.items():
                 self._db[task_id] = {}
                 for fp, rec in fps.items():

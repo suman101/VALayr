@@ -75,6 +75,11 @@ The CI pipeline and `tests/conftest.py` handle this automatically.
 | `ExploitRegistry.t.sol`  | 7     | Exploit recording, deduplication, quorum, severity, rewards  |
 | `ProtocolRegistry.t.sol` | 20    | Registration, bounties, claims, expiry, deactivation, fuzz   |
 | `AdversarialMode.t.sol`  | 24    | Invariant registry, adversarial scoring, bounds checks, fuzz |
+| `Treasury.t.sol`         | 29    | Competition lifecycle, settlement, fees, withdrawals, fuzz   |
+| `Ownable2Step.t.sol`     | 17    | Two-step ownership transfer, delay, zero-address guards      |
+| `Pausable.t.sol`         | 12    | Pause/unpause state transitions, modifier enforcement        |
+| `ReentrancyGuard.t.sol`  | 3     | Reentrancy lock, nested call rejection                       |
+| `Invariant.t.sol`        | 5     | Stateful invariant fuzzing across contracts                  |
 
 ### Example Exploits (`exploits/`)
 
@@ -123,7 +128,7 @@ FOUNDRY_PROFILE=exploits forge test -vvv
 forge test --match-path contracts/test/ExploitRegistry.t.sol -vvv
 
 # Specific test function
-forge test --match-test test_revealAfterCommitWindow -vvv
+forge test --match-test test_createCompetition -vvv
 
 # With gas snapshot
 forge snapshot
@@ -396,11 +401,11 @@ If `python` fails on one version but passes others, check version-specific behav
 
 ### Test Naming Conventions
 
-| Convention                               | Example                        |
-| ---------------------------------------- | ------------------------------ |
-| Solidity: `test_<behavior>`              | `test_revealAfterCommitWindow` |
-| Solidity revert: `test_<action>_reverts` | `test_doubleCommit_reverts`    |
-| Python: `test_<feature>_<scenario>`      | `test_pipeline_full_cycle`     |
+| Convention                               | Example                      |
+| ---------------------------------------- | ---------------------------- |
+| Solidity: `test_<behavior>`              | `test_createCompetition`     |
+| Solidity revert: `test_<action>_reverts` | `test_withdrawPrize_reverts` |
+| Python: `test_<feature>_<scenario>`      | `test_pipeline_full_cycle`   |
 
 ---
 
@@ -492,8 +497,8 @@ Open `htmlcov/index.html` for a detailed coverage report.
 
 | Suite                    | Count | Framework |
 | ------------------------ | ----- | --------- |
-| Foundry contract tests   | 81    | forge     |
-| Python integration tests | 198   | pytest    |
+| Foundry contract tests   | 125   | forge     |
+| Python integration tests | 477   | pytest    |
 | Skipped (expected)       | 1     | pytest    |
 
 ---

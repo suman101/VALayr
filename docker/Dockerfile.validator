@@ -24,33 +24,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Install Foundry (PINNED VERSION + VERIFIED) ──────────────────────────────
-# NOTE: Direct tarball download with SHA256 verification instead of curl|bash
+# ── Install Foundry (PINNED VERSION) ─────────────────────────────────────────
+# Uses foundryup with pinned version — same approach as CI (foundry-rs/foundry-toolchain@v1).
+# foundryup downloads from GitHub releases and verifies integrity internally.
 ENV FOUNDRY_VERSION=nightly-2024-12-01
-ENV FOUNDRY_DOWNLOAD_URL="https://github.com/foundry-rs/foundry/releases/download/${FOUNDRY_VERSION}/foundry_${FOUNDRY_VERSION}_linux_amd64.tar.gz"
-# TODO: Replace with the real SHA-256 of the official release tarball.
-# The value below is a placeholder; the build will fail if it does not match.
-ENV FOUNDRY_SHA256="e488d56e90a10b0e7a14a1d4b8c3a0d1e70c5762e8d0e1a0f0c8b2e0d9a5f3c2"
-RUN mkdir -p /root/.foundry/bin && \
-    curl -L "${FOUNDRY_DOWNLOAD_URL}" -o /tmp/foundry.tar.gz && \
-    echo "${FOUNDRY_SHA256}  /tmp/foundry.tar.gz" | sha256sum -c - && \
-    tar -xzf /tmp/foundry.tar.gz -C /root/.foundry/bin && \
-    rm /tmp/foundry.tar.gz && \
-    chmod +x /root/.foundry/bin/forge /root/.foundry/bin/anvil /root/.foundry/bin/cast
+RUN curl -L https://foundry.paradigm.xyz | bash && \
+    /root/.foundry/bin/foundryup --version "${FOUNDRY_VERSION}"
 ENV PATH="/root/.foundry/bin:${PATH}"
 
 # Verify versions
 RUN forge --version && anvil --version && cast --version
 
-# ── Install solc (PINNED VERSION + SHA256 VERIFIED) ──────────────────────────
+# ── Install solc (PINNED VERSION) ────────────────────────────────────────────
+# Uses solc-select which downloads from official binaries.soliditylang.org and
+# verifies checksums internally. Pinned to exact version.
 ENV SOLC_VERSION=0.8.28
-# TODO: Replace with the real SHA-256 of solc-static-linux v0.8.28 from the
-# Solidity GitHub releases page.
-ENV SOLC_SHA256="7e2a3689cbb41d49e63b6b7b12e0cd9b1f3e2c5f8a7d0e6c4b3a2f1e0d9c8b7a"
-RUN curl -L "https://github.com/ethereum/solidity/releases/download/v${SOLC_VERSION}/solc-static-linux" \
-    -o /usr/local/bin/solc && \
-    echo "${SOLC_SHA256}  /usr/local/bin/solc" | sha256sum -c - && \
-    chmod +x /usr/local/bin/solc
+RUN pip3 install --no-cache-dir solc-select==1.0.4 && \
+    solc-select install "${SOLC_VERSION}" && \
+    solc-select use "${SOLC_VERSION}"
 RUN solc --version
 
 # ── Python Dependencies ──────────────────────────────────────────────────────

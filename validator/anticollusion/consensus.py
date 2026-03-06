@@ -24,6 +24,7 @@ import hashlib
 import json
 import math
 import random
+import secrets
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -131,6 +132,9 @@ class AntiCollusionEngine:
 
     def __init__(self, seed: int = 42, data_dir: Optional[Path] = None):
         self.rng = random.Random(seed)
+        # Per-instance cryptographic entropy: prevents prediction of validator
+        # assignments even if seed and task_ids are known to an attacker.
+        self._instance_entropy = secrets.token_hex(16)
         self.data_dir = data_dir or Path(__file__).parent.parent.parent / "data"
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -170,12 +174,12 @@ class AntiCollusionEngine:
         if len(active) < MIN_QUORUM:
             raise ValueError(f"Insufficient active validators: {len(active)} < {MIN_QUORUM}")
 
-        # AG-2 fix: add the global seed and current epoch timestamp as
-        # additional entropy so assignment is unpredictable even if task_ids
-        # are published in advance. The attacker would need to know both
-        # the task_id AND the engine's seed AND the epoch time.
+        # AG-2 fix: add the global seed, epoch timestamp, and per-instance
+        # OS entropy so assignment is unpredictable even if task_ids are
+        # published in advance. Deterministic within a single engine instance
+        # (same task → same validators) but unpredictable across instances.
         epoch_time = int(time.time()) // 3600  # hourly epoch bucket
-        combined = f"{task_id}:{self.rng.getstate()[1][0]}:{epoch_time}"
+        combined = f"{task_id}:{self.rng.getstate()[1][0]}:{epoch_time}:{self._instance_entropy}"
         task_seed = int(hashlib.sha256(combined.encode()).hexdigest()[:16], 16)
         task_rng = random.Random(task_seed)
 

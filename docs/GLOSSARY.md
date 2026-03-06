@@ -222,10 +222,6 @@ The minimum number of validators (5) that must agree on a validation result for 
 
 A vulnerability class where an external call allows the callee to call back into the vulnerable function before the first invocation completes, typically draining funds.
 
-### Reveal Window
-
-The 4-hour period after the commit window closes during which miners can reveal their exploit source and nonce.
-
 ### Reward Multiplier
 
 The fraction of base reward a miner receives: 1.0 (100%) for first-of-fingerprint, 0.10 (10%) for duplicates, 0.0 for invalid submissions.

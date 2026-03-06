@@ -118,6 +118,17 @@ jobs:
             tests/test_validate_engine_unit.py \
             -v --timeout=120
 
+      - name: Run additional test suites
+        run: |
+          PYTHONHASHSEED=0 python -m pytest \
+            tests/test_consensus_edge.py \
+            tests/test_fingerprint_recovery.py \
+            tests/test_protocol_roundtrip.py \
+            tests/test_mutator_extended.py \
+            tests/test_orchestrator_integration.py \
+            tests/test_validator_neuron.py \
+            -v --timeout=120
+
   # ── Determinism Verification ─────────────────────────────────────────────
   determinism:
     name: Determinism Checks

@@ -6,7 +6,6 @@ on-chain incentive mechanism. It translates:
   - Validation reports → miner scores
   - Fingerprint dedup results → reward multipliers
   - Severity scores → weight contributions
-  - Commit-reveal priority → temporal ordering
 
 The adapter is the ONLY component that touches Bittensor primitives.
 Everything else is chain-agnostic.

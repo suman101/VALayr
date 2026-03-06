@@ -48,7 +48,7 @@ def tmp_data_dir(tmp_path):
 class TestIdentityStore:
     def test_claim_and_verify(self, tmp_data_dir):
         store = IdentityStore(tmp_data_dir)
-        claim = store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID)
+        claim = store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID, signed_challenge="test_sig")
         assert claim.miner_hotkey == VALID_HOTKEY
         assert claim.platform == "immunefi"
         assert not claim.verified
@@ -61,22 +61,22 @@ class TestIdentityStore:
 
     def test_get_platform_id_unverified_returns_none(self, tmp_data_dir):
         store = IdentityStore(tmp_data_dir)
-        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID)
+        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID, signed_challenge="test_sig")
         assert store.get_platform_id(VALID_HOTKEY, "immunefi") is None
 
     def test_get_platform_id_verified(self, tmp_data_dir):
         store = IdentityStore(tmp_data_dir)
-        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID)
+        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID, signed_challenge="test_sig")
         store.verify_claim(VALID_HOTKEY, "immunefi")
         assert store.get_platform_id(VALID_HOTKEY, "immunefi") == VALID_PLATFORM_ID
 
     def test_duplicate_platform_id_raises(self, tmp_data_dir):
         store = IdentityStore(tmp_data_dir)
-        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID)
+        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID, signed_challenge="test_sig")
         store.verify_claim(VALID_HOTKEY, "immunefi")
 
         with pytest.raises(ValueError, match="already claimed"):
-            store.claim_identity(VALID_HOTKEY_2, "immunefi", VALID_PLATFORM_ID)
+            store.claim_identity(VALID_HOTKEY_2, "immunefi", VALID_PLATFORM_ID, signed_challenge="test_sig")
 
     def test_invalid_hotkey_raises(self, tmp_data_dir):
         store = IdentityStore(tmp_data_dir)
@@ -90,7 +90,7 @@ class TestIdentityStore:
 
     def test_revoke_claim(self, tmp_data_dir):
         store = IdentityStore(tmp_data_dir)
-        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID)
+        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID, signed_challenge="test_sig")
         assert store.revoke_claim(VALID_HOTKEY, "immunefi")
         assert store.get_identity(VALID_HOTKEY).claims == {}
 
@@ -100,7 +100,7 @@ class TestIdentityStore:
 
     def test_list_verified(self, tmp_data_dir):
         store = IdentityStore(tmp_data_dir)
-        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID)
+        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID, signed_challenge="test_sig")
         store.verify_claim(VALID_HOTKEY, "immunefi")
         verified = store.list_verified("immunefi")
         assert len(verified) == 1
@@ -109,7 +109,7 @@ class TestIdentityStore:
     def test_persistence_roundtrip(self, tmp_data_dir):
         """Data survives store re-creation (atomic write)."""
         store = IdentityStore(tmp_data_dir)
-        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID)
+        store.claim_identity(VALID_HOTKEY, "immunefi", VALID_PLATFORM_ID, signed_challenge="test_sig")
         store.verify_claim(VALID_HOTKEY, "immunefi")
 
         store2 = IdentityStore(tmp_data_dir)
@@ -216,7 +216,7 @@ def _make_report():
         vulnerability_class="reentrancy",
         severity_score=0.8,
         exploit_description="test exploit",
-        exploit_source="contract X {}",
+        exploit_source="pragma solidity ^0.8.0; contract X { function exploit() public {} }",
         fingerprint="fp1",
         subnet_timestamp=int(time.time()),
     )

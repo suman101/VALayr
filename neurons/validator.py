@@ -266,8 +266,7 @@ class ValidatorNeuron:
 
         Called via Bittensor axon when a miner sends a submission.
         Supports two flows:
-          1. Direct submission (local/testing): process immediately
-          2. Commit-reveal flow: verify commit first, then process
+          1. Direct submission: validate and score immediately
         """
         if len(self.submissions_this_epoch) >= MAX_SUBMISSIONS_PER_EPOCH:
             synapse.result = {"error": "Epoch submission limit reached"}
@@ -324,7 +323,7 @@ class ValidatorNeuron:
 
         except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             logger.error("Error in submission handler: %s", e, exc_info=True)
-            synapse.result = {"error": f"Validation error: {type(e).__name__}"}
+            synapse.result = {"error": "Validation error"}
             return synapse
         except Exception as e:  # pragma: no cover — safety net
             logger.exception("Unexpected error in submission handler")
@@ -368,9 +367,14 @@ class ValidatorNeuron:
             contracts = config.get("contracts", [])
             rpc_url = config.get("rpc_url", "")
             # Read owner_key from env (never store private keys in JSON).
-            # The JSON config may contain the env var name to use.
+            # The JSON config specifies which env var holds the key.
             owner_key_env = config.get("owner_key_env", "DEPLOYER_KEY")
-            owner_key = os.environ.get(owner_key_env, config.get("owner_key", ""))
+            if "owner_key" in config:
+                logger.warning(
+                    "Ignoring 'owner_key' in rotation config — private keys "
+                    "must be set via environment variables, not JSON files."
+                )
+            owner_key = os.environ.get(owner_key_env, "")
             old_validator = config.get("old_validator", "")
             new_validator = config.get("new_validator", "")
 

@@ -46,7 +46,7 @@ VALayr incentivises miners to discover vulnerabilities in opt-in smart contracts
 | [Miner Guide](docs/MINER_GUIDE.md)                     | Miner onboarding: writing exploits, submission workflow, scoring, strategies             |
 | [Validator Guide](docs/VALIDATOR_GUIDE.md)             | Validator setup, epoch lifecycle, weight setting, monitoring, determinism                |
 | [Testing Guide](docs/TESTING.md)                       | Test suites, CI pipeline, determinism verification, writing tests                        |
-| [Contract Reference](docs/CONTRACT_REFERENCE.md)       | Solidity contract documentation: ExploitRegistry, ProtocolRegistry, Stage 3              |
+| [Contract Reference](docs/CONTRACT_REFERENCE.md)       | Solidity contract documentation: ExploitRegistry, ProtocolRegistry, Treasury, Stage 3    |
 | [Exploit Writing Guide](docs/EXPLOIT_WRITING_GUIDE.md) | Annotated exploit examples for every vulnerability class, scoring strategies             |
 | [Glossary](docs/GLOSSARY.md)                           | Definitions of all key terms and concepts used in the project                            |
 | [Threat Model](docs/THREAT_MODEL.md)                   | STRIDE analysis, risk matrix, attack surfaces, security controls                         |
@@ -60,6 +60,7 @@ VALayr incentivises miners to discover vulnerabilities in opt-in smart contracts
 | Component           | Location                     | Status |
 | ------------------- | ---------------------------- | ------ |
 | On-chain Contracts  | `contracts/src/`             | v1     |
+| Treasury            | `contracts/src/Treasury.sol` | v1     |
 | Vulnerable Corpus   | `contracts/corpus/`          | v1     |
 | Task Generator      | `task-generator/`            | v1     |
 | Mutator Framework   | `task-generator/mutator/`    | v1     |

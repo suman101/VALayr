@@ -224,19 +224,19 @@ class TestIdentityConflicts:
         return IdentityStore(data_dir=tmp_path / "identity")
 
     def test_duplicate_claim_rejected(self, store):
-        store.claim_identity(VALID_HOTKEY, "immunefi", "alice123")
+        store.claim_identity(VALID_HOTKEY, "immunefi", "alice123", signed_challenge="test_sig")
         # Manually verify the claim
         store._identities[VALID_HOTKEY].claims["immunefi"].verified = True
         store._save()
 
         # Different miner claiming same platform_id on same platform
         with pytest.raises(ValueError, match="already claimed"):
-            store.claim_identity(VALID_HOTKEY_2, "immunefi", "alice123")
+            store.claim_identity(VALID_HOTKEY_2, "immunefi", "alice123", signed_challenge="test_sig")
 
     def test_same_miner_can_update_claim(self, store):
-        store.claim_identity(VALID_HOTKEY, "immunefi", "alice123")
+        store.claim_identity(VALID_HOTKEY, "immunefi", "alice123", signed_challenge="test_sig")
         # Same miner updating is allowed
-        claim = store.claim_identity(VALID_HOTKEY, "immunefi", "alice456")
+        claim = store.claim_identity(VALID_HOTKEY, "immunefi", "alice456", signed_challenge="test_sig")
         assert claim.platform_id == "alice456"
 
     def test_invalid_hotkey_rejected(self, store):

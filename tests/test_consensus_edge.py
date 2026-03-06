@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from validator.anticollusion.consensus import (
-    ConsensusEngine,
+    AntiCollusionEngine as ConsensusEngine,
     MIN_QUORUM,
     CONSENSUS_THRESHOLD,
     DIVERGENCE_SLASH_THRESHOLD,
@@ -32,15 +32,15 @@ def engine_with_validators(engine):
 
 
 class TestAssignmentEdgeCases:
-    def test_no_validators_returns_empty(self, engine):
-        assigned = engine.assign_validators("task_1")
-        assert assigned == [] or len(assigned) == 0
+    def test_no_validators_raises(self, engine):
+        with pytest.raises(ValueError, match="Insufficient active validators"):
+            engine.assign_validators("task_1")
 
-    def test_fewer_than_quorum_returns_all(self, engine):
+    def test_fewer_than_quorum_raises(self, engine):
         engine.register_validator("v1", stake=50.0)
         engine.register_validator("v2", stake=50.0)
-        assigned = engine.assign_validators("task_1")
-        assert len(assigned) <= 2
+        with pytest.raises(ValueError, match="Insufficient active validators"):
+            engine.assign_validators("task_1")
 
     def test_max_validators_cap(self, engine):
         for i in range(20):
@@ -48,14 +48,13 @@ class TestAssignmentEdgeCases:
         assigned = engine.assign_validators("task_1")
         assert len(assigned) <= MAX_VALIDATORS_PER_TASK
 
-    def test_assignment_deterministic_same_seed(self, tmp_path):
+    def test_assignment_deterministic_same_instance(self, tmp_path):
+        """Same engine instance assigns the same validators for the same task."""
         e1 = ConsensusEngine(seed=42, data_dir=tmp_path / "e1")
-        e2 = ConsensusEngine(seed=42, data_dir=tmp_path / "e2")
         for i in range(8):
             e1.register_validator(f"v_{i}", stake=100.0)
-            e2.register_validator(f"v_{i}", stake=100.0)
         a1 = e1.assign_validators("task_x")
-        a2 = e2.assign_validators("task_x")
+        a2 = e1.assign_validators("task_x")
         assert a1 == a2
 
     def test_different_tasks_may_get_different_validators(self, engine_with_validators):
@@ -67,51 +66,68 @@ class TestAssignmentEdgeCases:
         assert isinstance(a2, list)
 
 
+def _make_vote(hotkey: str, valid: bool, severity: float) -> dict:
+    """Helper to create a vote dict matching compute_consensus expected format."""
+    return {
+        "validator_hotkey": hotkey,
+        "result": "VALID" if valid else "REJECT_INVALID",
+        "fingerprint": f"fp_{hotkey}",
+        "severity_score": severity,
+    }
+
+
 class TestConsensusEdgeCases:
     def test_single_vote_below_quorum(self, engine_with_validators):
+        votes = [_make_vote("validator_0", valid=True, severity=0.8)]
         result = engine_with_validators.compute_consensus(
             task_id="task_1",
             submission_hash="0xabc",
-            validator_votes={"validator_0": {"valid": True, "severity": 0.8}},
+            votes=votes,
         )
-        # Single vote < MIN_QUORUM should still produce a result (may reject)
-        assert "consensus" in result or "status" in result or result is not None
+        # Single vote < MIN_QUORUM should return NO_QUORUM
+        assert result is not None
+        assert result.consensus_result == "NO_QUORUM"
 
     def test_unanimous_agreement(self, engine_with_validators):
-        votes = {}
-        for i in range(MIN_QUORUM):
-            votes[f"validator_{i}"] = {"valid": True, "severity": 0.9}
+        votes = [
+            _make_vote(f"validator_{i}", valid=True, severity=0.9)
+            for i in range(MIN_QUORUM)
+        ]
         result = engine_with_validators.compute_consensus(
-            task_id="task_2", submission_hash="0xdef", validator_votes=votes,
+            task_id="task_2", submission_hash="0xdef", votes=votes,
         )
         assert result is not None
 
     def test_unanimous_rejection(self, engine_with_validators):
-        votes = {}
-        for i in range(MIN_QUORUM):
-            votes[f"validator_{i}"] = {"valid": False, "severity": 0.0}
+        votes = [
+            _make_vote(f"validator_{i}", valid=False, severity=0.0)
+            for i in range(MIN_QUORUM)
+        ]
         result = engine_with_validators.compute_consensus(
-            task_id="task_3", submission_hash="0x111", validator_votes=votes,
+            task_id="task_3", submission_hash="0x111", votes=votes,
         )
         assert result is not None
 
     def test_split_vote_at_threshold_boundary(self, engine_with_validators):
         """66% threshold: 4 out of 6 votes agree = 66.7% — should reach consensus."""
-        votes = {}
-        for i in range(4):
-            votes[f"validator_{i}"] = {"valid": True, "severity": 0.5}
-        for i in range(4, 6):
-            votes[f"validator_{i}"] = {"valid": False, "severity": 0.0}
+        votes = [
+            _make_vote(f"validator_{i}", valid=True, severity=0.5)
+            for i in range(4)
+        ] + [
+            _make_vote(f"validator_{i}", valid=False, severity=0.0)
+            for i in range(4, 6)
+        ]
         result = engine_with_validators.compute_consensus(
-            task_id="task_4", submission_hash="0x222", validator_votes=votes,
+            task_id="task_4", submission_hash="0x222", votes=votes,
         )
         assert result is not None
 
     def test_empty_votes(self, engine_with_validators):
         result = engine_with_validators.compute_consensus(
-            task_id="task_5", submission_hash="0x333", validator_votes={},
+            task_id="task_5", submission_hash="0x333", votes=[],
         )
         assert result is not None
+        assert result.consensus_result == "NO_QUORUM"
 
 
 class TestDivergenceTracking:
