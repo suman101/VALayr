@@ -42,7 +42,7 @@ logger = get_logger(__name__)
 ANVIL_HOST = "127.0.0.1"
 ANVIL_PORT_BASE = 18545  # Each validation gets a unique port
 FOUNDRY_VERSION = "nightly-2024-12-01"
-DOCKER_IMAGE = "ghcr.io/exploit-subnet/validator:v0.1.0"
+DOCKER_IMAGE = os.environ.get("VALAYR_DOCKER_IMAGE", "ghcr.io/exploit-subnet/validator:v0.1.0")
 
 # V-5: Whether to enforce Docker sandbox mode for network isolation.
 # Defaults to ON when running inside a Docker sandbox (DOCKER_SANDBOX_ACTIVE=1)

@@ -30,6 +30,9 @@ def _load_shares() -> tuple[float, float, float]:
     miner = float(os.environ.get("VALAYR_MINER_SHARE", DEFAULT_MINER_SHARE))
     validator = float(os.environ.get("VALAYR_VALIDATOR_SHARE", DEFAULT_VALIDATOR_SHARE))
     treasury = float(os.environ.get("VALAYR_TREASURY_SHARE", DEFAULT_TREASURY_SHARE))
+    for name, val in [("miner", miner), ("validator", validator), ("treasury", treasury)]:
+        if not (0.0 <= val <= 1.0):
+            raise ValueError(f"{name} share must be in [0, 1], got {val}")
     total = miner + validator + treasury
     if abs(total - 1.0) > 1e-6:
         raise ValueError(

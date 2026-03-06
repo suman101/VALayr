@@ -72,7 +72,8 @@ class SeverityScorer:
 
         # Sanity check: weights must sum to 1.0
         total = self.w_funds + self.w_priv + self.w_invariant + self.w_lock
-        assert abs(total - 1.0) < 1e-9, f"Weights must sum to 1.0, got {total}"
+        if abs(total - 1.0) > 1e-9:
+            raise ValueError(f"Weights must sum to 1.0, got {total}")
 
     def score(self, trace) -> float:
         """

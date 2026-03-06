@@ -191,7 +191,7 @@ contract ProtocolRegistry is Pausable {
     function withdrawBounty(
         bytes32 contractHash,
         uint256 startIndex
-    ) external onlyProtocol(contractHash) nonReentrant {
+    ) external onlyProtocol(contractHash) nonReentrant whenNotPaused {
         RegisteredContract storage reg = registry[contractHash];
         if (reg.active) revert ContractStillActive();
 

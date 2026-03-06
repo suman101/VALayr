@@ -49,6 +49,9 @@ contract InvariantRegistry is Pausable {
     error InvariantInactive();
     error InvalidPropertyId();
 
+    /// @dev Maximum length for description and solidityCondition strings (10 KB).
+    uint256 private constant MAX_STRING_LEN = 10_240;
+
     constructor(uint256 transferDelay) Ownable2Step(transferDelay) {}
 
     modifier onlyValidator() {
@@ -65,6 +68,14 @@ contract InvariantRegistry is Pausable {
         bytes calldata compiledCheck
     ) external onlyValidator whenNotPaused returns (uint256 id) {
         if (miner == address(0)) revert ZeroAddress();
+        require(
+            bytes(description).length <= MAX_STRING_LEN,
+            "description too long"
+        );
+        require(
+            bytes(solidityCondition).length <= MAX_STRING_LEN,
+            "condition too long"
+        );
         id = propertyCount++;
         properties[id] = Invariant({
             submitter: miner,

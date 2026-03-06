@@ -17,6 +17,7 @@ Usage::
 import logging
 import os
 import re
+import threading
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ _SECRET_SPECS: dict[str, dict] = {
 }
 
 _cache: dict[str, str] = {}
+_cache_lock = threading.Lock()
 
 
 def get_secret(
@@ -73,8 +75,9 @@ def get_secret(
     RuntimeError
         If a *required* secret is missing, empty, or fails validation.
     """
-    if name in _cache:
-        return _cache[name]
+    with _cache_lock:
+        if name in _cache:
+            return _cache[name]
 
     value = os.environ.get(name, "").strip()
 
@@ -103,7 +106,8 @@ def get_secret(
             raise RuntimeError(f"Secret {name} does not match expected format.")
         logger.warning("Secret %s does not match expected format", name)
 
-    _cache[name] = value
+    with _cache_lock:
+        _cache[name] = value
     return value
 
 

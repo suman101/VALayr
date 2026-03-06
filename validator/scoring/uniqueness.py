@@ -94,7 +94,8 @@ class UniquenessScorer:
 
     def register_task(self, task_id: str, published_at: Optional[float] = None) -> None:
         """Record when a task was published (for timing analysis)."""
-        self._task_timestamps[task_id] = published_at or time.time()
+        with self._lock:
+            self._task_timestamps[task_id] = published_at or time.time()
 
     def score_submission(
         self,

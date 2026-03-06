@@ -926,7 +926,7 @@ contract InvariantCheckTest is Test {{
         corpus_dir = Path(__file__).resolve().parent.parent.parent / "contracts" / "corpus"
         if corpus_dir.is_dir():
             # Try exact prefix match
-            prefix = task_id[:10]
+            prefix = task_id[:16]
             task_dir = corpus_dir / prefix
             source_file = task_dir / "Vulnerable.sol"
             if source_file.exists():
@@ -946,10 +946,10 @@ contract InvariantCheckTest is Test {{
                 if task_json.exists():
                     try:
                         cfg = json.loads(task_json.read_text())
-                        if cfg.get("task_id", "").startswith(task_id[:10]):
+                        if cfg.get("task_id", "").startswith(task_id[:16]):
                             return sf.read_text()
-                    except (json.JSONDecodeError, KeyError):
-                        pass
+                    except (json.JSONDecodeError, KeyError) as exc:
+                        logger.debug("Skipping task.json at %s: %s", task_json, exc)
 
         return None
 

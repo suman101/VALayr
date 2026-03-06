@@ -62,6 +62,9 @@ REFRESH_INTERVAL = 86400  # 24 hours
 # Maximum contracts to add per refresh cycle
 MAX_CONTRACTS_PER_CYCLE = 20
 
+# Maximum discovered contracts to keep in memory
+MAX_DISCOVERED_CONTRACTS = 10_000
+
 
 @dataclass
 class DiscoveredContract:
@@ -130,6 +133,7 @@ class MainnetAutoDiscovery:
                 new_contracts.append(c)
 
         self._last_refresh = now
+        self._prune()
         self._save()
 
         logger.info(
@@ -185,6 +189,18 @@ class MainnetAutoDiscovery:
         except (json.JSONDecodeError, OSError, TypeError) as exc:
             logger.warning("Failed to load discovery state from %s: %s — starting empty", self._state_path, exc)
 
+    def _prune(self) -> None:
+        """Evict oldest entries if _discovered exceeds MAX_DISCOVERED_CONTRACTS."""
+        if len(self._discovered) <= MAX_DISCOVERED_CONTRACTS:
+            return
+        # Sort by discovered_at ascending, keep the newest entries
+        sorted_keys = sorted(
+            self._discovered, key=lambda k: self._discovered[k].discovered_at,
+        )
+        excess = len(sorted_keys) - MAX_DISCOVERED_CONTRACTS
+        for key in sorted_keys[:excess]:
+            del self._discovered[key]
+
     def _save(self) -> None:
         data = {
             "last_refresh": self._last_refresh,
@@ -204,6 +220,8 @@ class MainnetAutoDiscovery:
         tmp = self._state_path.with_suffix(self._state_path.suffix + ".tmp")
         tmp.write_text(payload)
         fd = os.open(str(tmp), os.O_RDONLY)
-        os.fsync(fd)
-        os.close(fd)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(tmp, self._state_path)

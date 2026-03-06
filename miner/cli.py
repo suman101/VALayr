@@ -112,16 +112,16 @@ class MinerCLI:
 
         # Prevent path traversal: exploit file must be under cwd or
         # a known project directory
-        if not (str(exploit_path).startswith(str(cwd) + os.sep)
-                or str(exploit_path).startswith(str(PROJECT_ROOT) + os.sep)):
+        if not (exploit_path.is_relative_to(cwd)
+                or exploit_path.is_relative_to(PROJECT_ROOT)):
             logger.error("Exploit file must be under %s or %s", cwd, PROJECT_ROOT)
             return
 
         # Reject symlinks pointing outside the allowed directories
         if exploit_path.is_symlink():
             real = exploit_path.resolve()
-            if not (str(real).startswith(str(cwd) + os.sep)
-                    or str(real).startswith(str(PROJECT_ROOT) + os.sep)):
+            if not (real.is_relative_to(cwd)
+                    or real.is_relative_to(PROJECT_ROOT)):
                 logger.error("Exploit symlink points outside allowed directory")
                 return
 

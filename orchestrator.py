@@ -1062,7 +1062,15 @@ class Orchestrator:
     def _save_report(self, result: SubmissionResult):
         """Persist submission result to disk."""
         report_path = self.reports_dir / f"{result.task_id[:16]}_{result.miner_address[:8]}_{time.time_ns()}.json"
-        report_path.write_text(json.dumps(result.to_dict(), indent=2))
+        payload = json.dumps(result.to_dict(), indent=2)
+        tmp_path = report_path.with_suffix(".tmp")
+        tmp_path.write_text(payload)
+        fd = os.open(str(tmp_path), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp_path, report_path)
 
     def reset(self) -> None:
         """Reset all state. For testing only."""

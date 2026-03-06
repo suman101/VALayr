@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -511,3 +512,110 @@ class TestMetricsIntegration:
                 miner_address="0xTEST",
             )
             assert m._global_store.get_counter("validations_total") >= initial
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P1 Tests: MEDIUM Fix Coverage
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSeverityWeightValidation:
+    """M-11: SeverityScorer raises ValueError (not assert) on bad weights."""
+
+    def test_invalid_weights_raises_value_error(self):
+        from validator.scoring.severity import SeverityScorer
+        with pytest.raises(ValueError, match="sum to 1.0"):
+            SeverityScorer(w_funds=0.5, w_priv=0.5, w_invariant=0.5, w_lock=0.5)
+
+    def test_valid_custom_weights(self):
+        from validator.scoring.severity import SeverityScorer
+        scorer = SeverityScorer(w_funds=0.5, w_priv=0.2, w_invariant=0.2, w_lock=0.1)
+        assert scorer.w_funds == 0.5
+
+
+class TestRewardShareValidation:
+    """M-17: Negative reward shares rejected even if they sum to 1.0."""
+
+    def test_negative_share_rejected(self):
+        from validator.bounty.reward_split import _load_shares
+        with patch.dict("os.environ", {
+            "VALAYR_MINER_SHARE": "-0.5",
+            "VALAYR_VALIDATOR_SHARE": "1.0",
+            "VALAYR_TREASURY_SHARE": "0.5",
+        }):
+            with pytest.raises(ValueError, match=r"miner share must be in \[0, 1\]"):
+                _load_shares()
+
+    def test_valid_shares_accepted(self):
+        from validator.bounty.reward_split import _load_shares
+        with patch.dict("os.environ", {
+            "VALAYR_MINER_SHARE": "0.60",
+            "VALAYR_VALIDATOR_SHARE": "0.25",
+            "VALAYR_TREASURY_SHARE": "0.15",
+        }):
+            m, v, t = _load_shares()
+            assert abs(m - 0.6) < 1e-9
+            assert abs(v - 0.25) < 1e-9
+            assert abs(t - 0.15) < 1e-9
+
+
+class TestDiscoveryPruning:
+    """M-10: _discovered dict is pruned when exceeding MAX_DISCOVERED_CONTRACTS."""
+
+    def test_prune_evicts_oldest(self, tmp_path):
+        from importlib import import_module
+        discovery_mod = import_module("task-generator.discovery")
+        disco = discovery_mod.MainnetAutoDiscovery(data_dir=tmp_path)
+
+        # Inject more contracts than the limit
+        original_max = discovery_mod.MAX_DISCOVERED_CONTRACTS
+        discovery_mod.MAX_DISCOVERED_CONTRACTS = 5
+        try:
+            base_time = 1000000.0
+            for i in range(8):
+                key = f"1:0x{i:040x}"
+                disco._discovered[key] = discovery_mod.DiscoveredContract(
+                    address=f"0x{i:040x}",
+                    chain_id=1,
+                    source="test",
+                    discovered_at=base_time + i,
+                    metadata={},
+                )
+            disco._prune()
+            assert len(disco._discovered) == 5
+            # Oldest entries (0, 1, 2) should be evicted
+            assert f"1:0x{'0' * 40}" not in disco._discovered
+            assert f"1:0x{'0' * 39}5" in disco._discovered  # idx 5 kept
+        finally:
+            discovery_mod.MAX_DISCOVERED_CONTRACTS = original_max
+
+
+class TestSecretsThreadSafety:
+    """M-12: secrets cache is thread-safe."""
+
+    def test_concurrent_get_secret(self):
+        import threading
+        from validator.utils.secrets import _cache, _cache_lock
+
+        # Clear cache for isolation
+        with _cache_lock:
+            _cache.clear()
+
+        errors = []
+
+        def worker(i):
+            try:
+                with patch.dict("os.environ", {f"TEST_SECRET_{i}": f"value_{i}" * 10}):
+                    from validator.utils.secrets import get_secret
+                    result = get_secret(f"TEST_SECRET_{i}", required=False)
+                    assert result == f"value_{i}" * 10
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []

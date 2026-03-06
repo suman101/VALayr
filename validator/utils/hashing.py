@@ -16,6 +16,9 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
+# Cached backend function set by _validate_backend()
+_backend_fn = None
+
 # Known test vector: keccak256(b"hello")
 _KNOWN_HELLO_HASH = "0x1c8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8"
 
@@ -26,6 +29,8 @@ def keccak256(data: bytes) -> str:
     >>> keccak256(b"hello")
     '0x1c8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8'
     """
+    if _backend_fn is not None:
+        return _backend_fn(data)
     # Primary: pycryptodome (fast, no subprocess)
     try:
         from Crypto.Hash import keccak as _keccak
@@ -57,15 +62,21 @@ def keccak256(data: bytes) -> str:
 
 def _validate_backend() -> None:
     """Verify the active keccak256 backend produces correct results."""
+    global _backend_fn
     result = keccak256(b"hello")
     if result != _KNOWN_HELLO_HASH:
         raise RuntimeError(
             f"keccak256 backend produces incorrect hash for b'hello': "
             f"got {result}, expected {_KNOWN_HELLO_HASH}"
         )
-    # Log which backend is active
+    # Cache the working backend to avoid repeated import/subprocess attempts
     try:
         from Crypto.Hash import keccak as _keccak  # noqa: F401
+        def _pycryptodome_keccak(data: bytes) -> str:
+            k = _keccak.new(digest_bits=256)
+            k.update(data)
+            return "0x" + k.hexdigest()
+        _backend_fn = _pycryptodome_keccak
         logger.info("keccak256 backend: pycryptodome (preferred)")
     except ImportError:
         logger.info("keccak256 backend: cast CLI (fallback)")

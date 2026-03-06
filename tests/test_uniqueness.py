@@ -256,3 +256,30 @@ class TestConcurrentUniquenessScorer:
 
         assert errors == []
         assert len(scorer._submissions) == 200  # 10 workers * 20 tasks each
+
+
+# ── P1 Tests: M-7 register_task Thread-Safety ────────────────────────────────
+
+class TestRegisterTaskThreadSafety:
+    """M-7: register_task acquires _lock to avoid corruption."""
+
+    def test_concurrent_register_task(self):
+        import threading
+        scorer = UniquenessScorer()
+        errors = []
+
+        def worker(i):
+            try:
+                for j in range(50):
+                    scorer.register_task(f"task-{i}-{j}")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []
+        assert len(scorer._task_timestamps) == 500

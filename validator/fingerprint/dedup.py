@@ -401,6 +401,8 @@ class FingerprintEngine:
                 try:
                     with os.fdopen(fd, "w") as tmp:
                         tmp.write(data)
+                        tmp.flush()
+                        os.fsync(tmp.fileno())
                     # Atomic rename (POSIX guarantees atomicity on same filesystem)
                     os.replace(tmp_path, str(self.db_path))
                 except BaseException:

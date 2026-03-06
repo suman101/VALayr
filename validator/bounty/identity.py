@@ -255,6 +255,8 @@ class IdentityStore:
         tmp_path.write_text(payload)
         # H-9 fix: fsync before rename to prevent data loss on crash
         fd = os.open(str(tmp_path), os.O_RDONLY)
-        os.fsync(fd)
-        os.close(fd)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(tmp_path, self._db_path)
