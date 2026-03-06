@@ -606,14 +606,57 @@ docker compose ps
 curl http://localhost:9946/health
 ```
 
-### 9.2 Contract Upgrade
+### 9.2 Contract Upgrade Strategy
 
-Smart contracts are **immutable** once deployed. To upgrade:
+VALayr contracts are **non-upgradeable by design** — there is no UUPS proxy,
+transparent proxy, or `delegatecall`-based upgrade mechanism. This is a
+deliberate architectural choice:
 
-1. Deploy new contract version
-2. Update validator configuration to point to new addresses
-3. Migrate any relevant on-chain state
-4. Update validators via coordinated rollout
+| Approach          | Chosen? | Rationale                                                                 |
+| ----------------- | ------- | ------------------------------------------------------------------------- |
+| Immutable deploy  | **Yes** | Auditable, no admin key can alter logic, simpler threat model             |
+| UUPS proxy        | No      | Adds storage-layout risk, admin-key attack surface, and upgrade governance complexity |
+| Transparent proxy | No      | Same risks as UUPS plus larger gas overhead from proxy dispatch           |
+
+#### Migration Procedure (deploy-and-swap)
+
+When a contract upgrade is needed:
+
+1. **Deploy new contract** with updated logic via `Deploy.s.sol`:
+   ```bash
+   TRANSFER_DELAY=172800 forge script script/Deploy.s.sol \
+     --rpc-url $RPC_URL --broadcast --verify
+   ```
+2. **Verify the new contract** on the block explorer.
+3. **Migrate on-chain state** if needed (e.g., re-register validators, replay
+   protocol registrations). For `ExploitRegistry`, the fingerprint data is
+   derived from off-chain consensus and can be replayed from the Python-side
+   `FingerprintEngine` database.
+4. **Update validator configs** to point to the new contract addresses:
+   ```bash
+   # In .env or secrets manager
+   PROTOCOL_REGISTRY=0xNEW_ADDR
+   EXPLOIT_REGISTRY=0xNEW_ADDR
+   TREASURY=0xNEW_ADDR
+   ```
+5. **Coordinated rollout**: Update all validators within one epoch to avoid
+   split-brain writes to old and new contracts.
+6. **Deprecate old contracts**: Transfer remaining funds out and call `pause()`
+   on old contracts (if applicable). Old contracts remain on-chain and readable
+   for historical audit.
+
+#### Storage Layout Rules (if UUPS is adopted in future)
+
+If the project moves to upgradeable contracts in the future:
+
+- All storage variables must be declared in strict order — never reorder.
+- Use `@custom:storage-location erc7201` (namespaced storage) to avoid slot
+  collisions.
+- Never remove a storage variable — mark deprecated with `__gap` slots.
+- New variables must be appended after existing ones.
+- Run `forge inspect <Contract> storage-layout` before and after each change to
+  verify layout compatibility.
+- Pair with a timelock (≥ 48h) on the `upgradeTo` call for mainnet.
 
 ### 9.3 Rollback
 

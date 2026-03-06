@@ -76,6 +76,18 @@ class ValidatorState:
         recent_rate = 1.0 - self.divergence_rate
         return 0.6 * base + 0.4 * recent_rate
 
+    def _update(self, agreed: bool):
+        """Record a validation result and update tracking state."""
+        self.total_validations += 1
+        if agreed:
+            self.agreements += 1
+        else:
+            self.divergences += 1
+        self.recent_results.append(agreed)
+        if len(self.recent_results) > DIVERGENCE_WINDOW:
+            self.recent_results = self.recent_results[-DIVERGENCE_WINDOW:]
+        self.last_active = time.time()
+
 
 @dataclass
 class ConsensusResult:
@@ -306,37 +318,21 @@ class AntiCollusionEngine:
             result.consensus_severity = severity_values[mid]
 
         # ── Update Validator State ────────────────────────────────────────
+        participants = set()
         for hotkey in result.agreeing_validators:
             if hotkey in self.validators:
-                v = self.validators[hotkey]
-                v.total_validations += 1
-                v.agreements += 1
-                v.recent_results.append(True)
-                v.recent_results = v.recent_results[-DIVERGENCE_WINDOW:]
-                v.last_active = time.time()
+                self.validators[hotkey]._update(agreed=True)
+                participants.add(hotkey)
 
         for hotkey in result.diverging_validators:
             if hotkey in self.validators:
-                v = self.validators[hotkey]
-                v.total_validations += 1
-                v.divergences += 1
-                v.recent_results.append(False)
-                v.recent_results = v.recent_results[-DIVERGENCE_WINDOW:]
-                v.last_active = time.time()
+                self.validators[hotkey]._update(agreed=False)
+                participants.add(hotkey)
 
-        # ── Check Slash Conditions ────────────────────────────────────────
-        self._check_slashing()
+        # ── Check Slash Conditions (participants only) ────────────────────
+        self._check_slashing(participants)
 
-        self.consensus_history.append(result)
-        # Prune history to prevent unbounded memory growth
-        _MAX_HISTORY = 10_000
-        if len(self.consensus_history) > _MAX_HISTORY:
-            self.consensus_history = self.consensus_history[-_MAX_HISTORY:]
-
-        self._rounds_since_save += 1
-        if self._rounds_since_save >= SAVE_STATE_INTERVAL:
-            self._save_state()
-            self._rounds_since_save = 0
+        self._record_and_persist(result)
 
         return result
 
@@ -398,27 +394,20 @@ class AntiCollusionEngine:
         result.diverging_validators = list(all_voters - set(majority_validators))
 
         # Update validator divergence tracking (shared with exploit consensus)
+        participants = set()
         for hotkey in result.agreeing_validators:
             if hotkey in self.validators:
-                v = self.validators[hotkey]
-                v.total_validations += 1
-                v.agreements += 1
-                v.recent_results.append(True)
-                v.recent_results = v.recent_results[-DIVERGENCE_WINDOW:]
-                v.last_active = time.time()
+                self.validators[hotkey]._update(agreed=True)
+                participants.add(hotkey)
 
         for hotkey in result.diverging_validators:
             if hotkey in self.validators:
-                v = self.validators[hotkey]
-                v.total_validations += 1
-                v.divergences += 1
-                v.recent_results.append(False)
-                v.recent_results = v.recent_results[-DIVERGENCE_WINDOW:]
-                v.last_active = time.time()
+                self.validators[hotkey]._update(agreed=False)
+                participants.add(hotkey)
 
-        self._check_slashing()
+        self._check_slashing(participants)
 
-        self.consensus_history.append(ConsensusResult(
+        self._record_and_persist(ConsensusResult(
             task_id=f"adversarial:{challenge_id}",
             submission_hash=f"inv:{invariant_id}",
             consensus_result=majority_outcome,
@@ -429,6 +418,13 @@ class AntiCollusionEngine:
             votes=result.votes,
         ))
 
+        return result
+
+    # ── Slashing ──────────────────────────────────────────────────────────
+
+    def _record_and_persist(self, result: ConsensusResult):
+        """Append to history, prune, and persist if interval reached."""
+        self.consensus_history.append(result)
         _MAX_HISTORY = 10_000
         if len(self.consensus_history) > _MAX_HISTORY:
             self.consensus_history = self.consensus_history[-_MAX_HISTORY:]
@@ -438,16 +434,22 @@ class AntiCollusionEngine:
             self._save_state()
             self._rounds_since_save = 0
 
-        return result
+    def _check_slashing(self, participant_hotkeys: set[str] | None = None):
+        """Check validators for slash conditions and cooldown recovery.
 
-    # ── Slashing ──────────────────────────────────────────────────────────
-
-    def _check_slashing(self):
-        """Check all validators for slash conditions and cooldown recovery."""
+        When *participant_hotkeys* is given, only those validators are
+        evaluated for new slashing (recovery checks still run for any
+        previously slashed validator that participated).  This avoids
+        the O(V) full scan on every consensus call.
+        """
         now = time.time()
         to_slash: list[str] = []
+        check_keys = participant_hotkeys if participant_hotkeys is not None else set(self.validators)
 
-        for hotkey, v in self.validators.items():
+        for hotkey in check_keys:
+            v = self.validators.get(hotkey)
+            if v is None:
+                continue
             # Recovery: lift slash after cooldown if divergence has improved
             if v.slashed and v.slashed_at > 0:
                 if (now - v.slashed_at) >= SLASH_COOLDOWN_SECONDS:
