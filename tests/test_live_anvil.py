@@ -712,6 +712,115 @@ def test_adversarial_onchain_integration(anvil: AnvilInstance):
     print("[+] Adversarial on-chain integration: PASSED\n")
 
 
+def test_treasury_competition_lifecycle(anvil: AnvilInstance):
+    """
+    Deploy Treasury and exercise the full competition lifecycle:
+    1. createCompetition() with funded prize pool
+    2. submitScore() tracks highest score (winner takes all)
+    3. settle() after deadline deducts 5% fee
+    4. withdrawPrize() sends reward to winner
+    5. receive() rejects unsolicited ETH
+    """
+    print("[7/7] Testing Treasury competition lifecycle...")
+
+    contracts_root = str(PROJECT_ROOT / "contracts")
+
+    # Deploy Treasury with deployer as validator, transferDelay=0
+    treasury_addr = forge_create(
+        anvil.rpc_url,
+        "src/Treasury.sol:Treasury",
+        contracts_root,
+        constructor_args=[DEPLOYER_ADDR, "0"],
+    )
+    print(f"  Treasury deployed at {treasury_addr}")
+
+    # 1. Create competition: 0.1 ETH prize, 1 hour duration
+    task_id = "0x" + "ab" * 32
+    cast_send(anvil.rpc_url, treasury_addr,
+              "createCompetition(bytes32,uint256)",
+              [task_id, "3600"],
+              value="100000000000000000")  # 0.1 ETH
+    print("  Competition created (0.1 ETH, 1h)")
+
+    # Verify nextCompetitionId == 1
+    next_id = cast_call(anvil.rpc_url, treasury_addr, "nextCompetitionId()")
+    assert int(next_id, 16) == 1, f"Expected nextCompetitionId=1, got {next_id}"
+
+    # Verify isActive
+    active = cast_call(anvil.rpc_url, treasury_addr,
+                        "isActive(uint256)", ["0"])
+    assert int(active, 16) == 1, "Competition should be active"
+
+    # 2. Submit scores from two miners
+    miner_a = "0x" + "a1" * 20
+    miner_b = "0x" + "b2" * 20
+    fp_a = "0x" + "11" * 32
+    fp_b = "0x" + "22" * 32
+
+    cast_send(anvil.rpc_url, treasury_addr,
+              "submitScore(uint256,address,uint256,bytes32)",
+              ["0", miner_a, "5000", fp_a])
+    print("  Miner A submitted score=5000")
+
+    cast_send(anvil.rpc_url, treasury_addr,
+              "submitScore(uint256,address,uint256,bytes32)",
+              ["0", miner_b, "8000", fp_b])
+    print("  Miner B submitted score=8000 (higher)")
+
+    # 3. Warp past deadline and settle
+    # Anvil: evm_increaseTime + evm_mine
+    anvil.rpc_call("evm_increaseTime", [3601])
+    anvil.rpc_call("evm_mine", [])
+
+    # Verify no longer active
+    active_after = cast_call(anvil.rpc_url, treasury_addr,
+                              "isActive(uint256)", ["0"])
+    assert int(active_after, 16) == 0, "Competition should no longer be active"
+
+    cast_send(anvil.rpc_url, treasury_addr, "settle(uint256)", ["0"])
+    print("  Competition settled")
+
+    # Verify accumulated fees = 5% of 0.1 ETH = 0.005 ETH
+    fees_raw = cast_call(anvil.rpc_url, treasury_addr, "accumulatedFees()")
+    fees = int(fees_raw, 16)
+    expected_fee = 100000000000000000 * 500 // 10000  # 5000000000000000
+    assert fees == expected_fee, f"Expected fees={expected_fee}, got {fees}"
+    print(f"  Fees verified: {fees} wei (5%)")
+
+    # 4. Winner (miner_b) withdraws
+    # Impersonate miner_b on Anvil and fund with ETH for gas
+    anvil.rpc_call("anvil_impersonateAccount", [miner_b])
+    anvil.rpc_call("anvil_setBalance",
+                    [miner_b, hex(10**18)])  # 1 ETH for gas
+    pre_balance = anvil.get_balance(miner_b)
+
+    # Send from miner_b
+    cmd = ["cast", "send", "--rpc-url", anvil.rpc_url,
+           "--unlocked", "--from", miner_b,
+           treasury_addr, "withdrawPrize(uint256)", "0"]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, f"withdrawPrize failed: {result.stderr}"
+
+    post_balance = anvil.get_balance(miner_b)
+    expected_reward = 100000000000000000 - expected_fee  # 0.095 ETH
+    # Balance should have increased by ~reward (minus gas)
+    balance_increase = post_balance - pre_balance
+    assert balance_increase > expected_reward * 95 // 100, \
+        f"Winner balance increase too low: {balance_increase}"
+    print(f"  Winner withdrew {balance_increase} wei (expected ~{expected_reward})")
+
+    # 5. Verify receive() rejects unsolicited ETH
+    cmd = ["cast", "send", "--rpc-url", anvil.rpc_url,
+           "--unlocked", "--from", DEPLOYER_ADDR,
+           treasury_addr, "--value", "1000"]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    assert result.returncode != 0 or "revert" in result.stderr.lower(), \
+        "Unsolicited ETH should have been rejected"
+    print("  receive() correctly rejects unsolicited ETH")
+
+    print("[+] Treasury competition lifecycle: PASSED\n")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -736,6 +845,7 @@ def main():
         test_fingerprint_and_score_from_live_trace,
         test_full_epoch_from_live_data,
         test_adversarial_onchain_integration,
+        test_treasury_competition_lifecycle,
     ]
 
     passed = 0
