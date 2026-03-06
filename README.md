@@ -314,6 +314,14 @@ python3 neurons/miner.py --local
 | `VALAYR_REWARD_SPLIT_PROTOCOL_FEE`  | `0.10`       | Protocol fee on bounty payouts (10%)     |
 | `VALAYR_TREASURY_ADDRESS`           | _(none)_     | Treasury contract address                |
 | `VALAYR_ANTI_BYPASS_ENABLED`        | `true`       | Enable anti-bypass violation detection   |
+| `VALAYR_RPC_URL`                    | `http://127.0.0.1:8545` | RPC endpoint for on-chain reads |
+| `VALAYR_PROTOCOL_REGISTRY`          | _(none)_     | ProtocolRegistry contract address        |
+| `VALAYR_ADVERSARIAL_SCORING`        | _(none)_     | AdversarialScoring contract address      |
+| `VALAYR_EXPLOIT_REGISTRY`           | _(none)_     | ExploitRegistry contract address         |
+| `VALAYR_ADVERSARIAL_REGISTRY`       | _(none)_     | InvariantRegistry contract address       |
+| `VALAYR_MAX_CONCURRENT_VALIDATIONS` | `4`          | Max parallel validations per epoch       |
+| `VALAYR_SUBMISSION_TIMEOUT`         | `300`        | Per-submission timeout (seconds)         |
+| `VALAYR_RECEIPT_HMAC_KEY`           | _(auto)_     | HMAC key for receipt integrity           |
 
 See [Deployment Guide](docs/DEPLOYMENT.md) for the full consolidated environment variable reference.
 
@@ -325,13 +333,13 @@ See [Deployment Guide](docs/DEPLOYMENT.md) for the full consolidated environment
 # Unit + integration (no Anvil needed)
 python3 -m pytest tests/ -v
 
-# Contract tests only (132 Solidity tests)
+# Contract tests only (134 Solidity tests)
 forge test --root contracts -vv
 
 # Live Anvil integration tests (requires Foundry)
 python3 -m pytest tests/test_live_anvil.py -v
 
-# All tests (132 Solidity + 569 Python)
+# All tests (134 Solidity + 569 Python)
 forge test --root contracts -vv && python3 -m pytest tests/ -v
 
 # Determinism verification
@@ -344,13 +352,26 @@ Test suites:
 - `test_pipeline.py` — end-to-end pipeline simulation
 - `test_live_anvil.py` — real Anvil sandbox validation
 - `test_extended.py` — mutators, metrics, neurons, miner CLI, input sanitization
-- `test_adversarial.py` — Stage 3 adversarial invariant system (35 tests)
-- `test_bounty.py` — bounty platform, reward splitting, anti-bypass
-- `test_multi_tx.py` — multi-transaction exploit sequences
-- `test_security.py` — security regression tests (path traversal, injection, etc.)
-- `test_reward_split.py` — reward-split engine unit tests
-- `test_mainnet_source.py` — mainnet contract source fetching
-- `test_difficulty_discovery.py` — difficulty scaling and discovery engine
+- `test_adversarial.py` — Stage 3 adversarial invariant system (58 tests)
+- `test_bounty.py` — bounty platform, reward splitting, anti-bypass (47 tests)
+- `test_multi_tx.py` — multi-transaction exploit sequences (21 tests)
+- `test_security.py` — security regression tests (39 tests)
+- `test_reward_split.py` — reward-split engine unit tests (10 tests)
+- `test_mainnet_source.py` — mainnet contract source fetching (17 tests)
+- `test_difficulty_discovery.py` — difficulty scaling and discovery engine (27 tests)
+- `test_round2.py` — deploy pipeline, auto-mine, key rotation (37 tests)
+- `test_e2e_pipeline.py` — full end-to-end pipeline with weight blending (32 tests)
+- `test_schemas_hashing.py` — schema validation and keccak256 hashing (29 tests)
+- `test_validate_engine_unit.py` — validation engine unit tests (36 tests)
+- `test_consensus_edge.py` — consensus edge cases (16 tests)
+- `test_mutator_extended.py` — extended mutator coverage (19 tests)
+- `test_orchestrator_integration.py` — orchestrator integration (15 tests)
+- `test_uniqueness.py` — uniqueness scoring (18 tests)
+- `test_key_rotation.py` — key rotation (17 tests)
+- `test_protocol_roundtrip.py` — protocol round-trip (11 tests)
+- `test_fingerprint_recovery.py` — fingerprint DB recovery (8 tests)
+- `test_validator_neuron.py` — validator neuron lifecycle (8 tests)
+- `test_logging_utils.py` — logging utilities (6 tests)
 
 ---
 
@@ -367,7 +388,7 @@ Test suites:
 │   │   ├── Pausable.sol
 │   │   └── stage3/            # Adversarial mode contracts
 │   ├── corpus/                 # Generated vulnerable contract corpus
-│   └── test/                   # Foundry Solidity tests (132 tests)
+│   └── test/                   # Foundry Solidity tests (134 tests)
 ├── task-generator/
 │   ├── generate.py             # Deterministic corpus generator
 │   ├── discovery.py            # Mainnet contract discovery engine
@@ -404,8 +425,8 @@ Test suites:
 ├── scripts/                    # Build, deploy, backup, health-check
 ├── exploits/                   # Reference exploit examples
 ├── docs/                       # Full documentation suite
-│   └── runbooks/               # Operational runbooks (8 files)
-├── tests/                      # Python test suites (569 tests)
+│   └── runbooks/               # Operational runbooks (10 files)
+├── tests/                      # Python test suites (569 tests, 24 files)
 │   ├── test_integration.py     #   Core unit + integration
 │   ├── test_pipeline.py        #   End-to-end pipeline
 │   ├── test_live_anvil.py      #   Real Anvil sandbox
@@ -414,7 +435,7 @@ Test suites:
 │   ├── test_bounty.py          #   Bounty / reward-split system
 │   ├── test_multi_tx.py        #   Multi-transaction exploits
 │   ├── test_security.py        #   Security regression tests
-│   └── ... (25 test files)
+│   └── ... (24 test files total)
 └── pyproject.toml
 ```
 

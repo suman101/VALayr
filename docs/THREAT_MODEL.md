@@ -4,7 +4,7 @@
 
 ## 1. Overview
 
-VALayr is a Bittensor subnet (SN-XX) that incentivises discovery of smart-contract exploits through an adversarial mining process. Miners submit Solidity exploit code, validators execute it in a deterministic sandbox, and the results are scored, fingerprinted, de-duplicated, and recorded on-chain for optional bounty payout.
+VALayr is a Bittensor subnet that incentivises discovery of smart-contract exploits through an adversarial mining process. Miners submit Solidity exploit code, validators execute it in a deterministic sandbox, and the results are scored, fingerprinted, de-duplicated, and recorded on-chain for optional bounty payout.
 
 This document describes the system's **threat actors**, **trust boundaries**, **attack surfaces**, **assets at risk**, and **mitigations** in the current design.
 
@@ -79,6 +79,9 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 | `ProtocolRegistry.withdrawBounty()`     | `onlyProtocol`     | Withdraw before claims settled | Disclosure window enforcement loop (72 h)                               |
 | `ProtocolRegistry.payExploitReward()`   | Any (after window) | Reentrancy                     | Checks-effects-interactions pattern; reward computed once and immutable |
 | `AdversarialScoring.processChallenge()` | `onlyOwner`        | Centralised scoring            | Designed as validator-only in Stage 3; decentralisation planned         |
+| `Treasury.createCompetition()`          | `onlyOwner`        | Arbitrary prize creation       | Owner-only; production requires multi-sig                               |
+| `Treasury.settlePrize()`                | `onlyOwner`        | Fraudulent settlement          | Owner-only; event emitted for audit trail                               |
+| `Treasury.withdrawFees()`               | `onlyOwner`        | Treasury drain                 | `nonReentrant` + `onlyOwner`; capped by collected fees                  |
 
 ### 4.2 Network Interfaces
 
@@ -164,7 +167,7 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 | Threat                        | Impact                  | Mitigation                                                                           |
 | ----------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
-| Commit spam on-chain          | Block legitimate miners | `MAX_COMMITS_PER_TASK = 256`; requires gas                                           |
+| Submission spam on-chain       | Block legitimate miners | Per-miner rate limit (50/epoch), global cap (1000/epoch); requires gas                |
 | Submission flood to validator | Resource exhaustion     | Per-miner rate limit (50/epoch), global cap (1000/epoch), submission cooldown (30 s) |
 | Contract registration spam    | Registry bloat          | `MIN_BOUNTY = 0.01 ETH`                                                              |
 | Large exploit source          | Memory/disk exhaustion  | 64 KB size limit                                                                     |

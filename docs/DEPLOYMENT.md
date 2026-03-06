@@ -176,6 +176,13 @@ All `VALAYR_*` variables are optional unless marked **required**. See [VALIDATOR
 | `VALAYR_TREASURY_SHARE`             | `0.10`        | Bounty       | Treasury reward share                             |
 | `VALAYR_TREASURY_ADDRESS`           | (none)        | Bounty       | Treasury contract address                         |
 | `VALAYR_RECEIPT_HMAC_KEY`           | —             | Security     | **Required.** 32+ byte hex key for receipt HMAC   |
+| `VALAYR_DOCKER_IMAGE`               | `ghcr.io/exploit-subnet/validator:v0.1.0` | Sandbox | Docker image for sandbox validation         |
+| `VALAYR_ADVERSARIAL_SCORING`        | (none)        | On-chain     | AdversarialScoring contract address               |
+| `VALAYR_RPC_URL`                    | `http://127.0.0.1:8545` | On-chain | RPC endpoint for on-chain reads              |
+| `VALAYR_PROTOCOL_REGISTRY`          | (none)        | On-chain     | ProtocolRegistry contract address                 |
+| `VALAYR_EXPLOIT_REGISTRY`           | (none)        | On-chain     | ExploitRegistry contract address                  |
+| `VALAYR_SEED_TARGETS`               | (none)        | Discovery    | Comma-separated target contract addresses         |
+| `VALAYR_SEED_CHAIN_ID`              | `1`           | Discovery    | Chain ID for mainnet discovery                    |
 | `ETH_PRIVATE_KEY`                   | —             | On-chain     | Validator/deployer private key (never commit)     |
 
 ### 3.5 Start Services

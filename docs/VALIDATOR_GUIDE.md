@@ -123,7 +123,7 @@ btcli subnet register --netuid <NETUID> --wallet.name validator --wallet.hotkey 
 
 ```bash
 # Clone and install
-git clone <repo-url> && cd VALayr
+git clone https://github.com/suman101/VALayr.git && cd VALayr
 pip install -r requirements.txt
 pip install -e ".[dev]"
 ln -sf task-generator task_generator

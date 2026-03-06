@@ -42,6 +42,8 @@ The following components are in scope for security reports:
 | --------------------- | -------------------------- | -------- |
 | Smart contracts       | `contracts/src/`           | Critical |
 | Validation engine     | `validator/engine/`        | Critical |
+| Scoring engine        | `validator/scoring/`       | Critical |
+| Treasury contract     | `contracts/src/Treasury.sol` | Critical |
 | Anti-collusion engine | `validator/anticollusion/` | High     |
 | Fingerprint dedup     | `validator/fingerprint/`   | High     |
 | Bounty system         | `validator/bounty/`        | High     |
@@ -49,6 +51,7 @@ The following components are in scope for security reports:
 | Orchestrator          | `orchestrator.py`          | High     |
 | Subnet adapter        | `subnet-adapter/`          | Medium   |
 | Docker infrastructure | `docker/`                  | Medium   |
+| Discovery engine      | `task-generator/discovery.py` | Medium |
 | Task generator        | `task-generator/`          | Low      |
 | CI / scripts          | `.github/`, `scripts/`     | Low      |
 

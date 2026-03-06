@@ -17,7 +17,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Orchestrator Stage 3 methods: `submit_invariant()`, `submit_challenge()`, `get_adversarial_weights()`
 - Orchestrator CLI commands: `invariant` and `challenge`
 - Adversarial weight blending in `close_epoch()` (70% exploit + 30% adversarial)
-- `tests/test_adversarial.py` — 35 tests for Stage 3 subsystem
+- `tests/test_adversarial.py` — 58 tests for Stage 3 subsystem
 - **Python lint & type-check CI job** — ruff, black, mypy in `lint-python` workflow job
 - `[tool.mypy]` configuration in `pyproject.toml`
 - Example data files in `data/reports/`, `data/anticollusion/`
@@ -53,7 +53,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `INVALID_SUBMISSION_PENALTY` now wired into scoring (was inert)
 - Documentation version headers bumped to v1.2 across all 11 doc files
 - **README.md** — updated project structure, components table, env vars, test counts
-- **CONTRIBUTING.md** — test counts (81→125 Solidity, 198→477 Python), symlink step, CI info
+- **CONTRIBUTING.md** — test counts (81→134 Solidity, 198→569 Python), symlink step, CI info
 - **SECURITY.md** — fixed scope table formatting, added `validator/bounty/` scope
 - **ARCHITECTURE.md** — added bounty subsystem to component map
 
@@ -87,7 +87,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `ZeroAddress` custom errors on `InvariantRegistry` and `AdversarialScoring`
 - Disclosure window enforcement in `ProtocolRegistry.withdrawBounty()` — loops through unpaid claims within `DISCLOSURE_WINDOW`
 - Zero-address validation on `recordExploit()` in both `ExploitRegistry` and `ProtocolRegistry`
-- `AdversarialMode.t.sol` — 14 Foundry tests for `InvariantRegistry` + `AdversarialScoring`
+- `AdversarialMode.t.sol` — 26 Foundry tests for `InvariantRegistry` + `AdversarialScoring`
 - Graceful `SIGTERM` shutdown handlers on both validator and miner neurons
 - `RotatingFileHandler` for structured logging (10 MB, 5 backups)
 - Bounded `consensus_history` (10 K entries) and `recent_results` pruning

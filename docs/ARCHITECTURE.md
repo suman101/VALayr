@@ -272,6 +272,13 @@ Templates (*.sol)  ──▶  MutationRegistry  ──▶  TaskPackage  ──�
 | Flash Loan                  | 1         | Hard        |
 | Flash Loan System (Stage 2) | 1         | Expert      |
 | Upgradeable Vault (Stage 2) | 1         | Expert      |
+| Multi-Tx Governance         | 1         | Expert      |
+| Multi-Tx Oracle (TWAP)      | 1         | Expert      |
+| Multi-Tx Timelock           | 1         | Expert      |
+
+**Mainnet Discovery** (`task-generator/discovery.py`, `task-generator/mainnet.py`):
+
+Alongside the synthetic corpus, the Task Generator includes a mainnet contract discovery engine. It scans live EVM chains for opt-in contracts matching registered vulnerability patterns, fetches verified source via block-explorer APIs, and converts them into `TaskPackage` format. The mainnet-to-synthetic task ratio is controlled by the difficulty phasing system (see `validator/utils/difficulty.py`).
 
 **Determinism:** All mutations are seeded with `PYTHONHASHSEED=0` and explicit `random.Random(seed)` instances. The same seed produces the same corpus across all validators.
 
@@ -414,6 +421,38 @@ Zero-dependency HTTP server on port 9946.
 | `validation_latency_ms` | Histogram |
 | `severity_score`        | Histogram |
 | `uptime_seconds`        | Gauge     |
+
+### 5.9 Bounty System (`validator/bounty/`)
+
+Manages the lifecycle of bounty payouts from on-chain protocol registrations to miner rewards.
+
+| Module             | Purpose                                                                 |
+| ------------------ | ----------------------------------------------------------------------- |
+| `reward_split.py`  | Computes miner share, protocol fee, and Treasury allocation             |
+| `anti_bypass.py`   | Detects attempts to circumvent bounty rules (duplicate identity, etc.)  |
+| `identity.py`      | Links miner hotkeys to external identities (bounty platform accounts)   |
+| `platform.py`      | Integrates with external bounty platforms (Immunefi, Code4rena)         |
+
+**Reward Flow:**
+
+```
+Exploit validated ──▶ RewardSplitEngine ──▶ Miner share (70%)
+                                       ├──▶ Protocol fee (10%)
+                                       └──▶ Treasury (20%)
+```
+
+### 5.10 Discovery Engine (`task-generator/discovery.py`)
+
+Scans live EVM chains for opt-in contracts and converts them into task packages.
+
+| Step | Action                                       |
+| ---- | -------------------------------------------- |
+| 1    | Query chain for registered protocol contracts |
+| 2    | Fetch verified source via block-explorer API  |
+| 3    | Flatten multi-file Solidity into single file  |
+| 4    | Convert to `TaskPackage` format               |
+
+The discovery engine runs periodically (configurable via `VALAYR_DISCOVERY_INTERVAL`) and its output is blended with the synthetic corpus according to the difficulty phasing ratio.
 
 ---
 

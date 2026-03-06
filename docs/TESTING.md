@@ -72,37 +72,57 @@ The CI pipeline and `tests/conftest.py` handle this automatically.
 
 | File                     | Tests | Description                                                  |
 | ------------------------ | ----- | ------------------------------------------------------------ |
-| `ExploitRegistry.t.sol`  | 7     | Exploit recording, deduplication, quorum, severity, rewards  |
-| `ProtocolRegistry.t.sol` | 20    | Registration, bounties, claims, expiry, deactivation, fuzz   |
-| `AdversarialMode.t.sol`  | 24    | Invariant registry, adversarial scoring, bounds checks, fuzz |
+| `ExploitRegistry.t.sol`  | 14    | Exploit recording, deduplication, quorum, severity, rewards  |
+| `ProtocolRegistry.t.sol` | 26    | Registration, bounties, claims, expiry, deactivation, fuzz   |
+| `AdversarialMode.t.sol`  | 26    | Invariant registry, adversarial scoring, bounds checks, fuzz |
 | `Treasury.t.sol`         | 29    | Competition lifecycle, settlement, fees, withdrawals, fuzz   |
-| `Ownable2Step.t.sol`     | 17    | Two-step ownership transfer, delay, zero-address guards      |
+| `Ownable2Step.t.sol`     | 19    | Two-step ownership transfer, delay, zero-address guards      |
 | `Pausable.t.sol`         | 12    | Pause/unpause state transitions, modifier enforcement        |
 | `ReentrancyGuard.t.sol`  | 3     | Reentrancy lock, nested call rejection                       |
 | `Invariant.t.sol`        | 5     | Stateful invariant fuzzing across contracts                  |
 
 ### Example Exploits (`exploits/`)
 
-| Directory              | Vulnerability       | Technique                                     |
-| ---------------------- | ------------------- | --------------------------------------------- |
-| `reentrancy_basic/`    | Reentrancy          | Re-enter `withdraw()` during ETH callback     |
-| `auth_bypass_missing/` | Access control      | Unprotected `setOwner()` takeover             |
-| `overflow_unchecked/`  | Integer overflow    | Underflow in `unchecked` block                |
-| `access_selfdestruct/` | Access control      | Unprotected `selfdestruct` permanent lock     |
-| `flash_loan_oracle/`   | Oracle manipulation | AMM spot price manipulation via flash loan    |
-| `upgradeable_vault/`   | Proxy vulnerability | Re-initialization of unguarded `initialize()` |
+| Directory              | Vulnerability          | Technique                                     |
+| ---------------------- | ---------------------- | --------------------------------------------- |
+| `reentrancy_basic/`    | Reentrancy             | Re-enter `withdraw()` during ETH callback     |
+| `auth_bypass_missing/` | Access control         | Unprotected `setOwner()` takeover             |
+| `overflow_unchecked/`  | Integer overflow       | Underflow in `unchecked` block                |
+| `access_selfdestruct/` | Access control         | Unprotected `selfdestruct` permanent lock     |
+| `flash_loan_oracle/`   | Oracle manipulation    | AMM spot price manipulation via flash loan    |
+| `upgradeable_vault/`   | Proxy vulnerability    | Re-initialization of unguarded `initialize()` |
+| `multi_tx_governance/` | Governance bypass      | Multi-tx governance drain without votes       |
+| `multi_tx_oracle/`     | TWAP oracle            | Multi-tx TWAP manipulation + undercollateralised borrow |
+| `multi_tx_timelock/`   | Timelock bypass        | Multi-tx timelock cancellation double-spend   |
 
 ### Python Tests (`tests/`)
 
-| File                   | Tests | Scope            | Timeout | Description                                                |
-| ---------------------- | ----- | ---------------- | ------- | ---------------------------------------------------------- |
-| `test_integration.py`  | 19    | Unit/Integration | 120 s   | Core pipeline components without live blockchain           |
-| `test_pipeline.py`     | 8     | End-to-end       | 120 s   | Full task → exploit → validation pipeline                  |
-| `test_live_anvil.py`   | 6     | Live chain       | 120 s   | Against running Anvil instance                             |
-| `test_extended.py`     | 72    | Extended         | 60 s    | Edge cases, mutator, consensus, race conditions, epochs    |
-| `test_round2.py`       | 37    | Round 2          | 120 s   | Deploy pipeline, auto-mine, key rotation, retry, lifecycle |
-| `test_adversarial.py`  | 43    | Adversarial      | 120 s   | Stage 3 adversarial engine, invariant challenges           |
-| `test_e2e_pipeline.py` | 30    | E2E              | 120 s   | Full end-to-end pipeline with weight blending              |
+| File                              | Tests | Scope            | Timeout | Description                                                |
+| --------------------------------- | ----- | ---------------- | ------- | ---------------------------------------------------------- |
+| `test_integration.py`             | 19    | Unit/Integration | 120 s   | Core pipeline components without live blockchain           |
+| `test_pipeline.py`                | 8     | End-to-end       | 120 s   | Full task → exploit → validation pipeline                  |
+| `test_live_anvil.py`              | 7     | Live chain       | 120 s   | Against running Anvil instance                             |
+| `test_extended.py`                | 64    | Extended         | 60 s    | Edge cases, mutator, consensus, race conditions, epochs    |
+| `test_round2.py`                  | 37    | Round 2          | 120 s   | Deploy pipeline, auto-mine, key rotation, retry, lifecycle |
+| `test_adversarial.py`             | 58    | Adversarial      | 120 s   | Stage 3 adversarial engine, invariant challenges           |
+| `test_e2e_pipeline.py`            | 32    | E2E              | 120 s   | Full end-to-end pipeline with weight blending              |
+| `test_bounty.py`                  | 47    | Bounty           | 120 s   | Bounty platform, reward splitting, anti-bypass             |
+| `test_security.py`                | 39    | Security         | 120 s   | Security regression tests (path traversal, injection, etc.)|
+| `test_schemas_hashing.py`         | 29    | Schemas          | 60 s    | JSON schema validation and keccak256 hashing               |
+| `test_difficulty_discovery.py`    | 27    | Discovery        | 120 s   | Difficulty scaling and mainnet discovery engine             |
+| `test_multi_tx.py`                | 21    | Multi-tx         | 120 s   | Multi-transaction exploit sequences                        |
+| `test_mutator_extended.py`        | 19    | Mutators         | 60 s    | Extended mutator coverage                                  |
+| `test_uniqueness.py`              | 18    | Uniqueness       | 60 s    | Uniqueness scoring engine                                  |
+| `test_key_rotation.py`            | 17    | Key rotation     | 60 s    | Validator key rotation                                     |
+| `test_mainnet_source.py`          | 17    | Mainnet          | 60 s    | Mainnet contract source fetching                           |
+| `test_consensus_edge.py`          | 16    | Consensus        | 60 s    | Consensus edge cases and tie-breaking                      |
+| `test_orchestrator_integration.py`| 15    | Orchestrator     | 120 s   | Orchestrator integration tests                             |
+| `test_protocol_roundtrip.py`      | 11    | Protocol         | 60 s    | Synapse/protocol round-trip tests                          |
+| `test_reward_split.py`            | 10    | Rewards          | 60 s    | Reward-split engine unit tests                             |
+| `test_validate_engine_unit.py`    | 36    | Engine           | 60 s    | Validation engine unit tests                               |
+| `test_fingerprint_recovery.py`    | 8     | Fingerprint      | 60 s    | Fingerprint DB corruption recovery                         |
+| `test_validator_neuron.py`        | 8     | Neuron           | 60 s    | Validator neuron lifecycle and signal handling              |
+| `test_logging_utils.py`           | 6     | Logging          | 60 s    | Logging utility tests                                      |
 
 ---
 
@@ -138,16 +158,16 @@ forge snapshot
 
 ```bash
 # All Python tests
-PYTHONHASHSEED=0 python -m pytest tests/ -v --timeout=120
+PYTHONHASHSEED=0 python3 -m pytest tests/ -v --timeout=120
 
 # Individual suites
-PYTHONHASHSEED=0 python -m pytest tests/test_integration.py -v --timeout=120
-PYTHONHASHSEED=0 python -m pytest tests/test_pipeline.py -v --timeout=120
-PYTHONHASHSEED=0 python -m pytest tests/test_live_anvil.py -v --timeout=120
-PYTHONHASHSEED=0 python -m pytest tests/test_extended.py -v --timeout=60
+PYTHONHASHSEED=0 python3 -m pytest tests/test_integration.py -v --timeout=120
+PYTHONHASHSEED=0 python3 -m pytest tests/test_pipeline.py -v --timeout=120
+PYTHONHASHSEED=0 python3 -m pytest tests/test_live_anvil.py -v --timeout=120
+PYTHONHASHSEED=0 python3 -m pytest tests/test_extended.py -v --timeout=60
 
 # Specific test
-PYTHONHASHSEED=0 python -m pytest tests/test_pipeline.py::test_full_pipeline -v
+PYTHONHASHSEED=0 python3 -m pytest tests/test_pipeline.py::test_full_pipeline -v
 ```
 
 > **Important:** Always set `PYTHONHASHSEED=0` for deterministic results. The CI pipeline enforces this.
@@ -341,12 +361,13 @@ The GitHub Actions CI (`.github/workflows/ci.yml`) runs on every push/PR to `mai
 
 ### Jobs
 
-| Job           | Runner                                   | What it does                                                  |
-| ------------- | ---------------------------------------- | ------------------------------------------------------------- |
-| `foundry`     | ubuntu-latest                            | Compile, run contract tests, run exploit tests, gas snapshots |
-| `python`      | ubuntu-latest × {3.10, 3.11, 3.12, 3.13} | Integration, pipeline, live Anvil, extended tests             |
-| `determinism` | ubuntu-latest                            | Full determinism verification script                          |
-| `lint`        | ubuntu-latest                            | `forge fmt --check`, compiler warning detection               |
+| Job             | Runner                                   | What it does                                                  |
+| --------------- | ---------------------------------------- | ------------------------------------------------------------- |
+| `foundry`       | ubuntu-latest                            | Compile, run contract tests, run exploit tests, gas snapshots |
+| `python`        | ubuntu-latest × {3.10, 3.11, 3.12, 3.13} | Integration, pipeline, live Anvil, extended tests             |
+| `determinism`   | ubuntu-latest                            | Full determinism verification script                          |
+| `lint-python`   | ubuntu-latest                            | `ruff`, `black`, `mypy` linting and type-check                |
+| `lint-solidity` | ubuntu-latest                            | `forge fmt --check`, compiler warning detection               |
 
 ### Key CI Behaviors
 
@@ -428,13 +449,13 @@ forge test --gas-report
 
 ```bash
 # Show print output
-PYTHONHASHSEED=0 python -m pytest tests/test_pipeline.py -v -s
+PYTHONHASHSEED=0 python3 -m pytest tests/test_pipeline.py -v -s
 
 # Drop into debugger on failure
-PYTHONHASHSEED=0 python -m pytest tests/test_pipeline.py --pdb
+PYTHONHASHSEED=0 python3 -m pytest tests/test_pipeline.py --pdb
 
 # Run single test
-PYTHONHASHSEED=0 python -m pytest tests/test_pipeline.py::test_specific -v
+PYTHONHASHSEED=0 python3 -m pytest tests/test_pipeline.py::test_specific -v
 ```
 
 ### Anvil Issues
@@ -486,7 +507,7 @@ Generates a coverage report for all Solidity tests. Focus areas:
 
 ```bash
 pip install pytest-cov
-PYTHONHASHSEED=0 python -m pytest tests/ --cov=validator --cov=task-generator --cov-report=html
+PYTHONHASHSEED=0 python3 -m pytest tests/ --cov=validator --cov=task_generator --cov-report=html
 ```
 
 Open `htmlcov/index.html` for a detailed coverage report.
@@ -497,9 +518,9 @@ Open `htmlcov/index.html` for a detailed coverage report.
 
 | Suite                    | Count | Framework |
 | ------------------------ | ----- | --------- |
-| Foundry contract tests   | 125   | forge     |
-| Python integration tests | 477   | pytest    |
-| Skipped (expected)       | 1     | pytest    |
+| Foundry contract tests   | 134   | forge     |
+| Python integration tests | 569   | pytest    |
+| Skipped (expected)       | 5     | pytest    |
 
 ---
 

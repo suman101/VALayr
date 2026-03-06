@@ -46,8 +46,8 @@ foundryup --version nightly-2024-12-01
 cd contracts && forge install && cd ..
 
 # Verify setup
-forge test --root contracts          # 125 Solidity tests
-python3 -m pytest tests/ -q          # 477 Python tests
+forge test --root contracts          # 134 Solidity tests
+python3 -m pytest tests/ -q          # 569 Python tests
 ```
 
 ### Environment Variables
@@ -89,7 +89,7 @@ export PYTHONHASHSEED=0              # Required for deterministic builds
 ├── docker/                 # Docker infrastructure
 ├── scripts/                # Build + verification scripts
 ├── exploits/               # Reference exploit examples
-├── tests/                  # Python test suites (25 files, 477 tests)
+├── tests/                  # Python test suites (24 files, 569 tests)
 └── docs/                   # Documentation + runbooks
 ```
 
@@ -197,10 +197,10 @@ PYTHONHASHSEED=0 bash scripts/verify-determinism.sh
 
 Every PR triggers:
 
-1. Foundry tests (`forge test` — 125 Solidity tests)
-2. Python tests across 4 versions (3.10, 3.11, 3.12, 3.13) — 477 tests
+1. Foundry tests (`forge test` — 134 Solidity tests)
+2. Python tests across 4 versions (3.10, 3.11, 3.12, 3.13) — 569 tests
 3. Python lint + type-check (`ruff`, `black`, `mypy`)
-4. Solidity lint check
+4. Solidity lint check (`forge fmt --check`)
 5. Determinism verification
 
 The CI workflow also supports manual dispatch (`workflow_dispatch`) for on-demand runs.

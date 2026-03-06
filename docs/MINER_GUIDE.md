@@ -252,7 +252,7 @@ Your score is determined by four factors:
 1. **Validity** — Does your exploit actually work? (binary: yes/no)
 2. **Uniqueness** — Is this a new exploit? (first submitter gets 10× more)
 3. **Severity** — How impactful is the exploit? (0.0 to 1.0)
-4. **Speed** — Did you commit first? (small bonus)
+4. **Speed** — Did you submit first? (small bonus)
 
 ### 6.2 Severity Score Breakdown
 
@@ -292,7 +292,7 @@ Deduplication is based on **state impact**, not source code. Two different explo
 
 ## 7. Exploit Strategies by Vulnerability Class
 
-### 8.1 Reentrancy
+### 7.1 Reentrancy
 
 **Pattern:** The vulnerable contract sends ETH before updating state.
 
@@ -324,7 +324,7 @@ contract Attacker {
 }
 ```
 
-### 8.2 Integer Overflow/Underflow
+### 7.2 Integer Overflow/Underflow
 
 **Pattern:** Arithmetic operations wrap around without checks in `unchecked` blocks.
 
@@ -334,7 +334,7 @@ contract Attacker {
 2. Craft inputs that cause overflow (large values) or underflow (subtract from zero)
 3. Exploit the resulting incorrect state
 
-### 8.3 Auth Bypass / Missing Access Control
+### 7.3 Auth Bypass / Missing Access Control
 
 **Pattern:** Critical functions lack proper access control modifiers.
 
@@ -344,7 +344,7 @@ contract Attacker {
 2. Transfer ownership to yourself
 3. Drain funds or modify state
 
-### 8.4 Storage Collision
+### 7.4 Storage Collision
 
 **Pattern:** Proxy contracts where implementation and proxy share overlapping storage slots.
 
@@ -354,7 +354,7 @@ contract Attacker {
 2. Find functions that write to the same slots in the implementation
 3. Overwrite the proxy admin with your address
 
-### 8.5 Flash Loan + Oracle Manipulation
+### 7.5 Flash Loan + Oracle Manipulation
 
 **Pattern:** A lending protocol uses an AMM's spot price as an oracle.
 
@@ -365,7 +365,7 @@ contract Attacker {
 3. Borrow against inflated collateral from the lending protocol
 4. Repay the flash loan, keep the profit
 
-### 8.6 Upgradeable Proxy
+### 7.6 Upgradeable Proxy
 
 **Pattern:** An upgradeable proxy has a missing or unprotected initialiser.
 
@@ -383,7 +383,7 @@ contract Attacker {
 ### 8.1 Speed Matters
 
 - First unique submission gets full reward
-- Commit as early as possible, even before your exploit is perfect
+- Submit as early as possible, even before your exploit is perfect
 
 ### 8.2 Maximise Severity
 
@@ -483,7 +483,7 @@ Shares must sum to 1.0. The split is computed by `RewardSplitEngine` and recorde
 
 ### Q: What happens if two miners find the same exploit?
 
-**A:** The first miner (by commit time) gets the full reward (1.0× multiplier). All subsequent miners with the same state-impact fingerprint receive only 10% (0.1× multiplier).
+**A:** The first miner (by submission time) gets the full reward (1.0× multiplier). All subsequent miners with the same state-impact fingerprint receive only 10% (0.1× multiplier).
 
 ### Q: Can I submit exploits for the same task multiple times?
 
