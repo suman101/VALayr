@@ -86,6 +86,13 @@ services:
     ports:
       - "127.0.0.1:9946:9946" # Health/metrics — localhost only, no external access
     deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
       restart_policy:
         condition: on-failure
         max_attempts: 5

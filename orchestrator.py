@@ -23,6 +23,20 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
+# ── Execution Safety: Concurrency & Cost Budget ──────────────────────────────
+
+# Max concurrent validations to prevent resource exhaustion from parallel submissions.
+# Each validation can use up to 2 CPU + 4GB RAM, so cap at a safe level.
+MAX_CONCURRENT_VALIDATIONS = int(os.environ.get("VALAYR_MAX_CONCURRENT_VALIDATIONS", "4"))
+_validation_semaphore = threading.Semaphore(MAX_CONCURRENT_VALIDATIONS)
+
+# Per-epoch compute budget (in cumulative CPU-seconds). 0 = unlimited.
+# Validators can set this to cap how much compute they spend per epoch.
+EPOCH_COMPUTE_BUDGET = float(os.environ.get("VALAYR_EPOCH_COMPUTE_BUDGET", "0"))
+
+# Timeout for a single process_submission call (seconds).
+SUBMISSION_TIMEOUT = int(os.environ.get("VALAYR_SUBMISSION_TIMEOUT", "300"))
+
 # Resolve project root for imports
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -208,6 +222,11 @@ class Orchestrator:
         self._last_closed_epoch: int = -1
         self._epoch_lock = threading.Lock()
 
+        # ── Cost-per-validation tracking ──────────────────────────────────
+        self._epoch_cpu_seconds: float = 0.0
+        self._epoch_validations: int = 0
+        self._cost_lock = threading.Lock()
+
         # Startup validation — log which secrets are configured
         try:
             from validator.utils.secrets import log_secret_status
@@ -357,6 +376,42 @@ class Orchestrator:
             result.error = f"exploit_source exceeds {MAX_EXPLOIT_SOURCE_BYTES} bytes"
             return result
 
+        # ── Execution safety: check epoch compute budget ──
+        if EPOCH_COMPUTE_BUDGET > 0:
+            with self._cost_lock:
+                if self._epoch_cpu_seconds >= EPOCH_COMPUTE_BUDGET:
+                    result.validation_result = "REJECT_INVALID_FORMAT"
+                    result.error = "Epoch compute budget exhausted"
+                    logger.warning(
+                        "Rejecting submission: epoch CPU budget %.1fs exhausted",
+                        EPOCH_COMPUTE_BUDGET,
+                    )
+                    return result
+
+        # ── Execution safety: concurrency semaphore ──
+        if not _validation_semaphore.acquire(timeout=30):
+            result.validation_result = "REJECT_TIMEOUT"
+            result.error = "Validation queue full — try again later"
+            logger.warning("Submission rejected: concurrency limit (%d)", MAX_CONCURRENT_VALIDATIONS)
+            return result
+
+        try:
+            return self._process_submission_inner(
+                task_id, exploit_source, miner_address, entry_functions, result,
+            )
+        finally:
+            _validation_semaphore.release()
+
+    def _process_submission_inner(
+        self,
+        task_id: str,
+        exploit_source: str,
+        miner_address: str,
+        entry_functions: list[str] | None,
+        result: SubmissionResult,
+    ) -> SubmissionResult:
+        """Inner pipeline behind the concurrency semaphore."""
+
         start = time.monotonic()
 
         # Step 1: Load task
@@ -479,6 +534,17 @@ class Orchestrator:
             _metrics.inc("duplicates_total")
         if result.severity_score > 0:
             _metrics.observe("severity_score", result.severity_score)
+
+        # ── Cost-per-validation tracking ──
+        elapsed_cpu = time.monotonic() - start
+        with self._cost_lock:
+            self._epoch_cpu_seconds += elapsed_cpu
+            self._epoch_validations += 1
+        _metrics.observe("validation_cpu_seconds", elapsed_cpu)
+        logger.debug(
+            "Validation cost: %.2fs CPU | epoch total: %.1fs / %d validations",
+            elapsed_cpu, self._epoch_cpu_seconds, self._epoch_validations,
+        )
 
         return result
 
@@ -909,6 +975,19 @@ class Orchestrator:
         self._last_closed_epoch = epoch_number
         self._current_epoch = epoch_number
         logger.info("Closing epoch %d (blocks %d-%d)", epoch_number, start_block, end_block)
+
+        # Log and reset per-epoch cost tracking
+        with self._cost_lock:
+            logger.info(
+                "Epoch %d cost: %.1f CPU-seconds across %d validations (avg %.2fs/validation)",
+                epoch_number,
+                self._epoch_cpu_seconds,
+                self._epoch_validations,
+                self._epoch_cpu_seconds / max(self._epoch_validations, 1),
+            )
+            self._epoch_cpu_seconds = 0.0
+            self._epoch_validations = 0
+
         epoch = self.incentive.compute_epoch_weights(epoch_number, start_block, end_block)
 
         # Merge adversarial weights (Stage 3) into epoch result
@@ -949,6 +1028,24 @@ class Orchestrator:
         return epoch
 
     # ── Internal ──────────────────────────────────────────────────────────
+
+    def get_epoch_cost_summary(self) -> dict:
+        """Return current epoch's compute cost summary for operator visibility.
+
+        Validators can poll this to monitor resource spend and decide whether
+        to adjust VALAYR_EPOCH_COMPUTE_BUDGET or MAX_CONCURRENT_VALIDATIONS.
+        """
+        with self._cost_lock:
+            return {
+                "epoch": self._current_epoch,
+                "cpu_seconds_used": round(self._epoch_cpu_seconds, 2),
+                "cpu_budget": EPOCH_COMPUTE_BUDGET or "unlimited",
+                "validations_count": self._epoch_validations,
+                "avg_cpu_per_validation": round(
+                    self._epoch_cpu_seconds / max(self._epoch_validations, 1), 2
+                ),
+                "concurrent_limit": MAX_CONCURRENT_VALIDATIONS,
+            }
 
     def _save_report(self, result: SubmissionResult):
         """Persist submission result to disk."""

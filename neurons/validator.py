@@ -26,6 +26,7 @@ import sys
 import time
 import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from pathlib import Path
 from typing import Optional
 
@@ -48,6 +49,7 @@ TASK_REFRESH_EPOCHS = 6  # Refresh task corpus every N epochs
 WEIGHT_SET_INTERVAL = 100  # Blocks between weight sets
 MAX_SUBMISSIONS_PER_EPOCH = 1000
 MAX_SUBMISSIONS_PER_MINER_PER_EPOCH = 50  # Per-miner cap to prevent one miner starving others
+HANDLER_TIMEOUT = 300  # Max seconds for a single submission handler before timeout
 
 
 # ── Validator Neuron ─────────────────────────────────────────────────────────
@@ -298,12 +300,21 @@ class ValidatorNeuron:
                 # Increment count atomically with check to prevent race condition
                 self._miner_submission_counts[miner_hotkey] = miner_count + 1
 
-            result = self.orchestrator.process_submission(
-                task_id=task_id,
-                exploit_source=exploit_source,
-                miner_address=miner_hotkey,
-                entry_functions=getattr(synapse, "entry_functions", None) or [],
-            )
+            # Run validation with a hard timeout to prevent DoS from slow/malicious exploits
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    self.orchestrator.process_submission,
+                    task_id=task_id,
+                    exploit_source=exploit_source,
+                    miner_address=miner_hotkey,
+                    entry_functions=getattr(synapse, "entry_functions", None) or [],
+                )
+                try:
+                    result = future.result(timeout=HANDLER_TIMEOUT)
+                except FutureTimeout:
+                    synapse.result = {"error": f"Validation timed out ({HANDLER_TIMEOUT}s)"}
+                    logger.warning("Submission handler timed out for miner %s", miner_hotkey[:16])
+                    return synapse
 
             with self._submission_lock:
                 self.submissions_this_epoch.append(result)

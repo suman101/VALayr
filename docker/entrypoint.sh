@@ -18,6 +18,20 @@ if curl -s --connect-timeout 2 https://1.1.1.1 > /dev/null 2>&1; then
     exit 1
 fi
 
+# ── Enforce Resource Limits ──────────────────────────────────────────────────
+echo "[*] Setting process resource limits..."
+# Max virtual memory per process: 6GB (prevents runaway memory)
+ulimit -v $((6 * 1024 * 1024)) 2>/dev/null || echo "[!] Could not set virtual memory limit"
+# Max CPU time per process: 300s (hard kill if exceeded)
+ulimit -t 300 2>/dev/null || echo "[!] Could not set CPU time limit"
+# Max open file descriptors: 1024
+ulimit -n 1024 2>/dev/null || echo "[!] Could not set file descriptor limit"
+# Max processes per user: 512 (defense against fork bombs)
+ulimit -u 512 2>/dev/null || echo "[!] Could not set process limit"
+# Max file size: 256MB (prevents disk filling from crafted output)
+ulimit -f $((256 * 1024)) 2>/dev/null || echo "[!] Could not set file size limit"
+echo "    limits: vmem=$(ulimit -v), cpu=$(ulimit -t), fds=$(ulimit -n), procs=$(ulimit -u)"
+
 # ── Verify Tool Versions ─────────────────────────────────────────────────────
 echo "[*] Verifying tool versions..."
 FORGE_VERSION=$(forge --version 2>&1 | head -1)

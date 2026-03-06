@@ -77,6 +77,35 @@ MAX_EXPLOIT_SOURCE_BYTES = 64_000  # Reject exploits larger than 64KB (DoS guard
 ANVIL_READY_TIMEOUT = 10  # Max seconds to wait for Anvil readiness
 ANVIL_READY_INTERVAL = 0.05  # Poll interval in seconds
 
+# Local-mode resource limits (applied via preexec_fn when not in Docker sandbox).
+# These provide process-level guardrails against infinite loops and memory bombs.
+LOCAL_MAX_CPU_SECONDS = 120  # Hard CPU-time kill
+LOCAL_MAX_VMEM_BYTES = 4 * 1024 * 1024 * 1024  # 4 GB virtual memory
+LOCAL_MAX_FILE_SIZE = 256 * 1024 * 1024  # 256 MB max output file size
+
+
+def _set_local_resource_limits():
+    """Apply resource limits to child processes in local (non-Docker) mode.
+
+    Called as preexec_fn for subprocess.Popen/run. Silently skips limits
+    that aren't available on the platform (e.g. macOS lacks RLIMIT_AS).
+    """
+    import resource
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (LOCAL_MAX_CPU_SECONDS, LOCAL_MAX_CPU_SECONDS))
+    except (ValueError, OSError):
+        pass
+    try:
+        resource.setrlimit(resource.RLIMIT_FSIZE, (LOCAL_MAX_FILE_SIZE, LOCAL_MAX_FILE_SIZE))
+    except (ValueError, OSError):
+        pass
+    # RLIMIT_AS is Linux-only (limits virtual address space)
+    if hasattr(resource, "RLIMIT_AS"):
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (LOCAL_MAX_VMEM_BYTES, LOCAL_MAX_VMEM_BYTES))
+        except (ValueError, OSError):
+            pass
+
 
 # ── Enums & Data Structures ─────────────────────────────────────────────────
 
@@ -460,7 +489,8 @@ contract ExploitTest is Test {{
             result = subprocess.run(
                 ["forge", "build", "--root", str(workspace)],
                 capture_output=True, text=True, timeout=60,
-                cwd=str(workspace)
+                cwd=str(workspace),
+                preexec_fn=_set_local_resource_limits,
             )
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -485,7 +515,8 @@ contract ExploitTest is Test {{
 
         try:
             self._anvil_proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                preexec_fn=_set_local_resource_limits,
             )
             # Poll for readiness instead of sleeping a fixed 2 seconds
             if not self._wait_anvil_ready():
@@ -657,6 +688,7 @@ contract ExploitTest is Test {{
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
+                preexec_fn=_set_local_resource_limits,
             )
 
             if result.returncode != 0:
@@ -807,7 +839,12 @@ contract ExploitTest is Test {{
         return state
 
     def _execute_exploit(self, workspace: Path, target_address: str) -> dict:
-        """Execute the exploit test via forge test."""
+        """Execute the exploit test via forge test.
+
+        Applies local resource limits (CPU time, memory, file size) as a
+        defense-in-depth layer against malicious exploits containing infinite
+        loops, memory bombs, or excessive output.
+        """
         rpc_url = f"http://{ANVIL_HOST}:{self.anvil_port}"
 
         try:
@@ -823,7 +860,9 @@ contract ExploitTest is Test {{
                 ],
                 capture_output=True, text=True,
                 timeout=VALIDATION_TIMEOUT,
-                cwd=str(workspace)
+                cwd=str(workspace),
+                preexec_fn=_set_local_resource_limits,
+            )
             )
 
             # V-10 fix: enforce MAX_JSON_OUTPUT_SIZE to prevent OOM from
