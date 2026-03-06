@@ -426,10 +426,10 @@ Stage 3 introduces adversarial mode where **Class A miners** submit invariants
 (security properties) and **Class B miners** submit challenges (exploits that
 break those invariants). Two additional contracts power this:
 
-| Contract             | Purpose                                   |
-| -------------------- | ----------------------------------------- |
-| `InvariantRegistry`  | Stores invariants submitted by Class A    |
-| `AdversarialScoring` | Tracks Class A/B scores from challenges   |
+| Contract             | Purpose                                 |
+| -------------------- | --------------------------------------- |
+| `InvariantRegistry`  | Stores invariants submitted by Class A  |
+| `AdversarialScoring` | Tracks Class A/B scores from challenges |
 
 **Deployment wiring** (handled automatically by `Deploy.s.sol`):
 
@@ -701,6 +701,45 @@ When a contract upgrade is needed:
 6. **Deprecate old contracts**: Transfer remaining funds out and call `pause()`
    on old contracts (if applicable). Old contracts remain on-chain and readable
    for historical audit.
+
+#### Pre-Migration Checklist
+
+Before executing a contract migration:
+
+- [ ] New contract passes full `forge test` suite with 100% of existing + migration-specific tests
+- [ ] `forge inspect <NewContract> storage-layout` reviewed — no slot collisions with expected state
+- [ ] Deployment script (`Deploy.s.sol`) tested on a local Anvil fork of mainnet
+- [ ] Transfer-delay timelock configured (`TRANSFER_DELAY ≥ 172800` for mainnet)
+- [ ] Validator operators notified — migration window communicated (target: during low-activity period)
+- [ ] Rollback plan documented (see below)
+
+#### State Snapshot & Replay
+
+For stateful contracts (`ProtocolRegistry`, `ExploitRegistry`):
+
+1. **Snapshot on-chain state** before migration:
+   ```bash
+   # Export registered contracts, exploit claims, bounty balances
+   cast call $OLD_REGISTRY "getExploitCount(bytes32)" $CONTRACT_HASH --rpc-url $RPC_URL
+   # For each registered contract, dump the claim history off-chain
+   python scripts/snapshot_registry.py --registry $OLD_REGISTRY --rpc $RPC_URL --out data/migration/snapshot.json
+   ```
+2. **Replay state** into the new contract:
+   - Validator registrations: call `setValidator(addr, true)` for each active validator
+   - Protocol registrations: call `registerContract{value: bounty}(target, expiry)` for each active protocol
+   - Exploit claims do **not** need on-chain replay — they are derived from the Python-side
+     `FingerprintEngine` database and can be re-submitted through the normal `recordExploit` flow
+3. **Verify** the new contract state matches the snapshot before switching validators over
+
+#### Migration Rollback
+
+If the new contract has issues post-migration:
+
+1. **Pause the new contract** immediately: `cast send $NEW_REGISTRY "pause()" --private-key $KEY`
+2. **Revert validator configs** to point back to the old contract addresses
+3. **Un-pause the old contracts** if they were paused: `cast send $OLD_REGISTRY "unpause()"`
+4. **Notify validators** to restart with rolled-back configs
+5. **Post-mortem**: Document what went wrong and update the migration procedure
 
 #### Storage Layout Rules (if UUPS is adopted in future)
 

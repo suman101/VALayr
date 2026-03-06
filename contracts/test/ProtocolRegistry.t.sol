@@ -380,6 +380,48 @@ contract ProtocolRegistryTest is Test {
         registry.withdrawBounty(contractHash, 0);
     }
 
+    // ── withdrawBountyAll Guard Tests ────────────────────────────────────
+
+    function test_withdrawBountyAll_tooManyClaims_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 50 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        // Record 21 exploits to exceed the 20-claim guard
+        for (uint256 i = 0; i < 21; i++) {
+            bytes32 fp = keccak256(abi.encodePacked("bulk-exploit-", i));
+            registry.recordExploit(contractHash, fp, MINER, 0.01e18);
+        }
+
+        registry.deactivateContract(contractHash);
+        vm.warp(block.timestamp + 73 hours);
+
+        vm.expectRevert(ProtocolRegistry.TooManyClaims.selector);
+        registry.withdrawBountyAll(contractHash);
+    }
+
+    function test_withdrawBountyAll_syncsVerifiedUpTo() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 10 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+        registry.setValidator(address(this), true);
+
+        // Record 3 exploits (within limit)
+        for (uint256 i = 0; i < 3; i++) {
+            bytes32 fp = keccak256(abi.encodePacked("sync-exploit-", i));
+            registry.recordExploit(contractHash, fp, MINER, 0.1e18);
+        }
+
+        registry.deactivateContract(contractHash);
+        vm.warp(block.timestamp + 73 hours);
+
+        registry.withdrawBountyAll(contractHash);
+
+        // withdrawVerifiedUpTo should be synced to history.length
+        assertEq(registry.withdrawVerifiedUpTo(contractHash), 3);
+    }
+
     receive() external payable {}
 }
 

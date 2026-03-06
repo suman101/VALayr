@@ -91,6 +91,9 @@ class ValidatorNeuron:
             mode="docker" if mode == "bittensor" else "local",
             validator_id=f"validator-{wallet_hotkey[:8]}",
             anvil_port=anvil_port,
+            rpc_url=os.environ.get("VALAYR_RPC_URL", "http://127.0.0.1:8545"),
+            registry_address=os.environ.get("VALAYR_PROTOCOL_REGISTRY", ""),
+            scoring_address=os.environ.get("VALAYR_ADVERSARIAL_SCORING", ""),
         )
 
         # Bittensor integration (lazy-loaded)

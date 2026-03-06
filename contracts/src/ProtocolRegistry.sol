@@ -318,6 +318,9 @@ contract ProtocolRegistry is Pausable {
         if (reg.active) revert ContractStillActive();
 
         bytes32[] storage history = exploitHistory[contractHash];
+        // Guard: refuse unbounded loop — use paginated withdrawBounty() for large histories
+        if (history.length > 20) revert TooManyClaims();
+
         for (uint256 i = 0; i < history.length; i++) {
             ExploitClaim storage c = claims[contractHash][history[i]];
             if (c.miner != address(0) && !c.paid) {
@@ -325,6 +328,9 @@ contract ProtocolRegistry is Pausable {
                     revert DisclosureWindowActive();
             }
         }
+
+        // Sync verifiedUpTo so paginated path stays consistent
+        withdrawVerifiedUpTo[contractHash] = history.length;
 
         uint256 amount = reg.bountyPool;
         reg.bountyPool = 0;

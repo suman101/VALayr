@@ -16,6 +16,7 @@ This is the glue that makes the subnet tick.
 import hashlib
 import json
 import os
+import signal
 import sys
 import time
 import threading
@@ -1152,6 +1153,15 @@ Examples:
     # refresh — difficulty ramp + mainnet discovery
     refresh_parser = subparsers.add_parser("refresh", help="Refresh corpus for current epoch")
     refresh_parser.add_argument("--epoch", type=int, required=True, help="Current epoch number")
+
+    # ── Graceful shutdown on SIGTERM / SIGINT ─────────────────────────────
+    def _shutdown_handler(signum: int, frame: object) -> None:
+        sig_name = signal.Signals(signum).name
+        logger.info(f"Received {sig_name} — shutting down orchestrator")
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     args = parser.parse_args()
     orch = Orchestrator()
