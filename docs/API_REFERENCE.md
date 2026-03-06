@@ -869,19 +869,19 @@ AdversarialEngine(
 )
 ```
 
-| Method | Returns | Description |
-| ------ | ------- | ----------- |
-| `submit_invariant(submission)` | `int` | Register a Class A invariant; returns ID |
-| `get_invariant(invariant_id)` | `Optional[InvariantRecord]` | Retrieve invariant by ID |
-| `list_active_invariants(target_contract_hash=None)` | `list[InvariantRecord]` | List active invariants, optionally filtered |
-| `deactivate_invariant(invariant_id)` | `None` | Deactivate an invariant |
-| `process_challenge(challenge, validation_fn=None)` | `ChallengeReport` | Process a Class B challenge |
-| `get_class_a_score(miner)` | `int` | Get Class A score for a miner |
-| `get_class_b_score(miner)` | `int` | Get Class B score for a miner |
-| `get_all_scores()` | `dict` | Get all scores `{"class_a": {…}, "class_b": {…}}` |
-| `get_challenge_history(invariant_id=None, limit=100)` | `list[ChallengeReport]` | Get challenge history |
-| `compute_adversarial_weights()` | `dict[str, float]` | Compute normalised weight contributions |
-| `reset()` | `None` | Reset all state (testing only) |
+| Method                                                | Returns                     | Description                                       |
+| ----------------------------------------------------- | --------------------------- | ------------------------------------------------- |
+| `submit_invariant(submission)`                        | `int`                       | Register a Class A invariant; returns ID          |
+| `get_invariant(invariant_id)`                         | `Optional[InvariantRecord]` | Retrieve invariant by ID                          |
+| `list_active_invariants(target_contract_hash=None)`   | `list[InvariantRecord]`     | List active invariants, optionally filtered       |
+| `deactivate_invariant(invariant_id)`                  | `None`                      | Deactivate an invariant                           |
+| `process_challenge(challenge, validation_fn=None)`    | `ChallengeReport`           | Process a Class B challenge                       |
+| `get_class_a_score(miner)`                            | `int`                       | Get Class A score for a miner                     |
+| `get_class_b_score(miner)`                            | `int`                       | Get Class B score for a miner                     |
+| `get_all_scores()`                                    | `dict`                      | Get all scores `{"class_a": {…}, "class_b": {…}}` |
+| `get_challenge_history(invariant_id=None, limit=100)` | `list[ChallengeReport]`     | Get challenge history                             |
+| `compute_adversarial_weights()`                       | `dict[str, float]`          | Compute normalised weight contributions           |
+| `reset()`                                             | `None`                      | Reset all state (testing only)                    |
 
 ---
 
@@ -897,11 +897,11 @@ Scores exploit submissions for uniqueness using fuzzy hashing and timing analysi
 UniquenessScorer()
 ```
 
-| Method | Returns | Description |
-| ------ | ------- | ----------- |
-| `register_task(task_id, published_at=None)` | `None` | Record task publication time for timing analysis |
-| `score_submission(task_id, exploit_source, miner_address, gas_used=0, selector_count=0, difficulty=1)` | `UniquenessResult` | Score a submission's uniqueness |
-| `reset()` | `None` | Clear all state (testing only) |
+| Method                                                                                                 | Returns            | Description                                      |
+| ------------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------ |
+| `register_task(task_id, published_at=None)`                                                            | `None`             | Record task publication time for timing analysis |
+| `score_submission(task_id, exploit_source, miner_address, gas_used=0, selector_count=0, difficulty=1)` | `UniquenessResult` | Score a submission's uniqueness                  |
+| `reset()`                                                                                              | `None`             | Clear all state (testing only)                   |
 
 ---
 
@@ -921,12 +921,12 @@ MainnetContractSource(
 )
 ```
 
-| Method | Returns | Description |
-| ------ | ------- | ----------- |
-| `fetch_contract(address, chain_id=1)` | `Optional[MainnetContract]` | Fetch verified source for a single contract |
-| `fetch_batch(addresses, chain_id=1)` | `list[MainnetContract]` | Fetch multiple contracts with rate-limiting |
-| `to_task_package(contract, difficulty=3, vulnerability_class="mainnet-unknown")` | `TaskPackage` | Convert fetched contract into a TaskPackage |
-| `fetch_and_save(addresses, chain_id=1, difficulty=3)` | `list[TaskPackage]` | Fetch, convert, and save to corpus |
+| Method                                                                           | Returns                     | Description                                 |
+| -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------- |
+| `fetch_contract(address, chain_id=1)`                                            | `Optional[MainnetContract]` | Fetch verified source for a single contract |
+| `fetch_batch(addresses, chain_id=1)`                                             | `list[MainnetContract]`     | Fetch multiple contracts with rate-limiting |
+| `to_task_package(contract, difficulty=3, vulnerability_class="mainnet-unknown")` | `TaskPackage`               | Convert fetched contract into a TaskPackage |
+| `fetch_and_save(addresses, chain_id=1, difficulty=3)`                            | `list[TaskPackage]`         | Fetch, convert, and save to corpus          |
 
 ---
 
