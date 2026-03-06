@@ -36,7 +36,7 @@ contract ExploitRegistryInvariantTest is Test {
     ExploitRegistryHandler public handler;
 
     function setUp() public {
-        reg = new ExploitRegistry();
+        reg = new ExploitRegistry(0);
         reg.setValidator(address(this), true);
 
         handler = new ExploitRegistryHandler(reg);
@@ -101,7 +101,7 @@ contract TreasuryInvariantTest is Test {
 
     function setUp() public {
         validatorAddr = makeAddr("validator");
-        treasury = new Treasury(validatorAddr);
+        treasury = new Treasury(validatorAddr, 0);
 
         handler = new TreasuryHandler(treasury, validatorAddr);
 

@@ -17,19 +17,20 @@ contract Deploy is Script {
             deployerKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
         }
         address deployer = vm.addr(deployerKey);
+        uint256 transferDelay = vm.envOr("TRANSFER_DELAY", uint256(0));
 
         vm.startBroadcast(deployerKey);
 
         // Deploy ProtocolRegistry
-        ProtocolRegistry registry = new ProtocolRegistry();
+        ProtocolRegistry registry = new ProtocolRegistry(transferDelay);
 
         // Deploy ExploitRegistry
-        ExploitRegistry exploitRegistry = new ExploitRegistry();
+        ExploitRegistry exploitRegistry = new ExploitRegistry(transferDelay);
 
         // Deploy Stage 3: AdversarialMode (InvariantRegistry + AdversarialScoring)
-        InvariantRegistry invariantRegistry = new InvariantRegistry();
+        InvariantRegistry invariantRegistry = new InvariantRegistry(transferDelay);
         AdversarialScoring adversarialScoring = new AdversarialScoring(
-            address(invariantRegistry)
+            address(invariantRegistry), transferDelay
         );
 
         // Wire up: set deployer as validator on all registries
@@ -39,7 +40,7 @@ contract Deploy is Script {
         adversarialScoring.setValidator(deployer, true);
 
         // Deploy Treasury (winner-takes-all competitions)
-        Treasury treasury = new Treasury(deployer);
+        Treasury treasury = new Treasury(deployer, transferDelay);
 
         vm.stopBroadcast();
 
@@ -51,5 +52,6 @@ contract Deploy is Script {
         console.log("AdversarialScoring: ", address(adversarialScoring));
         console.log("Treasury:           ", address(treasury));
         console.log("Deployer/Validator: ", deployer);
+        console.log("Transfer Delay:     ", transferDelay);
     }
 }

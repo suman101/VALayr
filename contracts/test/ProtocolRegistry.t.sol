@@ -14,7 +14,7 @@ contract ProtocolRegistryTest is Test {
     address constant TARGET = address(0xDEAD);
 
     function setUp() public {
-        registry = new ProtocolRegistry();
+        registry = new ProtocolRegistry(0);
         registry.setValidator(VALIDATOR, true);
     }
 

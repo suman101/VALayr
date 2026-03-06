@@ -106,7 +106,7 @@ contract Treasury is Ownable2Step, Pausable {
 
     // ── Constructor ──────────────────────────────────────────────────────
 
-    constructor(address _validator) Ownable2Step(0) {
+    constructor(address _validator, uint256 transferDelay) Ownable2Step(transferDelay) {
         if (_validator == address(0)) revert ZeroAddress();
         validator = _validator;
     }

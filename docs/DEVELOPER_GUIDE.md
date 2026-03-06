@@ -49,6 +49,7 @@ python3 -m pytest tests/ -q           # Python tests
 ```
 
 > **Note:** The repository uses directory symlinks for Python module imports: `task_generator → task-generator/` and `subnet_adapter → subnet-adapter/`. These are committed to Git as symlinks. On macOS/Linux they work automatically after clone. On **Windows**, Git may check them out as plain text files; recreate them from an elevated prompt:
+>
 > ```
 > mklink /D task_generator task-generator
 > mklink /D subnet_adapter subnet-adapter

@@ -17,7 +17,7 @@ contract TreasuryTest is Test {
         validatorAddr = makeAddr("validator");
         miner1 = makeAddr("miner1");
         miner2 = makeAddr("miner2");
-        treasury = new Treasury(validatorAddr);
+        treasury = new Treasury(validatorAddr, 0);
     }
 
     // ── createCompetition ────────────────────────────────────────────────

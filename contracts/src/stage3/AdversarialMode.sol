@@ -49,7 +49,7 @@ contract InvariantRegistry is Pausable {
     error InvariantInactive();
     error InvalidPropertyId();
 
-    constructor() Ownable2Step(0) {}
+    constructor(uint256 transferDelay) Ownable2Step(transferDelay) {}
 
     modifier onlyValidator() {
         if (!validators[msg.sender]) revert Unauthorized();
@@ -148,7 +148,7 @@ contract AdversarialScoring is Pausable {
     event ScoreUpdated(address indexed miner, string class_, int256 newScore);
     event ValidatorUpdated(address indexed validator, bool status);
 
-    constructor(address _registry) Ownable2Step(0) {
+    constructor(address _registry, uint256 transferDelay) Ownable2Step(transferDelay) {
         registry = InvariantRegistry(_registry);
     }
 

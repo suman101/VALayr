@@ -232,6 +232,7 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 **Requirements:**
+
 - Minimum 32 bytes (64 hex characters).
 - Must be unique per validator instance — **do not share** across validators.
 - Store in your `.env` file with restricted permissions (`chmod 600 .env`).

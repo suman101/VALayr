@@ -12,7 +12,7 @@ contract ReentrancyGuardTest is Test {
     address constant MINER = address(0x3333);
 
     function setUp() public {
-        registry = new ProtocolRegistry();
+        registry = new ProtocolRegistry(0);
         registry.setValidator(address(this), true);
     }
 

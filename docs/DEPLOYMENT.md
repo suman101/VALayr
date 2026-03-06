@@ -762,14 +762,14 @@ _For security-related concerns, see [SECURITY.md](../SECURITY.md) and [THREAT_MO
 
 For incident response and operational procedures, see:
 
-| Runbook                                            | When to Use                                                  |
-| -------------------------------------------------- | ------------------------------------------------------------ |
-| [Key Rotation](runbooks/key-rotation.md)           | Compromised or expired validator/deployer keys               |
-| [Epoch Stall](runbooks/epoch-stall.md)             | Epoch fails to close or weight-setting stalls                |
-| [Consensus Failure](runbooks/consensus-failure.md) | Validators cannot reach quorum on submissions                |
-| [Validator Drift](runbooks/validator-drift.md)     | Determinism check fails or validators give different results |
-| [Treasury](runbooks/treasury.md)                   | Creating, settling, or debugging Treasury competitions       |
-| [Incident Response](runbooks/incident-response.md) | Security incidents, exploit leaks, emergency procedures      |
-| [Validator Recovery](runbooks/validator-recovery.md) | Recovering a failed or corrupted validator node            |
-| [Backup & Recovery](runbooks/backup-recovery.md)   | Data backup procedures and disaster recovery                 |
-| [Mainnet Deploy](runbooks/mainnet-deploy.md)       | Step-by-step mainnet contract deployment                     |
+| Runbook                                              | When to Use                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------ |
+| [Key Rotation](runbooks/key-rotation.md)             | Compromised or expired validator/deployer keys               |
+| [Epoch Stall](runbooks/epoch-stall.md)               | Epoch fails to close or weight-setting stalls                |
+| [Consensus Failure](runbooks/consensus-failure.md)   | Validators cannot reach quorum on submissions                |
+| [Validator Drift](runbooks/validator-drift.md)       | Determinism check fails or validators give different results |
+| [Treasury](runbooks/treasury.md)                     | Creating, settling, or debugging Treasury competitions       |
+| [Incident Response](runbooks/incident-response.md)   | Security incidents, exploit leaks, emergency procedures      |
+| [Validator Recovery](runbooks/validator-recovery.md) | Recovering a failed or corrupted validator node              |
+| [Backup & Recovery](runbooks/backup-recovery.md)     | Data backup procedures and disaster recovery                 |
+| [Mainnet Deploy](runbooks/mainnet-deploy.md)         | Step-by-step mainnet contract deployment                     |

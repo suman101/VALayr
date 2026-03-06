@@ -18,8 +18,8 @@ contract AdversarialModeTest is Test {
     bytes32 constant TARGET_HASH = keccak256("TargetContract");
 
     function setUp() public {
-        registry = new InvariantRegistry();
-        scoring = new AdversarialScoring(address(registry));
+        registry = new InvariantRegistry(0);
+        scoring = new AdversarialScoring(address(registry), 0);
 
         // Register the AdversarialScoring contract as a validator on the registry
         // (required for processChallenge → recordChallenge to succeed)
@@ -215,7 +215,7 @@ contract AdversarialModeTest is Test {
     {
         // Deploy fresh scoring without registering owner as validator
         AdversarialScoring freshScoring = new AdversarialScoring(
-            address(registry)
+            address(registry), 0
         );
         registry.setValidator(address(freshScoring), true);
 

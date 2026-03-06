@@ -603,6 +603,7 @@ def test_adversarial_onchain_integration(anvil: AnvilInstance):
         anvil.rpc_url,
         "src/stage3/AdversarialMode.sol:InvariantRegistry",
         contracts_root,
+        constructor_args=["0"],
     )
     print(f"  InvariantRegistry deployed at {registry_addr}")
 
@@ -611,7 +612,7 @@ def test_adversarial_onchain_integration(anvil: AnvilInstance):
         anvil.rpc_url,
         "src/stage3/AdversarialMode.sol:AdversarialScoring",
         contracts_root,
-        constructor_args=[registry_addr],
+        constructor_args=[registry_addr, "0"],
     )
     print(f"  AdversarialScoring deployed at {scoring_addr}")
 

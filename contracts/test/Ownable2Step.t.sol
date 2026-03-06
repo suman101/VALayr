@@ -165,3 +165,35 @@ contract Ownable2StepTest is Test {
         assertEq(owned.pendingOwner(), nobody);
     }
 }
+
+// ── Timelock harness & tests ─────────────────────────────────────────────
+
+contract OwnableTimelockHarness is Ownable2Step {
+    constructor() Ownable2Step(1 days) {}
+}
+
+contract Ownable2StepTimelockTest is Test {
+    OwnableTimelockHarness public owned;
+    address public newOwner = address(0xBEEF);
+
+    function setUp() public {
+        owned = new OwnableTimelockHarness();
+    }
+
+    function test_acceptOwnership_reverts_before_delay() public {
+        owned.transferOwnership(newOwner);
+        // Warp to just before the delay expires
+        vm.warp(block.timestamp + 1 days - 1);
+        vm.prank(newOwner);
+        vm.expectRevert(Ownable2Step.TransferNotReady.selector);
+        owned.acceptOwnership();
+    }
+
+    function test_acceptOwnership_succeeds_after_delay() public {
+        owned.transferOwnership(newOwner);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(newOwner);
+        owned.acceptOwnership();
+        assertEq(owned.owner(), newOwner);
+    }
+}

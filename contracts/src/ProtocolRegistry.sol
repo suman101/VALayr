@@ -118,7 +118,7 @@ contract ProtocolRegistry is Pausable {
 
     // ── Constructor ──────────────────────────────────────────────────────
 
-    constructor() Ownable2Step(0) {}
+    constructor(uint256 transferDelay) Ownable2Step(transferDelay) {}
 
     // ── Protocol Functions ───────────────────────────────────────────────
 
