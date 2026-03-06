@@ -1,6 +1,6 @@
 # VALayr — Miner Guide
 
-> Version 1.2 · Last updated: 2026-03-06
+> Version 0.1.0 · Last updated: 2026-03-06
 
 This guide is for **miners** who want to participate in the VALayr subnet by discovering and submitting smart contract exploits. You do not need to understand the validator internals — this guide covers everything you need to earn TAO.
 

@@ -1,6 +1,6 @@
 # VALayr — Deployment & Operations Guide
 
-> Version 1.2 · Last updated: 2026-03-06
+> Version 0.1.0 · Last updated: 2026-03-06
 
 This guide covers production deployment, Docker configuration, monitoring, troubleshooting, and operational procedures for running VALayr validator and miner nodes.
 
@@ -769,3 +769,7 @@ For incident response and operational procedures, see:
 | [Consensus Failure](runbooks/consensus-failure.md) | Validators cannot reach quorum on submissions                |
 | [Validator Drift](runbooks/validator-drift.md)     | Determinism check fails or validators give different results |
 | [Treasury](runbooks/treasury.md)                   | Creating, settling, or debugging Treasury competitions       |
+| [Incident Response](runbooks/incident-response.md) | Security incidents, exploit leaks, emergency procedures      |
+| [Validator Recovery](runbooks/validator-recovery.md) | Recovering a failed or corrupted validator node            |
+| [Backup & Recovery](runbooks/backup-recovery.md)   | Data backup procedures and disaster recovery                 |
+| [Mainnet Deploy](runbooks/mainnet-deploy.md)       | Step-by-step mainnet contract deployment                     |

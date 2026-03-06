@@ -258,6 +258,12 @@ class AntiBypassEngine:
         payload = json.dumps(data, indent=2, sort_keys=True)
         tmp_path = self._receipts_path.with_suffix(self._receipts_path.suffix + ".tmp")
         tmp_path.write_text(payload)
+        # Flush to disk before atomic replace to prevent crash-loss
+        fd = os.open(str(tmp_path), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(tmp_path, self._receipts_path)
 
     def _save_violations(self) -> None:
@@ -265,4 +271,9 @@ class AntiBypassEngine:
         payload = json.dumps(data, indent=2)
         tmp_path = self._violations_path.with_suffix(self._violations_path.suffix + ".tmp")
         tmp_path.write_text(payload)
+        fd = os.open(str(tmp_path), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(tmp_path, self._violations_path)

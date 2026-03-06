@@ -239,8 +239,8 @@ class ImmunefiAdapter(BountyPlatform):
         req.add_header("User-Agent", "VALayr-Subnet/0.1")
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read().decode())
-        except (urllib.error.URLError, json.JSONDecodeError, OSError):
+                return json.loads(resp.read().decode("utf-8", errors="replace"))
+        except (urllib.error.URLError, json.JSONDecodeError, OSError, UnicodeDecodeError):
             return None
 
     def _api_get(self, endpoint: str) -> Optional[dict]:
@@ -254,8 +254,8 @@ class ImmunefiAdapter(BountyPlatform):
         req.add_header("User-Agent", "VALayr-Subnet/0.1")
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
-                return json.loads(resp.read().decode())
-        except (urllib.error.URLError, json.JSONDecodeError, OSError):
+                return json.loads(resp.read().decode("utf-8", errors="replace"))
+        except (urllib.error.URLError, json.JSONDecodeError, OSError, UnicodeDecodeError):
             return None
 
 
@@ -351,8 +351,8 @@ class Code4renaAdapter(BountyPlatform):
         req.add_header("User-Agent", "VALayr-Subnet/0.1")
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read().decode())
-        except (urllib.error.URLError, json.JSONDecodeError, OSError):
+                return json.loads(resp.read().decode("utf-8", errors="replace"))
+        except (urllib.error.URLError, json.JSONDecodeError, OSError, UnicodeDecodeError):
             return None
 
     def _api_get(self, endpoint: str) -> Optional[dict]:
@@ -366,8 +366,8 @@ class Code4renaAdapter(BountyPlatform):
         req.add_header("User-Agent", "VALayr-Subnet/0.1")
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
-                return json.loads(resp.read().decode())
-        except (urllib.error.URLError, json.JSONDecodeError, OSError):
+                return json.loads(resp.read().decode("utf-8", errors="replace"))
+        except (urllib.error.URLError, json.JSONDecodeError, OSError, UnicodeDecodeError):
             return None
 
 

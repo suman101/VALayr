@@ -1,6 +1,6 @@
 # Glossary
 
-> Version 1.2 · Last updated: 2026-03-06
+> Version 0.1.0 · Last updated: 2026-03-06
 
 Terminology used throughout the VALayr exploit subnet documentation and codebase.
 

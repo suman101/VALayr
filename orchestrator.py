@@ -913,9 +913,10 @@ class Orchestrator:
                         report.error_message = result_data.get("error_message", "")
                         report.fingerprint = result_data.get("fingerprint", "")
                         report.severity_score = result_data.get("severity_score", 0.0)
-                        if result_data.get("execution_trace"):
+                        trace_data = result_data.get("execution_trace")
+                        if trace_data:
                             from validator.engine.validate import ExecutionTrace
-                            report.execution_trace = ExecutionTrace(**result_data["execution_trace"])
+                            report.execution_trace = ExecutionTrace(**trace_data)
                     except (ValueError, TypeError) as e:
                         report.error_message = f"Docker result parse error: {e}"
                 elif not report.error_message:

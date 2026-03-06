@@ -521,7 +521,7 @@ contract ExploitTest is Test {{
 
         try:
             self._anvil_proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 preexec_fn=_set_local_resource_limits,
             )
             # Poll for readiness instead of sleeping a fixed 2 seconds

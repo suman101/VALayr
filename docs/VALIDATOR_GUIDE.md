@@ -1,6 +1,6 @@
 # Validator Guide
 
-> Version 1.2 · Last updated: 2026-03-06
+> Version 0.1.0 · Last updated: 2026-03-06
 
 Complete guide for running and operating a VALayr validator node.
 
@@ -217,6 +217,29 @@ python neurons/validator.py \
 | `VALAYR_TREASURY_SHARE`   | `0.10`  | Treasury's share of bounty rewards              |
 | `VALAYR_TREASURY_ADDRESS` | (none)  | On-chain Treasury contract address              |
 | `VALAYR_RECEIPT_HMAC_KEY` | —       | **Required.** 32+ byte hex key for receipt HMAC |
+
+#### HMAC Key — Generation & Usage
+
+The `VALAYR_RECEIPT_HMAC_KEY` is used by the anti-bypass engine to produce
+tamper-proof receipts that prove a miner's exploit was validated through the
+subnet before it appears on any bounty platform.
+
+**Generating a key:**
+
+```bash
+# 32+ random bytes encoded as hex (64+ hex chars)
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+**Requirements:**
+- Minimum 32 bytes (64 hex characters).
+- Must be unique per validator instance — **do not share** across validators.
+- Store in your `.env` file with restricted permissions (`chmod 600 .env`).
+- If missing, the anti-bypass engine auto-generates a key and stores it in
+  `data/anti_bypass/hmac.key` with `0o600` permissions. This is adequate for
+  single-machine setups but not recommended for production.
+
+**Rotation:** Replace the key in your `.env` and restart the validator. Old receipts remain valid (they embed their own HMAC tag). New receipts will use the new key.
 
 ### Anvil Configuration
 

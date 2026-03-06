@@ -87,6 +87,15 @@ class IdentityStore:
             raise ValueError(f"Invalid hotkey format: {miner_hotkey}")
         if not _PLATFORM_ID_PATTERN.match(platform_id):
             raise ValueError(f"Invalid platform_id format: {platform_id}")
+        # Validate platform against the registry to prevent sybil attacks
+        # via fabricated platform names.
+        if self._registry:
+            known = self._registry.list_platforms()
+            if known and platform not in known:
+                raise ValueError(
+                    f"Unsupported platform: {platform!r}. "
+                    f"Supported: {', '.join(sorted(known))}"
+                )
 
         # AG-3 fix: require signed_challenge for new claims. Without this,
         # any miner can claim any platform identity without proof of ownership.

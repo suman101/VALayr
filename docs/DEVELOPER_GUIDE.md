@@ -1,6 +1,6 @@
 # VALayr — Developer Guide
 
-> Version 1.2 · Last updated: 2026-03-06
+> Version 0.1.0 · Last updated: 2026-03-06
 
 This guide is for developers who want to contribute to VALayr's core codebase — adding features, fixing bugs, extending the validation engine, writing new mutators, or improving contracts.
 
@@ -48,7 +48,11 @@ forge test --root contracts -v        # Solidity tests
 python3 -m pytest tests/ -q           # Python tests
 ```
 
-> **Note:** The repository uses directory symlinks for Python module imports: `task_generator → task-generator/` and `subnet_adapter → subnet-adapter/`. These are checked into Git. If they appear broken after cloning on Windows, recreate them with `mklink /D task_generator task-generator`.
+> **Note:** The repository uses directory symlinks for Python module imports: `task_generator → task-generator/` and `subnet_adapter → subnet-adapter/`. These are committed to Git as symlinks. On macOS/Linux they work automatically after clone. On **Windows**, Git may check them out as plain text files; recreate them from an elevated prompt:
+> ```
+> mklink /D task_generator task-generator
+> mklink /D subnet_adapter subnet-adapter
+> ```
 
 > **Solidity dependencies:** The `contracts/lib/forge-std` submodule is installed by `forge install`. If you see missing import errors, run `cd contracts && forge install` again.
 

@@ -1,6 +1,6 @@
 # Data Schema Reference
 
-> Version 1.2 · Last updated: 2026-03-06
+> Version 0.1.0 · Last updated: 2026-03-06
 
 This document describes the JSON schemas for all persistent state files used by VALayr.
 

@@ -1,6 +1,6 @@
 # VALayr — Threat Model
 
-> Version 1.2 · Last updated: 2026-03-06
+> Version 0.1.0 · Last updated: 2026-03-06
 
 ## 1. Overview
 

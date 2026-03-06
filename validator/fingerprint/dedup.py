@@ -44,6 +44,12 @@ FULL_REWARD_MULTIPLIER = 1.0
 DUPLICATE_REWARD_MULTIPLIER = 0.10
 ZERO_REWARD_MULTIPLIER = 0.0
 
+# Maximum number of tasks to keep in the fingerprint database.  Oldest tasks
+# (by earliest fingerprint timestamp) are evicted when this limit is exceeded.
+# Prevents unbounded memory growth (DoS vector) while retaining enough history
+# for deduplication of recent work.
+MAX_FINGERPRINT_TASKS = 5_000
+
 # Storage path for fingerprint DB (production: use a proper DB)
 FINGERPRINT_DB_PATH = Path(__file__).parent.parent.parent / "data" / "fingerprints.json"
 
@@ -89,7 +95,7 @@ class FingerprintComponents:
             seq_parts = []
             for fn_name in sorted(self.per_function_selectors.keys()):
                 fn_sels = sorted(set(self.per_function_selectors.get(fn_name, [])))
-                seq_parts.append(f"{fn_name}={',' .join(fn_sels)}")
+                seq_parts.append(f"{fn_name}={','.join(fn_sels)}")
             parts.append("selector_sequence_unordered:" + "|".join(seq_parts))
         else:
             # Single-tx fallback: sorted flat selectors
@@ -358,6 +364,22 @@ class FingerprintEngine:
         """
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         lock_path = self.db_path.with_suffix(".lock")
+
+        # Evict oldest tasks when DB exceeds capacity to prevent unbounded
+        # memory growth.  "Oldest" = earliest first_seen_at across all
+        # fingerprints in a task.
+        if len(self._db) > MAX_FINGERPRINT_TASKS:
+            task_ages = {
+                tid: min(
+                    (r.first_seen_at for r in fps.values()),
+                    default=0,
+                )
+                for tid, fps in self._db.items()
+            }
+            sorted_tasks = sorted(task_ages, key=task_ages.get)  # type: ignore[arg-type]
+            evict_count = len(self._db) - MAX_FINGERPRINT_TASKS
+            for tid in sorted_tasks[:evict_count]:
+                del self._db[tid]
 
         serialized = {}
         for task_id, fps in self._db.items():

@@ -1,6 +1,6 @@
 # VALayr — API Reference
 
-> Version 1.2 · Last updated: 2026-03-06
+> Version 0.1.0 · Last updated: 2026-03-06
 
 This document covers the public APIs of every VALayr module: Python classes and functions, Bittensor synapse formats, smart contract interfaces, CLI commands, and HTTP endpoints.
 

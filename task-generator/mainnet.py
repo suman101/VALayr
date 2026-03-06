@@ -239,12 +239,11 @@ class MainnetContractSource:
         Rejects any embedded query-string, URL-encoding, or whitespace
         to prevent SSRF via the Etherscan API.
         """
-        address = address.strip()
+        # Strip all ASCII and Unicode whitespace to prevent SSRF via
+        # non-breaking spaces (U+00A0, U+202F, etc.) that survive .strip().
+        address = "".join(address.split())
         if not re.match(r"^0x[0-9a-fA-F]{40}$", address):
             raise ValueError(f"Invalid Ethereum address: {address}")
-        # Defense-in-depth: reject any chars that could be URL-encoded attacks
-        if any(c in address for c in ('?', '&', '#', '%', ' ', '\t', '\n')):
-            raise ValueError(f"Address contains forbidden characters: {address}")
         return address
 
     def _api_get_source(
