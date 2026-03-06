@@ -31,8 +31,9 @@ MAX_CONCURRENT_VALIDATIONS = int(os.environ.get("VALAYR_MAX_CONCURRENT_VALIDATIO
 _validation_semaphore = threading.Semaphore(MAX_CONCURRENT_VALIDATIONS)
 
 # Per-epoch compute budget (in cumulative CPU-seconds). 0 = unlimited.
-# Validators can set this to cap how much compute they spend per epoch.
-EPOCH_COMPUTE_BUDGET = float(os.environ.get("VALAYR_EPOCH_COMPUTE_BUDGET", "0"))
+# Default 10 000 CPU-seconds ≈ 83 full-timeout (120 s) validations per epoch,
+# well above the 50-submission-per-miner cap while preventing runaway costs.
+EPOCH_COMPUTE_BUDGET = float(os.environ.get("VALAYR_EPOCH_COMPUTE_BUDGET", "10000"))
 
 # Timeout for a single process_submission call (seconds).
 SUBMISSION_TIMEOUT = int(os.environ.get("VALAYR_SUBMISSION_TIMEOUT", "300"))
@@ -154,6 +155,10 @@ class Orchestrator:
         self.mode = mode
         self.validator_id = validator_id
         self.anvil_port = anvil_port
+
+        # In docker (bittensor) mode, enforce sandbox requirement automatically.
+        if mode == "docker" and not os.environ.get("VALAYR_REQUIRE_SANDBOX"):
+            os.environ["VALAYR_REQUIRE_SANDBOX"] = "1"
         self.corpus_dir = corpus_dir or CORPUS_DIR
         self.data_dir = data_dir or DATA_DIR
         self.reports_dir = self.data_dir / "reports"

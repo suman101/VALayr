@@ -25,7 +25,7 @@ from typing import Optional
 # Reward distribution parameters (v1 — FIXED)
 BASE_REWARD_PER_TASK = 1.0           # Normalized TAO units
 DUPLICATE_PENALTY = 0.90             # 90% penalty for duplicate fingerprints
-INVALID_SUBMISSION_PENALTY = 0.0     # Zero reward
+INVALID_SUBMISSION_PENALTY = 0.05    # Score deducted per invalid submission
 
 # Validator consensus parameters
 MIN_VALIDATOR_QUORUM = 5
@@ -278,7 +278,7 @@ class SubnetIncentiveAdapter:
 
         Formula:
           raw = (unique_exploits * severity) + (duplicate_exploits * severity * 0.1)
-                - (invalid_submissions * 0.05)
+                - (invalid_submissions * INVALID_SUBMISSION_PENALTY)
         """
         unique_weight = score.unique_fingerprints * (
             score.total_severity / max(score.valid_exploits, 1)
@@ -286,7 +286,7 @@ class SubnetIncentiveAdapter:
         duplicate_weight = score.duplicate_fingerprints * (
             score.total_severity / max(score.valid_exploits, 1) * (1 - DUPLICATE_PENALTY)
         )
-        spam_penalty = score.invalid_submissions * 0.05
+        spam_penalty = score.invalid_submissions * INVALID_SUBMISSION_PENALTY
 
         raw = unique_weight + duplicate_weight - spam_penalty
         return max(0.0, raw)

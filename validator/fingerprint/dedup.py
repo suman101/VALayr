@@ -79,7 +79,8 @@ class FingerprintComponents:
             for fn_name in self.test_function_order:
                 fn_sels = sorted(set(self.per_function_selectors.get(fn_name, [])))
                 seq_parts.append(f"{fn_name}={','.join(fn_sels)}")
-            parts.append("selector_sequence:" + "|".join(seq_parts))        elif self.per_function_selectors:
+            parts.append("selector_sequence:" + "|".join(seq_parts))
+        elif self.per_function_selectors:
             # F-1 fix: per_function_selectors present but test_function_order
             # is empty. Use sorted function names to produce a deterministic
             # (though order-unaware) fingerprint instead of falling through

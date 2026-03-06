@@ -45,8 +45,11 @@ FOUNDRY_VERSION = "nightly-2024-12-01"
 DOCKER_IMAGE = "ghcr.io/exploit-subnet/validator:v0.1.0"
 
 # V-5: Whether to enforce Docker sandbox mode for network isolation.
-# In production, set VALAYR_REQUIRE_SANDBOX=1 to refuse host-mode validation.
-REQUIRE_SANDBOX = os.environ.get("VALAYR_REQUIRE_SANDBOX", "") == "1"
+# Defaults to ON when running inside a Docker sandbox (DOCKER_SANDBOX_ACTIVE=1)
+# or can be forced via VALAYR_REQUIRE_SANDBOX=1.
+_sandbox_env = os.environ.get("VALAYR_REQUIRE_SANDBOX", "")
+_sandbox_default = "1" if os.environ.get("DOCKER_SANDBOX_ACTIVE") else ""
+REQUIRE_SANDBOX = (_sandbox_env or _sandbox_default) == "1"
 
 # Maximum size of JSON output from Docker sandbox (10 MB guard)
 MAX_JSON_OUTPUT_SIZE = 10 * 1024 * 1024
@@ -241,7 +244,10 @@ class ValidationEngine:
             # In production, VALAYR_REQUIRE_SANDBOX=1 refuses host-mode validation.
             if REQUIRE_SANDBOX and not os.environ.get("DOCKER_SANDBOX_ACTIVE"):
                 report.error_message = (
-                    \"Network isolation required (VALAYR_REQUIRE_SANDBOX=1) but \"\n                    \"not running inside Docker sandbox. Set DOCKER_SANDBOX_ACTIVE=1 \"\n                    \"or use the validation-sandbox Docker service.\"\n                )
+                    "Network isolation required (VALAYR_REQUIRE_SANDBOX=1) but "
+                    "not running inside Docker sandbox. Set DOCKER_SANDBOX_ACTIVE=1 "
+                    "or use the validation-sandbox Docker service."
+                )
                 logger.error(report.error_message)
                 return self._finalize(report, start_time)
 
@@ -862,7 +868,6 @@ contract ExploitTest is Test {{
                 timeout=VALIDATION_TIMEOUT,
                 cwd=str(workspace),
                 preexec_fn=_set_local_resource_limits,
-            )
             )
 
             # V-10 fix: enforce MAX_JSON_OUTPUT_SIZE to prevent OOM from
