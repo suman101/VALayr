@@ -426,12 +426,12 @@ Zero-dependency HTTP server on port 9946.
 
 Manages the lifecycle of bounty payouts from on-chain protocol registrations to miner rewards.
 
-| Module             | Purpose                                                                 |
-| ------------------ | ----------------------------------------------------------------------- |
-| `reward_split.py`  | Computes miner share, protocol fee, and Treasury allocation             |
-| `anti_bypass.py`   | Detects attempts to circumvent bounty rules (duplicate identity, etc.)  |
-| `identity.py`      | Links miner hotkeys to external identities (bounty platform accounts)   |
-| `platform.py`      | Integrates with external bounty platforms (Immunefi, Code4rena)         |
+| Module            | Purpose                                                                |
+| ----------------- | ---------------------------------------------------------------------- |
+| `reward_split.py` | Computes miner share, protocol fee, and Treasury allocation            |
+| `anti_bypass.py`  | Detects attempts to circumvent bounty rules (duplicate identity, etc.) |
+| `identity.py`     | Links miner hotkeys to external identities (bounty platform accounts)  |
+| `platform.py`     | Integrates with external bounty platforms (Immunefi, Code4rena)        |
 
 **Reward Flow:**
 
@@ -445,8 +445,8 @@ Exploit validated ──▶ RewardSplitEngine ──▶ Miner share (70%)
 
 Scans live EVM chains for opt-in contracts and converts them into task packages.
 
-| Step | Action                                       |
-| ---- | -------------------------------------------- |
+| Step | Action                                        |
+| ---- | --------------------------------------------- |
 | 1    | Query chain for registered protocol contracts |
 | 2    | Fetch verified source via block-explorer API  |
 | 3    | Flatten multi-file Solidity into single file  |

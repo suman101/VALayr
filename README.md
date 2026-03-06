@@ -56,11 +56,11 @@ VALayr is a Bittensor subnet that pays miners to **find real vulnerabilities** i
 
 ### Prerequisites
 
-| Tool | Version | Notes |
-|------|---------|-------|
-| Python | ≥ 3.10 | `python3` required |
+| Tool    | Version              | Notes                                  |
+| ------- | -------------------- | -------------------------------------- |
+| Python  | ≥ 3.10               | `python3` required                     |
 | Foundry | `nightly-2024-12-01` | [Install](https://book.getfoundry.sh/) |
-| Docker | ≥ 24.0 | Production only |
+| Docker  | ≥ 24.0               | Production only                        |
 
 ### Install & Run
 
@@ -122,32 +122,32 @@ PYTHONHASHSEED=0 bash scripts/verify-determinism.sh # Determinism check
 <details>
 <summary><strong>Full test suite breakdown</strong></summary>
 
-| File | Tests | Coverage Area |
-|------|------:|---------------|
-| `test_extended.py` | 64 | Mutators, metrics, neurons, CLI, input sanitisation |
-| `test_adversarial.py` | 58 | Stage 3 adversarial invariant system |
-| `test_bounty.py` | 47 | Bounty platform, reward splitting, anti-bypass |
-| `test_security.py` | 39 | Security regression tests |
-| `test_round2.py` | 37 | Deploy pipeline, auto-mine, key rotation |
-| `test_validate_engine_unit.py` | 36 | Validation engine unit tests |
-| `test_e2e_pipeline.py` | 32 | Full end-to-end pipeline with weight blending |
-| `test_schemas_hashing.py` | 29 | Schema validation and keccak256 hashing |
-| `test_difficulty_discovery.py` | 27 | Difficulty scaling and discovery engine |
-| `test_multi_tx.py` | 21 | Multi-transaction exploit sequences |
-| `test_mutator_extended.py` | 19 | Extended mutator coverage |
-| `test_integration.py` | 19 | Task generation, fingerprinting, scoring, consensus |
-| `test_uniqueness.py` | 18 | Uniqueness scoring |
-| `test_mainnet_source.py` | 17 | Mainnet contract source fetching |
-| `test_key_rotation.py` | 17 | Key rotation |
-| `test_consensus_edge.py` | 16 | Consensus edge cases |
-| `test_orchestrator_integration.py` | 15 | Orchestrator integration |
-| `test_protocol_roundtrip.py` | 11 | Protocol round-trip |
-| `test_reward_split.py` | 10 | Reward-split engine |
-| `test_validator_neuron.py` | 8 | Validator neuron lifecycle |
-| `test_pipeline.py` | 8 | End-to-end pipeline simulation |
-| `test_fingerprint_recovery.py` | 8 | Fingerprint DB recovery |
-| `test_live_anvil.py` | 7 | Real Anvil sandbox validation |
-| `test_logging_utils.py` | 6 | Logging utilities |
+| File                               | Tests | Coverage Area                                       |
+| ---------------------------------- | ----: | --------------------------------------------------- |
+| `test_extended.py`                 |    64 | Mutators, metrics, neurons, CLI, input sanitisation |
+| `test_adversarial.py`              |    58 | Stage 3 adversarial invariant system                |
+| `test_bounty.py`                   |    47 | Bounty platform, reward splitting, anti-bypass      |
+| `test_security.py`                 |    39 | Security regression tests                           |
+| `test_round2.py`                   |    37 | Deploy pipeline, auto-mine, key rotation            |
+| `test_validate_engine_unit.py`     |    36 | Validation engine unit tests                        |
+| `test_e2e_pipeline.py`             |    32 | Full end-to-end pipeline with weight blending       |
+| `test_schemas_hashing.py`          |    29 | Schema validation and keccak256 hashing             |
+| `test_difficulty_discovery.py`     |    27 | Difficulty scaling and discovery engine             |
+| `test_multi_tx.py`                 |    21 | Multi-transaction exploit sequences                 |
+| `test_mutator_extended.py`         |    19 | Extended mutator coverage                           |
+| `test_integration.py`              |    19 | Task generation, fingerprinting, scoring, consensus |
+| `test_uniqueness.py`               |    18 | Uniqueness scoring                                  |
+| `test_mainnet_source.py`           |    17 | Mainnet contract source fetching                    |
+| `test_key_rotation.py`             |    17 | Key rotation                                        |
+| `test_consensus_edge.py`           |    16 | Consensus edge cases                                |
+| `test_orchestrator_integration.py` |    15 | Orchestrator integration                            |
+| `test_protocol_roundtrip.py`       |    11 | Protocol round-trip                                 |
+| `test_reward_split.py`             |    10 | Reward-split engine                                 |
+| `test_validator_neuron.py`         |     8 | Validator neuron lifecycle                          |
+| `test_pipeline.py`                 |     8 | End-to-end pipeline simulation                      |
+| `test_fingerprint_recovery.py`     |     8 | Fingerprint DB recovery                             |
+| `test_live_anvil.py`               |     7 | Real Anvil sandbox validation                       |
+| `test_logging_utils.py`            |     6 | Logging utilities                                   |
 
 Solidity: `ExploitRegistry` (14), `ProtocolRegistry` (26), `AdversarialMode` (26), `Treasury` (29), `Ownable2Step` (19), `Pausable` (12), `ReentrancyGuard` (3), Invariants (5).
 
@@ -155,20 +155,20 @@ Solidity: `ExploitRegistry` (14), `ProtocolRegistry` (26), `AdversarialMode` (26
 
 ## Architecture Overview
 
-| Component | Location | Description |
-|-----------|----------|-------------|
-| **Smart Contracts** | `contracts/src/` | ExploitRegistry, ProtocolRegistry, Treasury, Ownable2Step, Pausable |
-| **Task Generator** | `task-generator/` | Deterministic corpus generation, mainnet discovery, mutation framework |
-| **Validation Engine** | `validator/engine/` | Anvil sandbox execution, state-diff capture |
-| **Scoring** | `validator/scoring/` | Severity scoring (funds drained 40%, escalation 25%, invariant 20%, lock 15%) |
-| **Fingerprinting** | `validator/fingerprint/` | State-diff fingerprinting, deduplication |
-| **Anti-Collusion** | `validator/anticollusion/` | Multi-validator consensus, divergence slashing |
-| **Bounty System** | `validator/bounty/` | Reward splitting (70/20/10), anti-bypass detection, platform integration |
-| **Subnet Adapter** | `subnet-adapter/` | Bittensor weight computation |
-| **Orchestrator** | `orchestrator.py` | Central pipeline: task → validate → fingerprint → score → record |
-| **Neurons** | `neurons/` | Bittensor validator/miner neuron wrappers |
-| **Miner CLI** | `miner/cli.py` | `tasks`, `scaffold`, `submit`, `status`, `scores` |
-| **Docker** | `docker/` | Compose stack with `--network=none` sandbox isolation |
+| Component             | Location                   | Description                                                                   |
+| --------------------- | -------------------------- | ----------------------------------------------------------------------------- |
+| **Smart Contracts**   | `contracts/src/`           | ExploitRegistry, ProtocolRegistry, Treasury, Ownable2Step, Pausable           |
+| **Task Generator**    | `task-generator/`          | Deterministic corpus generation, mainnet discovery, mutation framework        |
+| **Validation Engine** | `validator/engine/`        | Anvil sandbox execution, state-diff capture                                   |
+| **Scoring**           | `validator/scoring/`       | Severity scoring (funds drained 40%, escalation 25%, invariant 20%, lock 15%) |
+| **Fingerprinting**    | `validator/fingerprint/`   | State-diff fingerprinting, deduplication                                      |
+| **Anti-Collusion**    | `validator/anticollusion/` | Multi-validator consensus, divergence slashing                                |
+| **Bounty System**     | `validator/bounty/`        | Reward splitting (70/20/10), anti-bypass detection, platform integration      |
+| **Subnet Adapter**    | `subnet-adapter/`          | Bittensor weight computation                                                  |
+| **Orchestrator**      | `orchestrator.py`          | Central pipeline: task → validate → fingerprint → score → record              |
+| **Neurons**           | `neurons/`                 | Bittensor validator/miner neuron wrappers                                     |
+| **Miner CLI**         | `miner/cli.py`             | `tasks`, `scaffold`, `submit`, `status`, `scores`                             |
+| **Docker**            | `docker/`                  | Compose stack with `--network=none` sandbox isolation                         |
 
 See [Architecture docs](docs/ARCHITECTURE.md) for detailed data flow diagrams, design decisions, and component deep dives.
 
@@ -177,38 +177,38 @@ See [Architecture docs](docs/ARCHITECTURE.md) for detailed data flow diagrams, d
 <details>
 <summary><strong>Environment variables</strong></summary>
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| **Determinism** | | |
-| `ANVIL_BLOCK_TIMESTAMP` | `1700000000` | Fixed block timestamp |
-| `ANVIL_BLOCK_NUMBER` | `18000000` | Fixed block number |
-| `ANVIL_GAS_LIMIT` | `30000000` | Block gas limit |
-| `ANVIL_CHAIN_ID` | `31337` | Chain ID |
-| `PYTHONHASHSEED` | `0` | **Must be 0** for deterministic Python |
-| **Orchestrator** | | |
-| `VALAYR_MAX_CONCURRENT_VALIDATIONS` | `4` | Max parallel validations per epoch |
-| `VALAYR_EPOCH_COMPUTE_BUDGET` | `10000` | CPU-seconds budget per epoch |
-| `VALAYR_SUBMISSION_TIMEOUT` | `300` | Per-submission timeout (seconds) |
-| `VALAYR_REQUIRE_SANDBOX` | auto | Force Docker sandbox |
-| **Difficulty Phasing** | | |
-| `VALAYR_EPOCH_DIFFICULTY_2` | `51` | Phase 2 start epoch |
-| `VALAYR_EPOCH_DIFFICULTY_3` | `201` | Phase 3 start epoch |
-| `VALAYR_MAINNET_RATIO_{1,2,3}` | `0.0 / 0.3 / 0.6` | Mainnet task ratio per phase |
-| `VALAYR_MIN_SEVERITY_{1,2,3}` | `0.0 / 0.1 / 0.2` | Severity floor per phase |
-| **Bounty** | | |
-| `VALAYR_MINER_SHARE` | `0.70` | Miner reward share |
-| `VALAYR_VALIDATOR_SHARE` | `0.20` | Validator reward share |
-| `VALAYR_TREASURY_SHARE` | `0.10` | Treasury reward share |
-| `VALAYR_TREASURY_ADDRESS` | — | Treasury contract address |
-| `VALAYR_RECEIPT_HMAC_KEY` | _(auto)_ | 32+ byte hex key for receipt integrity |
-| **On-Chain** | | |
-| `VALAYR_RPC_URL` | `http://127.0.0.1:8545` | RPC endpoint |
-| `VALAYR_PROTOCOL_REGISTRY` | — | ProtocolRegistry address |
-| `VALAYR_EXPLOIT_REGISTRY` | — | ExploitRegistry address |
-| `VALAYR_ADVERSARIAL_SCORING` | — | AdversarialScoring address |
-| **Logging** | | |
-| `EXPLOIT_LOG_LEVEL` | `INFO` | DEBUG / INFO / WARNING / ERROR |
-| `EXPLOIT_LOG_FILE` | — | Optional log file path |
+| Variable                            | Default                 | Description                            |
+| ----------------------------------- | ----------------------- | -------------------------------------- |
+| **Determinism**                     |                         |                                        |
+| `ANVIL_BLOCK_TIMESTAMP`             | `1700000000`            | Fixed block timestamp                  |
+| `ANVIL_BLOCK_NUMBER`                | `18000000`              | Fixed block number                     |
+| `ANVIL_GAS_LIMIT`                   | `30000000`              | Block gas limit                        |
+| `ANVIL_CHAIN_ID`                    | `31337`                 | Chain ID                               |
+| `PYTHONHASHSEED`                    | `0`                     | **Must be 0** for deterministic Python |
+| **Orchestrator**                    |                         |                                        |
+| `VALAYR_MAX_CONCURRENT_VALIDATIONS` | `4`                     | Max parallel validations per epoch     |
+| `VALAYR_EPOCH_COMPUTE_BUDGET`       | `10000`                 | CPU-seconds budget per epoch           |
+| `VALAYR_SUBMISSION_TIMEOUT`         | `300`                   | Per-submission timeout (seconds)       |
+| `VALAYR_REQUIRE_SANDBOX`            | auto                    | Force Docker sandbox                   |
+| **Difficulty Phasing**              |                         |                                        |
+| `VALAYR_EPOCH_DIFFICULTY_2`         | `51`                    | Phase 2 start epoch                    |
+| `VALAYR_EPOCH_DIFFICULTY_3`         | `201`                   | Phase 3 start epoch                    |
+| `VALAYR_MAINNET_RATIO_{1,2,3}`      | `0.0 / 0.3 / 0.6`       | Mainnet task ratio per phase           |
+| `VALAYR_MIN_SEVERITY_{1,2,3}`       | `0.0 / 0.1 / 0.2`       | Severity floor per phase               |
+| **Bounty**                          |                         |                                        |
+| `VALAYR_MINER_SHARE`                | `0.70`                  | Miner reward share                     |
+| `VALAYR_VALIDATOR_SHARE`            | `0.20`                  | Validator reward share                 |
+| `VALAYR_TREASURY_SHARE`             | `0.10`                  | Treasury reward share                  |
+| `VALAYR_TREASURY_ADDRESS`           | —                       | Treasury contract address              |
+| `VALAYR_RECEIPT_HMAC_KEY`           | _(auto)_                | 32+ byte hex key for receipt integrity |
+| **On-Chain**                        |                         |                                        |
+| `VALAYR_RPC_URL`                    | `http://127.0.0.1:8545` | RPC endpoint                           |
+| `VALAYR_PROTOCOL_REGISTRY`          | —                       | ProtocolRegistry address               |
+| `VALAYR_EXPLOIT_REGISTRY`           | —                       | ExploitRegistry address                |
+| `VALAYR_ADVERSARIAL_SCORING`        | —                       | AdversarialScoring address             |
+| **Logging**                         |                         |                                        |
+| `EXPLOIT_LOG_LEVEL`                 | `INFO`                  | DEBUG / INFO / WARNING / ERROR         |
+| `EXPLOIT_LOG_FILE`                  | —                       | Optional log file path                 |
 
 Copy `.env.example` to `.env` and fill in your values. See [Deployment Guide](docs/DEPLOYMENT.md) for the full reference.
 
@@ -216,22 +216,22 @@ Copy `.env.example` to `.env` and fill in your values. See [Deployment Guide](do
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Architecture](docs/ARCHITECTURE.md) | System design, component interactions, data flow diagrams |
-| [API Reference](docs/API_REFERENCE.md) | Python modules, synapses, contract ABIs, CLI, HTTP endpoints |
-| [Contract Reference](docs/CONTRACT_REFERENCE.md) | Solidity contract docs: ExploitRegistry, ProtocolRegistry, Treasury |
-| [Deployment Guide](docs/DEPLOYMENT.md) | Production deployment, Docker, monitoring, troubleshooting |
-| [Developer Guide](docs/DEVELOPER_GUIDE.md) | Contributing code, setup, adding templates/mutators/contracts |
-| [Exploit Writing Guide](docs/EXPLOIT_WRITING_GUIDE.md) | Annotated exploits for every vulnerability class |
-| [Miner Guide](docs/MINER_GUIDE.md) | Writing exploits, submission workflow, scoring strategies |
-| [Validator Guide](docs/VALIDATOR_GUIDE.md) | Validator setup, epoch lifecycle, weight setting, monitoring |
-| [Testing Guide](docs/TESTING.md) | Test suites, CI pipeline, determinism verification |
-| [Threat Model](docs/THREAT_MODEL.md) | STRIDE analysis, risk matrix, attack surfaces, security controls |
-| [Data Schema](docs/DATA_SCHEMA.md) | JSON schemas for all persistent state files |
-| [Glossary](docs/GLOSSARY.md) | Key terms and concepts |
-| [Changelog](CHANGELOG.md) | Release history |
-| [Runbooks](docs/runbooks/) | 10 operational runbooks (key rotation, incident response, etc.) |
+| Document                                               | Description                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------- |
+| [Architecture](docs/ARCHITECTURE.md)                   | System design, component interactions, data flow diagrams           |
+| [API Reference](docs/API_REFERENCE.md)                 | Python modules, synapses, contract ABIs, CLI, HTTP endpoints        |
+| [Contract Reference](docs/CONTRACT_REFERENCE.md)       | Solidity contract docs: ExploitRegistry, ProtocolRegistry, Treasury |
+| [Deployment Guide](docs/DEPLOYMENT.md)                 | Production deployment, Docker, monitoring, troubleshooting          |
+| [Developer Guide](docs/DEVELOPER_GUIDE.md)             | Contributing code, setup, adding templates/mutators/contracts       |
+| [Exploit Writing Guide](docs/EXPLOIT_WRITING_GUIDE.md) | Annotated exploits for every vulnerability class                    |
+| [Miner Guide](docs/MINER_GUIDE.md)                     | Writing exploits, submission workflow, scoring strategies           |
+| [Validator Guide](docs/VALIDATOR_GUIDE.md)             | Validator setup, epoch lifecycle, weight setting, monitoring        |
+| [Testing Guide](docs/TESTING.md)                       | Test suites, CI pipeline, determinism verification                  |
+| [Threat Model](docs/THREAT_MODEL.md)                   | STRIDE analysis, risk matrix, attack surfaces, security controls    |
+| [Data Schema](docs/DATA_SCHEMA.md)                     | JSON schemas for all persistent state files                         |
+| [Glossary](docs/GLOSSARY.md)                           | Key terms and concepts                                              |
+| [Changelog](CHANGELOG.md)                              | Release history                                                     |
+| [Runbooks](docs/runbooks/)                             | 10 operational runbooks (key rotation, incident response, etc.)     |
 
 ## Project Structure
 

@@ -149,41 +149,41 @@ PYTHONHASHSEED=0
 
 All `VALAYR_*` variables are optional unless marked **required**. See [VALIDATOR_GUIDE.md](VALIDATOR_GUIDE.md#configuration) for detailed descriptions.
 
-| Variable                            | Default       | Category     | Description                                       |
-| ----------------------------------- | ------------- | ------------ | ------------------------------------------------- |
-| `ANVIL_BLOCK_TIMESTAMP`             | `1700000000`  | Determinism  | Pinned block timestamp                            |
-| `ANVIL_BLOCK_NUMBER`                | `18000000`    | Determinism  | Pinned block number                               |
-| `ANVIL_GAS_LIMIT`                   | `30000000`    | Determinism  | Gas limit per block                               |
-| `ANVIL_CHAIN_ID`                    | `31337`       | Determinism  | Chain ID                                          |
-| `PYTHONHASHSEED`                    | `0`           | Determinism  | **Must be 0**                                     |
-| `VALIDATOR_ID`                      | `validator-0` | Identity     | Unique validator identifier                       |
-| `EXPLOIT_LOG_LEVEL`                 | `INFO`        | Logging      | Logging level                                     |
-| `EXPLOIT_LOG_FILE`                  | (none)        | Logging      | Log file path                                     |
-| `VALAYR_MAX_CONCURRENT_VALIDATIONS` | `4`           | Orchestrator | Max parallel validations per epoch                |
-| `VALAYR_EPOCH_COMPUTE_BUDGET`       | `10000`       | Orchestrator | CPU-seconds budget per epoch                      |
-| `VALAYR_SUBMISSION_TIMEOUT`         | `300`         | Orchestrator | Per-submission timeout (seconds)                  |
-| `VALAYR_REQUIRE_SANDBOX`            | auto          | Security     | Force Docker sandbox; auto-enabled in Docker mode |
-| `VALAYR_EPOCH_DIFFICULTY_2`         | `51`          | Difficulty   | Epoch where phase 2 begins                        |
-| `VALAYR_EPOCH_DIFFICULTY_3`         | `201`         | Difficulty   | Epoch where phase 3 begins                        |
-| `VALAYR_MAINNET_RATIO_1`            | `0.0`         | Difficulty   | Mainnet task ratio — phase 1                      |
-| `VALAYR_MAINNET_RATIO_2`            | `0.3`         | Difficulty   | Mainnet task ratio — phase 2                      |
-| `VALAYR_MAINNET_RATIO_3`            | `0.6`         | Difficulty   | Mainnet task ratio — phase 3                      |
-| `VALAYR_MIN_SEVERITY_1`             | `0.0`         | Difficulty   | Min severity threshold — phase 1                  |
-| `VALAYR_MIN_SEVERITY_2`             | `0.1`         | Difficulty   | Min severity threshold — phase 2                  |
-| `VALAYR_MIN_SEVERITY_3`             | `0.2`         | Difficulty   | Min severity threshold — phase 3                  |
-| `VALAYR_MINER_SHARE`                | `0.70`        | Bounty       | Miner reward share                                |
-| `VALAYR_VALIDATOR_SHARE`            | `0.20`        | Bounty       | Validator reward share                            |
-| `VALAYR_TREASURY_SHARE`             | `0.10`        | Bounty       | Treasury reward share                             |
-| `VALAYR_TREASURY_ADDRESS`           | (none)        | Bounty       | Treasury contract address                         |
-| `VALAYR_RECEIPT_HMAC_KEY`           | —             | Security     | **Required.** 32+ byte hex key for receipt HMAC   |
-| `VALAYR_DOCKER_IMAGE`               | `ghcr.io/exploit-subnet/validator:v0.1.0` | Sandbox | Docker image for sandbox validation         |
-| `VALAYR_ADVERSARIAL_SCORING`        | (none)        | On-chain     | AdversarialScoring contract address               |
-| `VALAYR_RPC_URL`                    | `http://127.0.0.1:8545` | On-chain | RPC endpoint for on-chain reads              |
-| `VALAYR_PROTOCOL_REGISTRY`          | (none)        | On-chain     | ProtocolRegistry contract address                 |
-| `VALAYR_EXPLOIT_REGISTRY`           | (none)        | On-chain     | ExploitRegistry contract address                  |
-| `VALAYR_SEED_TARGETS`               | (none)        | Discovery    | Comma-separated target contract addresses         |
-| `VALAYR_SEED_CHAIN_ID`              | `1`           | Discovery    | Chain ID for mainnet discovery                    |
-| `ETH_PRIVATE_KEY`                   | —             | On-chain     | Validator/deployer private key (never commit)     |
+| Variable                            | Default                                   | Category     | Description                                       |
+| ----------------------------------- | ----------------------------------------- | ------------ | ------------------------------------------------- |
+| `ANVIL_BLOCK_TIMESTAMP`             | `1700000000`                              | Determinism  | Pinned block timestamp                            |
+| `ANVIL_BLOCK_NUMBER`                | `18000000`                                | Determinism  | Pinned block number                               |
+| `ANVIL_GAS_LIMIT`                   | `30000000`                                | Determinism  | Gas limit per block                               |
+| `ANVIL_CHAIN_ID`                    | `31337`                                   | Determinism  | Chain ID                                          |
+| `PYTHONHASHSEED`                    | `0`                                       | Determinism  | **Must be 0**                                     |
+| `VALIDATOR_ID`                      | `validator-0`                             | Identity     | Unique validator identifier                       |
+| `EXPLOIT_LOG_LEVEL`                 | `INFO`                                    | Logging      | Logging level                                     |
+| `EXPLOIT_LOG_FILE`                  | (none)                                    | Logging      | Log file path                                     |
+| `VALAYR_MAX_CONCURRENT_VALIDATIONS` | `4`                                       | Orchestrator | Max parallel validations per epoch                |
+| `VALAYR_EPOCH_COMPUTE_BUDGET`       | `10000`                                   | Orchestrator | CPU-seconds budget per epoch                      |
+| `VALAYR_SUBMISSION_TIMEOUT`         | `300`                                     | Orchestrator | Per-submission timeout (seconds)                  |
+| `VALAYR_REQUIRE_SANDBOX`            | auto                                      | Security     | Force Docker sandbox; auto-enabled in Docker mode |
+| `VALAYR_EPOCH_DIFFICULTY_2`         | `51`                                      | Difficulty   | Epoch where phase 2 begins                        |
+| `VALAYR_EPOCH_DIFFICULTY_3`         | `201`                                     | Difficulty   | Epoch where phase 3 begins                        |
+| `VALAYR_MAINNET_RATIO_1`            | `0.0`                                     | Difficulty   | Mainnet task ratio — phase 1                      |
+| `VALAYR_MAINNET_RATIO_2`            | `0.3`                                     | Difficulty   | Mainnet task ratio — phase 2                      |
+| `VALAYR_MAINNET_RATIO_3`            | `0.6`                                     | Difficulty   | Mainnet task ratio — phase 3                      |
+| `VALAYR_MIN_SEVERITY_1`             | `0.0`                                     | Difficulty   | Min severity threshold — phase 1                  |
+| `VALAYR_MIN_SEVERITY_2`             | `0.1`                                     | Difficulty   | Min severity threshold — phase 2                  |
+| `VALAYR_MIN_SEVERITY_3`             | `0.2`                                     | Difficulty   | Min severity threshold — phase 3                  |
+| `VALAYR_MINER_SHARE`                | `0.70`                                    | Bounty       | Miner reward share                                |
+| `VALAYR_VALIDATOR_SHARE`            | `0.20`                                    | Bounty       | Validator reward share                            |
+| `VALAYR_TREASURY_SHARE`             | `0.10`                                    | Bounty       | Treasury reward share                             |
+| `VALAYR_TREASURY_ADDRESS`           | (none)                                    | Bounty       | Treasury contract address                         |
+| `VALAYR_RECEIPT_HMAC_KEY`           | —                                         | Security     | **Required.** 32+ byte hex key for receipt HMAC   |
+| `VALAYR_DOCKER_IMAGE`               | `ghcr.io/exploit-subnet/validator:v0.1.0` | Sandbox      | Docker image for sandbox validation               |
+| `VALAYR_ADVERSARIAL_SCORING`        | (none)                                    | On-chain     | AdversarialScoring contract address               |
+| `VALAYR_RPC_URL`                    | `http://127.0.0.1:8545`                   | On-chain     | RPC endpoint for on-chain reads                   |
+| `VALAYR_PROTOCOL_REGISTRY`          | (none)                                    | On-chain     | ProtocolRegistry contract address                 |
+| `VALAYR_EXPLOIT_REGISTRY`           | (none)                                    | On-chain     | ExploitRegistry contract address                  |
+| `VALAYR_SEED_TARGETS`               | (none)                                    | Discovery    | Comma-separated target contract addresses         |
+| `VALAYR_SEED_CHAIN_ID`              | `1`                                       | Discovery    | Chain ID for mainnet discovery                    |
+| `ETH_PRIVATE_KEY`                   | —                                         | On-chain     | Validator/deployer private key (never commit)     |
 
 ### 3.5 Start Services
 

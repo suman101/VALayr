@@ -38,22 +38,22 @@ We will acknowledge receipt within **48 hours** and aim to release a patch withi
 
 The following components are in scope for security reports:
 
-| Component             | Path                       | Priority |
-| --------------------- | -------------------------- | -------- |
-| Smart contracts       | `contracts/src/`           | Critical |
-| Validation engine     | `validator/engine/`        | Critical |
-| Scoring engine        | `validator/scoring/`       | Critical |
-| Treasury contract     | `contracts/src/Treasury.sol` | Critical |
-| Anti-collusion engine | `validator/anticollusion/` | High     |
-| Fingerprint dedup     | `validator/fingerprint/`   | High     |
-| Bounty system         | `validator/bounty/`        | High     |
-| Neuron wrappers       | `neurons/`                 | High     |
-| Orchestrator          | `orchestrator.py`          | High     |
-| Subnet adapter        | `subnet-adapter/`          | Medium   |
-| Docker infrastructure | `docker/`                  | Medium   |
-| Discovery engine      | `task-generator/discovery.py` | Medium |
-| Task generator        | `task-generator/`          | Low      |
-| CI / scripts          | `.github/`, `scripts/`     | Low      |
+| Component             | Path                          | Priority |
+| --------------------- | ----------------------------- | -------- |
+| Smart contracts       | `contracts/src/`              | Critical |
+| Validation engine     | `validator/engine/`           | Critical |
+| Scoring engine        | `validator/scoring/`          | Critical |
+| Treasury contract     | `contracts/src/Treasury.sol`  | Critical |
+| Anti-collusion engine | `validator/anticollusion/`    | High     |
+| Fingerprint dedup     | `validator/fingerprint/`      | High     |
+| Bounty system         | `validator/bounty/`           | High     |
+| Neuron wrappers       | `neurons/`                    | High     |
+| Orchestrator          | `orchestrator.py`             | High     |
+| Subnet adapter        | `subnet-adapter/`             | Medium   |
+| Docker infrastructure | `docker/`                     | Medium   |
+| Discovery engine      | `task-generator/discovery.py` | Medium   |
+| Task generator        | `task-generator/`             | Low      |
+| CI / scripts          | `.github/`, `scripts/`        | Low      |
 
 ## Out of Scope
 

@@ -167,7 +167,7 @@ This document describes the system's **threat actors**, **trust boundaries**, **
 
 | Threat                        | Impact                  | Mitigation                                                                           |
 | ----------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
-| Submission spam on-chain       | Block legitimate miners | Per-miner rate limit (50/epoch), global cap (1000/epoch); requires gas                |
+| Submission spam on-chain      | Block legitimate miners | Per-miner rate limit (50/epoch), global cap (1000/epoch); requires gas               |
 | Submission flood to validator | Resource exhaustion     | Per-miner rate limit (50/epoch), global cap (1000/epoch), submission cooldown (30 s) |
 | Contract registration spam    | Registry bloat          | `MIN_BOUNTY = 0.01 ETH`                                                              |
 | Large exploit source          | Memory/disk exhaustion  | 64 KB size limit                                                                     |
