@@ -726,14 +726,14 @@ Validator                SubnetAdapter           AntiCollusion        Chain
 
 ## 13. Future Roadmap
 
-| Priority | Item | Description | Tracking |
-| --- | --- | --- | --- |
-| P3 | Consensus caching | O(v×t) voting optimization — cache per-validator results to avoid redundant fingerprint recomputation across epochs | Performance |
-| P3 | Stage 3 integration tests | Full adversarial-mode integration tests covering invariant submission → challenge → scoring → settlement end-to-end | Test coverage |
-| P3 | UUPS upgrade strategy | Document upgrade path for mainnet contracts: proxy deployment, storage layout compatibility rules, timelock governance | Docs |
-| P3 | Key vault integration | Runbook for integrating HashiCorp Vault or AWS Secrets Manager for production secret storage instead of env vars | Ops |
-| P3 | Fingerprint DB migration | Migrate JSON-file fingerprint storage to SQLite or KV store before 100k+ exploits (see `dedup.py` F-4 comment) | Scaling |
-| P3 | Docker image signing | Add Cosign/Sigstore attestation to CI for published container images | Supply chain |
+| Priority | Item                      | Description                                                                                                            | Tracking      |
+| -------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
+| P3       | Consensus caching         | O(v×t) voting optimization — cache per-validator results to avoid redundant fingerprint recomputation across epochs    | Performance   |
+| P3       | Stage 3 integration tests | Full adversarial-mode integration tests covering invariant submission → challenge → scoring → settlement end-to-end    | Test coverage |
+| P3       | UUPS upgrade strategy     | Document upgrade path for mainnet contracts: proxy deployment, storage layout compatibility rules, timelock governance | Docs          |
+| P3       | Key vault integration     | Runbook for integrating HashiCorp Vault or AWS Secrets Manager for production secret storage instead of env vars       | Ops           |
+| P3       | Fingerprint DB migration  | Migrate JSON-file fingerprint storage to SQLite or KV store before 100k+ exploits (see `dedup.py` F-4 comment)         | Scaling       |
+| P3       | Docker image signing      | Add Cosign/Sigstore attestation to CI for published container images                                                   | Supply chain  |
 
 ---
 

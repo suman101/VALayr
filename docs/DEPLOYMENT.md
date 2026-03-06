@@ -385,15 +385,15 @@ new Treasury(validatorAddr, 172_800);
 After deploying contracts to mainnet, wire the on-chain addresses into the
 subnet configuration so the validator can interact with them.
 
-| Contract | Env Variable | Usage |
-| --- | --- | --- |
-| ExploitRegistry | `VALAYR_EXPLOIT_REGISTRY` | Record validated exploits on-chain |
-| ProtocolRegistry | `VALAYR_PROTOCOL_REGISTRY` | Register protocol bounties |
-| Treasury | `VALAYR_TREASURY_ADDRESS` | Competition prize escrow |
-| AdversarialMode | `VALAYR_ADVERSARIAL_REGISTRY` | Stage 3 invariant scoring |
+| Contract         | Env Variable                  | Usage                              |
+| ---------------- | ----------------------------- | ---------------------------------- |
+| ExploitRegistry  | `VALAYR_EXPLOIT_REGISTRY`     | Record validated exploits on-chain |
+| ProtocolRegistry | `VALAYR_PROTOCOL_REGISTRY`    | Register protocol bounties         |
+| Treasury         | `VALAYR_TREASURY_ADDRESS`     | Competition prize escrow           |
+| AdversarialMode  | `VALAYR_ADVERSARIAL_REGISTRY` | Stage 3 invariant scoring          |
 
 **Recommended deployment chain**: Ethereum L2 (Base, Arbitrum, or Optimism) for
-low gas costs.  The contracts are chain-agnostic — deploy to any EVM-compatible
+low gas costs. The contracts are chain-agnostic — deploy to any EVM-compatible
 chain and set `VALAYR_CHAIN_ID` accordingly.
 
 ```bash
