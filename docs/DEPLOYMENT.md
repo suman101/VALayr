@@ -420,6 +420,63 @@ forge build --root contracts
 sha256sum contracts/out/**/*.json
 ```
 
+### 5.6 Stage 3: Adversarial Mode Deployment
+
+Stage 3 introduces adversarial mode where **Class A miners** submit invariants
+(security properties) and **Class B miners** submit challenges (exploits that
+break those invariants). Two additional contracts power this:
+
+| Contract             | Purpose                                   |
+| -------------------- | ----------------------------------------- |
+| `InvariantRegistry`  | Stores invariants submitted by Class A    |
+| `AdversarialScoring` | Tracks Class A/B scores from challenges   |
+
+**Deployment wiring** (handled automatically by `Deploy.s.sol`):
+
+```bash
+# Deploy.s.sol registers AdversarialScoring as a validator on InvariantRegistry
+# so it can call recordChallenge(). Verify this after deployment:
+cast call $VALAYR_ADVERSARIAL_REGISTRY \
+  "validators(address)(bool)" \
+  $(cast call $VALAYR_ADVERSARIAL_REGISTRY "scoringContract()(address)" --rpc-url $VALAYR_RPC_URL) \
+  --rpc-url $VALAYR_RPC_URL
+# Should return: true
+```
+
+**Validator configuration** for adversarial mode:
+
+```bash
+# Add to .env alongside existing variables
+VALAYR_ADVERSARIAL_REGISTRY=0x...   # InvariantRegistry address
+VALAYR_ADVERSARIAL_SCORING=0x...    # AdversarialScoring address
+ETH_PRIVATE_KEY=0x...               # Required for on-chain challenge recording
+```
+
+**Class A miner setup** — miners that submit invariants need the registry address:
+
+```bash
+python3 -m neurons.miner \
+  --wallet.name default \
+  --wallet.hotkey default \
+  --netuid $NETUID \
+  --miner_class A \
+  --adversarial_registry $VALAYR_ADVERSARIAL_REGISTRY
+```
+
+**Class B miner setup** — miners that challenge invariants:
+
+```bash
+python3 -m neurons.miner \
+  --wallet.name default \
+  --wallet.hotkey default \
+  --netuid $NETUID \
+  --miner_class B
+```
+
+> **Note:** Class A and B miners compete against each other. A miner can
+> participate in both classes, but their scores are tracked independently and
+> dual-class weight normalization prevents double-counting.
+
 ---
 
 ## 6. Monitoring & Observability

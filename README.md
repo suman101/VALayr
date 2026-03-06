@@ -325,13 +325,13 @@ See [Deployment Guide](docs/DEPLOYMENT.md) for the full consolidated environment
 # Unit + integration (no Anvil needed)
 python3 -m pytest tests/ -v
 
-# Contract tests only (125 Solidity tests)
+# Contract tests only (132 Solidity tests)
 forge test --root contracts -vv
 
 # Live Anvil integration tests (requires Foundry)
 python3 -m pytest tests/test_live_anvil.py -v
 
-# All tests (125 Solidity + 477 Python)
+# All tests (132 Solidity + 569 Python)
 forge test --root contracts -vv && python3 -m pytest tests/ -v
 
 # Determinism verification
@@ -367,7 +367,7 @@ Test suites:
 │   │   ├── Pausable.sol
 │   │   └── stage3/            # Adversarial mode contracts
 │   ├── corpus/                 # Generated vulnerable contract corpus
-│   └── test/                   # Foundry Solidity tests (125 tests)
+│   └── test/                   # Foundry Solidity tests (132 tests)
 ├── task-generator/
 │   ├── generate.py             # Deterministic corpus generator
 │   ├── discovery.py            # Mainnet contract discovery engine
@@ -405,7 +405,7 @@ Test suites:
 ├── exploits/                   # Reference exploit examples
 ├── docs/                       # Full documentation suite
 │   └── runbooks/               # Operational runbooks (8 files)
-├── tests/                      # Python test suites (477 tests)
+├── tests/                      # Python test suites (569 tests)
 │   ├── test_integration.py     #   Core unit + integration
 │   ├── test_pipeline.py        #   End-to-end pipeline
 │   ├── test_live_anvil.py      #   Real Anvil sandbox
