@@ -380,7 +380,36 @@ new Treasury(validatorAddr, 172_800);
 > ownership transfers with no cooling-off period. Always use ≥ 48 hours for
 > production contracts.
 
-### 5.4 Verify Determinism
+### 5.4 Mainnet Contract Address Strategy
+
+After deploying contracts to mainnet, wire the on-chain addresses into the
+subnet configuration so the validator can interact with them.
+
+| Contract | Env Variable | Usage |
+| --- | --- | --- |
+| ExploitRegistry | `VALAYR_EXPLOIT_REGISTRY` | Record validated exploits on-chain |
+| ProtocolRegistry | `VALAYR_PROTOCOL_REGISTRY` | Register protocol bounties |
+| Treasury | `VALAYR_TREASURY_ADDRESS` | Competition prize escrow |
+| AdversarialMode | `VALAYR_ADVERSARIAL_REGISTRY` | Stage 3 invariant scoring |
+
+**Recommended deployment chain**: Ethereum L2 (Base, Arbitrum, or Optimism) for
+low gas costs.  The contracts are chain-agnostic — deploy to any EVM-compatible
+chain and set `VALAYR_CHAIN_ID` accordingly.
+
+```bash
+# After deployment, update .env with contract addresses
+VALAYR_EXPLOIT_REGISTRY=0x...
+VALAYR_PROTOCOL_REGISTRY=0x...
+VALAYR_TREASURY_ADDRESS=0x...
+VALAYR_ADVERSARIAL_REGISTRY=0x...
+VALAYR_CHAIN_ID=8453          # Base mainnet
+VALAYR_RPC_URL=https://mainnet.base.org
+```
+
+Store the deploy artifact (`deployments/deploy_*.json`) in version control
+so all validators reference the same addresses.
+
+### 5.5 Verify Determinism
 
 ```bash
 # Build contracts and check bytecode hash

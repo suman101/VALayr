@@ -128,6 +128,8 @@ jobs:
             tests/test_mutator_extended.py \
             tests/test_orchestrator_integration.py \
             tests/test_validator_neuron.py \
+            tests/test_schemas_hashing.py \
+            tests/test_logging_utils.py \
             -v --timeout=120
 
   # ── Determinism Verification ─────────────────────────────────────────────

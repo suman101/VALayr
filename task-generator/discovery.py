@@ -27,7 +27,8 @@ logger = get_logger(__name__)
 
 # Well-known DeFi contracts that are always good targets (high TVL, active bounties)
 # These are public, verified mainnet contracts with Immunefi bounties.
-SEED_TARGETS: dict[int, list[str]] = {
+# Override via VALAYR_SEED_TARGETS (comma-separated addresses) for custom seeds.
+_DEFAULT_SEED_TARGETS: dict[int, list[str]] = {
     1: [
         # Aave V3 Pool
         "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
@@ -41,6 +42,19 @@ SEED_TARGETS: dict[int, list[str]] = {
         "0xbE286431454714F511008713973d3B053A2d38f3",
     ],
 }
+
+
+def _load_seed_targets() -> dict[int, list[str]]:
+    """Load seed targets from env override or defaults."""
+    custom = os.environ.get("VALAYR_SEED_TARGETS", "").strip()
+    if custom:
+        addrs = [a.strip() for a in custom.split(",") if a.strip()]
+        chain_id = int(os.environ.get("VALAYR_SEED_CHAIN_ID", "1"))
+        return {chain_id: addrs}
+    return _DEFAULT_SEED_TARGETS
+
+
+SEED_TARGETS = _load_seed_targets()
 
 # How often to refresh the contract list (seconds)
 REFRESH_INTERVAL = 86400  # 24 hours
