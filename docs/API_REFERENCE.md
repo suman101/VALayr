@@ -49,16 +49,16 @@ Orchestrator(
 )
 ```
 
-| Parameter           | Type         | Default                    | Description                                                         |
-| ------------------- | ------------ | -------------------------- | ------------------------------------------------------------------- |
-| `mode`              | `str`        | `"local"`                  | `"local"` for in-process, `"docker"` for container-based validation |
-| `validator_id`      | `str`        | `"validator-0"`            | Identifier for this validator instance                              |
-| `anvil_port`        | `int`        | `18545`                    | Base port for Anvil fork instances                                  |
-| `corpus_dir`        | `str \| None`| `None`                     | Override corpus directory (defaults to `contracts/corpus`)          |
-| `data_dir`          | `str \| None`| `None`                     | Override data directory (defaults to `data/`)                       |
-| `rpc_url`           | `str`        | `"http://127.0.0.1:8545"` | Ethereum RPC URL for contract interactions                          |
-| `registry_address`  | `str`        | `""`                       | Deployed ProtocolRegistry address                                   |
-| `scoring_address`   | `str`        | `""`                       | Deployed InvariantRegistry/scoring address                          |
+| Parameter          | Type          | Default                   | Description                                                         |
+| ------------------ | ------------- | ------------------------- | ------------------------------------------------------------------- |
+| `mode`             | `str`         | `"local"`                 | `"local"` for in-process, `"docker"` for container-based validation |
+| `validator_id`     | `str`         | `"validator-0"`           | Identifier for this validator instance                              |
+| `anvil_port`       | `int`         | `18545`                   | Base port for Anvil fork instances                                  |
+| `corpus_dir`       | `str \| None` | `None`                    | Override corpus directory (defaults to `contracts/corpus`)          |
+| `data_dir`         | `str \| None` | `None`                    | Override data directory (defaults to `data/`)                       |
+| `rpc_url`          | `str`         | `"http://127.0.0.1:8545"` | Ethereum RPC URL for contract interactions                          |
+| `registry_address` | `str`         | `""`                      | Deployed ProtocolRegistry address                                   |
+| `scoring_address`  | `str`         | `""`                      | Deployed InvariantRegistry/scoring address                          |
 
 **Methods:**
 
@@ -1013,11 +1013,11 @@ docker run <image> COMMAND
 
 ### Metrics Server (Port 9946)
 
-| Method | Path            | Content-Type                              | Description                           |
-| ------ | --------------- | ----------------------------------------- | ------------------------------------- |
-| `GET`  | `/health`       | `application/json`                        | Readiness probe `{"status": "ok"}`    |
-| `GET`  | `/metrics`      | `text/plain; version=0.0.4; charset=utf-8`| Prometheus text exposition format     |
-| `GET`  | `/metrics/json` | `application/json`                        | All metrics as flat JSON dict         |
+| Method | Path            | Content-Type                               | Description                        |
+| ------ | --------------- | ------------------------------------------ | ---------------------------------- |
+| `GET`  | `/health`       | `application/json`                         | Readiness probe `{"status": "ok"}` |
+| `GET`  | `/metrics`      | `text/plain; version=0.0.4; charset=utf-8` | Prometheus text exposition format  |
+| `GET`  | `/metrics/json` | `application/json`                         | All metrics as flat JSON dict      |
 
 **`/metrics` Response (Prometheus text format):**
 
@@ -1042,7 +1042,7 @@ validation_latency_ms_p99 4800.0
   "duplicates_total": 23,
   "uptime_seconds": 14523.7,
   "validation_latency_ms_count": 142,
-  "validation_latency_ms_sum": 216323.80,
+  "validation_latency_ms_sum": 216323.8,
   "validation_latency_ms_mean": 1523.4,
   "validation_latency_ms_p50": 1200.0,
   "validation_latency_ms_p99": 4800.0

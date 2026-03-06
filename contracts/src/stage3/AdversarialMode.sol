@@ -177,7 +177,9 @@ contract AdversarialScoring is Pausable {
     ) external onlyValidator whenNotPaused {
         // H-13 fix: verify classAMiner matches the actual invariant submitter
         // to prevent validators from penalising the wrong miner.
-        (address submitter, , , , , , , , , ) = registry.properties(invariantId);
+        (address submitter, , , , , , , , , ) = registry.properties(
+            invariantId
+        );
         require(classAMiner == submitter, "classA mismatch");
 
         // Record challenge result in the invariant registry
