@@ -545,6 +545,11 @@ class AntiCollusionEngine:
         target = self.data_dir / "anticollusion_state.json"
         tmp = target.with_suffix(".tmp")
         tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
+        fd = os.open(str(tmp), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(str(tmp), str(target))
 
     def _load_state(self):
