@@ -128,8 +128,10 @@ class MainnetContractSource:
         # Etherscan wraps multi-file sources in double braces: {{...}}
         if source.startswith("{{"):
             source = self._flatten_multi_file(source)
+            source = self._dedup_pragmas(source)
         elif source.startswith("{"):
             source = self._flatten_standard_json(source)
+            source = self._dedup_pragmas(source)
 
         if len(source.encode()) > MAX_SOURCE_BYTES:
             return None
@@ -290,6 +292,26 @@ class MainnetContractSource:
         if isinstance(result, list) and len(result) > 0:
             return result[0]
         return None
+
+    @staticmethod
+    def _dedup_pragmas(source: str) -> str:
+        """Keep only the first pragma solidity and SPDX-License-Identifier lines."""
+        seen_pragma = False
+        seen_spdx = False
+        lines = source.split("\n")
+        filtered = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("pragma solidity"):
+                if seen_pragma:
+                    continue
+                seen_pragma = True
+            if "SPDX-License-Identifier" in stripped:
+                if seen_spdx:
+                    continue
+                seen_spdx = True
+            filtered.append(line)
+        return "\n".join(filtered)
 
     @staticmethod
     def _flatten_multi_file(raw: str) -> str:

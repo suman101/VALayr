@@ -101,8 +101,8 @@ class MinerNeuron:
             self.axon.start()
 
             uid = -1
-            if self.miner_address in self.metagraph.hotkeys:
-                uid = self.metagraph.hotkeys.index(self.miner_address)
+            hotkey_to_uid = {hk: i for i, hk in enumerate(self.metagraph.hotkeys)}
+            uid = hotkey_to_uid.get(self.miner_address, -1)
 
             logger.info("Bittensor miner initialized")
             logger.info("  Network: %s", network)
@@ -315,8 +315,9 @@ class MinerNeuron:
                 self.current_block = self.subtensor.get_current_block()
 
                 # Check our stake/incentive
-                if self.miner_address in self.metagraph.hotkeys:
-                    uid = self.metagraph.hotkeys.index(self.miner_address)
+                hotkey_to_uid = {hk: i for i, hk in enumerate(self.metagraph.hotkeys)}
+                uid = hotkey_to_uid.get(self.miner_address, -1)
+                if uid >= 0:
                     incentive = self.metagraph.incentive[uid].item()
                     stake = self.metagraph.stake[uid].item()
                     if self.current_block % 100 == 0:  # Log every ~100 blocks
@@ -402,11 +403,13 @@ class MinerNeuron:
             "address": self.miner_address,
             "block": self.current_block,
         }
-        if self.metagraph is not None and self.miner_address in self.metagraph.hotkeys:
-            uid = self.metagraph.hotkeys.index(self.miner_address)
-            info["uid"] = uid
-            info["incentive"] = float(self.metagraph.incentive[uid])
-            info["stake"] = float(self.metagraph.stake[uid])
+        if self.metagraph is not None:
+            hotkey_to_uid = {hk: i for i, hk in enumerate(self.metagraph.hotkeys)}
+            uid = hotkey_to_uid.get(self.miner_address, -1)
+            if uid >= 0:
+                info["uid"] = uid
+                info["incentive"] = float(self.metagraph.incentive[uid])
+                info["stake"] = float(self.metagraph.stake[uid])
         return info
 
 

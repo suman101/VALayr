@@ -228,7 +228,7 @@ class Orchestrator:
         self._epoch_lock = threading.Lock()
 
         # ── Cost-per-validation tracking ──────────────────────────────────
-        self._epoch_cpu_seconds: float = 0.0
+        self._epoch_wall_seconds: float = 0.0
         self._epoch_validations: int = 0
         self._cost_lock = threading.Lock()
 
@@ -389,11 +389,11 @@ class Orchestrator:
         # ── Execution safety: check epoch compute budget ──
         if EPOCH_COMPUTE_BUDGET > 0:
             with self._cost_lock:
-                if self._epoch_cpu_seconds >= EPOCH_COMPUTE_BUDGET:
+                if self._epoch_wall_seconds >= EPOCH_COMPUTE_BUDGET:
                     result.validation_result = "REJECT_INVALID_FORMAT"
                     result.error = "Epoch compute budget exhausted"
                     logger.warning(
-                        "Rejecting submission: epoch CPU budget %.1fs exhausted",
+                        "Rejecting submission: epoch wall budget %.1fs exhausted",
                         EPOCH_COMPUTE_BUDGET,
                     )
                     return result
@@ -547,14 +547,14 @@ class Orchestrator:
             _metrics.observe("severity_score", result.severity_score)
 
         # ── Cost-per-validation tracking ──
-        elapsed_cpu = time.monotonic() - start
+        elapsed_wall = time.monotonic() - start
         with self._cost_lock:
-            self._epoch_cpu_seconds += elapsed_cpu
+            self._epoch_wall_seconds += elapsed_wall
             self._epoch_validations += 1
-        _metrics.observe("validation_cpu_seconds", elapsed_cpu)
+        _metrics.observe("validation_wall_seconds", elapsed_wall)
         logger.debug(
-            "Validation cost: %.2fs CPU | epoch total: %.1fs / %d validations",
-            elapsed_cpu, self._epoch_cpu_seconds, self._epoch_validations,
+            "Validation cost: %.2fs wall | epoch total: %.1fs / %d validations",
+            elapsed_wall, self._epoch_wall_seconds, self._epoch_validations,
         )
 
         return result
@@ -869,7 +869,7 @@ class Orchestrator:
                     "--cap-drop=ALL",
                     "--security-opt=no-new-privileges",
                     "--pids-limit=256",
-                    "-v", f"{tmpdir}:/workspace:ro",
+                    "-v", f"{tmpdir}:/workspace:rw",
                     "-e", "PYTHONHASHSEED=0",
                     "-e", "ANVIL_BLOCK_TIMESTAMP=1700000000",
                     "-e", "ANVIL_BLOCK_NUMBER=18000000",
@@ -879,7 +879,7 @@ class Orchestrator:
                     "python3", "-m", "validator.engine.validate",
                     "--task", "/workspace/task.json",
                     "--exploit", "/workspace/exploit.sol",
-                    "--output", "/tmp/result.json",
+                    "--output", "/workspace/result.json",
                 ]
 
                 result_proc = subprocess.run(
@@ -991,13 +991,13 @@ class Orchestrator:
         # Log and reset per-epoch cost tracking
         with self._cost_lock:
             logger.info(
-                "Epoch %d cost: %.1f CPU-seconds across %d validations (avg %.2fs/validation)",
+                "Epoch %d cost: %.1f wall-seconds across %d validations (avg %.2fs/validation)",
                 epoch_number,
-                self._epoch_cpu_seconds,
+                self._epoch_wall_seconds,
                 self._epoch_validations,
-                self._epoch_cpu_seconds / max(self._epoch_validations, 1),
+                self._epoch_wall_seconds / max(self._epoch_validations, 1),
             )
-            self._epoch_cpu_seconds = 0.0
+            self._epoch_wall_seconds = 0.0
             self._epoch_validations = 0
 
         epoch = self.incentive.compute_epoch_weights(epoch_number, start_block, end_block)
@@ -1050,11 +1050,11 @@ class Orchestrator:
         with self._cost_lock:
             return {
                 "epoch": self._current_epoch,
-                "cpu_seconds_used": round(self._epoch_cpu_seconds, 2),
-                "cpu_budget": EPOCH_COMPUTE_BUDGET or "unlimited",
+                "wall_seconds_used": round(self._epoch_wall_seconds, 2),
+                "wall_budget": EPOCH_COMPUTE_BUDGET or "unlimited",
                 "validations_count": self._epoch_validations,
-                "avg_cpu_per_validation": round(
-                    self._epoch_cpu_seconds / max(self._epoch_validations, 1), 2
+                "avg_wall_per_validation": round(
+                    self._epoch_wall_seconds / max(self._epoch_validations, 1), 2
                 ),
                 "concurrent_limit": MAX_CONCURRENT_VALIDATIONS,
             }

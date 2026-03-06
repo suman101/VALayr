@@ -127,7 +127,8 @@ class ValidatorNeuron:
             logger.info("  Network: %s", network)
             logger.info("  Netuid:  %d", self.netuid)
             logger.info("  Hotkey:  %s", self.wallet.hotkey.ss58_address)
-            logger.info("  UID:     %d", self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address))
+            hotkey_to_uid = {hk: i for i, hk in enumerate(self.metagraph.hotkeys)}
+            logger.info("  UID:     %d", hotkey_to_uid.get(self.wallet.hotkey.ss58_address, -1))
 
         except ImportError:
             logger.warning("bittensor package not installed — pip install bittensor")
@@ -436,12 +437,12 @@ class ValidatorNeuron:
                 return
 
             # Map hotkeys to UIDs using metagraph
-            metagraph_hotkeys = list(self.metagraph.hotkeys)
+            hotkey_to_uid = {hk: i for i, hk in enumerate(self.metagraph.hotkeys)}
             uids = []
             weights = []
             for hotkey, weight in weights_dict.items():
-                if hotkey in metagraph_hotkeys:
-                    uids.append(metagraph_hotkeys.index(hotkey))
+                if hotkey in hotkey_to_uid:
+                    uids.append(hotkey_to_uid[hotkey])
                     weights.append(weight)
 
             if not uids:

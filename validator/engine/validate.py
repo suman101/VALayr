@@ -584,20 +584,39 @@ contract ExploitTest is Test {{
     # test harnesses. These are checked as a belt-and-suspenders defence;
     # the Anvil sandbox (--network=none + temp workspace) is the primary
     # isolation layer.
-    # V-11 fix: use re.DOTALL to match nested assembly blocks with inner
-    # braces. The previous [^}]* stopped at the first }, missing:
-    #   assembly { if x { sstore(...) } }
-    _DANGEROUS_PATTERNS = re.compile(
+    # Non-assembly dangerous patterns (checked via regex).
+    _DANGEROUS_CALL_PATTERNS = re.compile(
         r'\b('
         r'delegatecall\s*\(|'
         r'callcode\s*\(|'
-        r'staticcall\s*\(.+\.call|'
-        r'assembly\s*\{(?:[^{}]|\{[^{}]*\})*sstore|'
-        r'assembly\s*\{(?:[^{}]|\{[^{}]*\})*create2|'
-        r'assembly\s*\{(?:[^{}]|\{[^{}]*\})*selfdestruct'
+        r'staticcall\s*\(.+\.call'
         r')',
         re.DOTALL,
     )
+
+    # Dangerous opcodes inside assembly blocks — checked via brace-counting
+    # parser to handle arbitrary nesting depth (regex only handles 1 level).
+    _DANGEROUS_ASSEMBLY_OPCODES = re.compile(
+        r'\b(sstore|create2|selfdestruct)\b'
+    )
+
+    _ASSEMBLY_START = re.compile(r'\bassembly\s*\{')
+
+    @staticmethod
+    def _extract_assembly_blocks(source: str) -> list[str]:
+        """Extract assembly block bodies using brace-counting (arbitrary depth)."""
+        blocks = []
+        for m in ValidationEngine._ASSEMBLY_START.finditer(source):
+            depth, start = 1, m.end()
+            for i in range(start, len(source)):
+                if source[i] == '{':
+                    depth += 1
+                elif source[i] == '}':
+                    depth -= 1
+                if depth == 0:
+                    blocks.append(source[start:i])
+                    break
+        return blocks
 
     @staticmethod
     def _sanitize_source(source: str) -> bool:
@@ -639,8 +658,13 @@ contract ExploitTest is Test {{
         # *target* but should not appear in the test harness itself.
         # NOTE: We allow selfdestruct/create2 outside of assembly blocks
         # because they are legitimate exploit techniques.
-        if ValidationEngine._DANGEROUS_PATTERNS.search(source):
+        if ValidationEngine._DANGEROUS_CALL_PATTERNS.search(source):
             return False
+
+        # Check assembly blocks (arbitrary nesting depth) for dangerous opcodes
+        for block in ValidationEngine._extract_assembly_blocks(source):
+            if ValidationEngine._DANGEROUS_ASSEMBLY_OPCODES.search(block):
+                return False
 
         return True
 
