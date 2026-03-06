@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/ProtocolRegistry.sol";
+import "../src/Pausable.sol";
 
 /// @title ProtocolRegistryTest — Foundry tests for the Protocol Registry.
 contract ProtocolRegistryTest is Test {
@@ -335,6 +336,48 @@ contract ProtocolRegistryTest is Test {
             bountyWei,
             "Pool should not exceed original bounty"
         );
+    }
+
+    // ── P2 Tests: H-12, H-14, M-14 ──────────────────────────────────────
+
+    /// @dev H-12: Re-registration when stranded bounty exists should revert.
+    function test_reRegister_strandedBounty_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 1 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+
+        // Deactivate — bountyPool still has 1 ETH
+        registry.deactivateContract(contractHash);
+
+        // Re-registration should revert (InsufficientBounty used as guard)
+        vm.expectRevert(ProtocolRegistry.InsufficientBounty.selector);
+        registry.registerContract{value: 0.01 ether}(address(dummy), 0);
+    }
+
+    /// @dev H-14: Registering an EOA (no code) should revert.
+    function test_registerContract_EOA_reverts() public {
+        address eoa = address(0xBEEF);
+        // Fund the EOA so it exists in state (extcodehash returns keccak256(""))
+        vm.deal(eoa, 1 ether);
+        vm.expectRevert(ProtocolRegistry.NotRegistered.selector);
+        registry.registerContract{value: 0.01 ether}(eoa, 0);
+    }
+
+    /// @dev M-14: withdrawBounty reverts when contract is paused.
+    function test_withdrawBounty_paused_reverts() public {
+        DummyTarget dummy = new DummyTarget();
+        registry.registerContract{value: 1 ether}(address(dummy), 0);
+        bytes32 contractHash = registry.getContractHash(address(dummy));
+
+        // Deactivate so withdrawal path is reachable
+        registry.deactivateContract(contractHash);
+
+        // Pause the registry
+        registry.pause();
+
+        // Attempt paginated withdrawal — should revert with ContractPaused
+        vm.expectRevert(Pausable.ContractPaused.selector);
+        registry.withdrawBounty(contractHash, 0);
     }
 
     receive() external payable {}

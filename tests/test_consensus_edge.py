@@ -159,3 +159,41 @@ class TestStatePersistence:
         e2 = ConsensusEngine(seed=42, data_dir=tmp_path)
         validators = e2.get_active_validators()
         assert len(validators) == 2
+
+
+# ── P2 Tests: H-6 Deterministic Adversarial Tie-Break ────────────────────────
+
+class TestAdversarialTieBreak:
+    """H-6: Tied adversarial votes produce deterministic consensus outcome."""
+
+    def test_tied_votes_deterministic(self, tmp_path):
+        engine = ConsensusEngine(seed=42, data_dir=tmp_path)
+        # Register enough validators to meet quorum
+        for i in range(6):
+            engine.register_validator(f"v{i}", stake=100.0)
+
+        # Create 3 HELD votes and 3 BROKEN votes (exact tie)
+        votes = []
+        for i in range(3):
+            votes.append({
+                "validator_hotkey": f"v{i}",
+                "outcome": "HELD",
+            })
+        for i in range(3, 6):
+            votes.append({
+                "validator_hotkey": f"v{i}",
+                "outcome": "BROKEN",
+            })
+
+        result = engine.compute_adversarial_consensus(
+            invariant_id=0, challenge_id="challenge-tie-1", votes=votes,
+        )
+
+        # Must produce a result (not empty)
+        assert result.consensus_outcome != ""
+
+        # Same inputs must always produce the same outcome (determinism)
+        result2 = engine.compute_adversarial_consensus(
+            invariant_id=0, challenge_id="challenge-tie-2", votes=votes,
+        )
+        assert result.consensus_outcome == result2.consensus_outcome

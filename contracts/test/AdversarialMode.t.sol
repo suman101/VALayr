@@ -368,4 +368,41 @@ contract AdversarialModeTest is Test {
             registry.recordChallenge(id, false);
         }
     }
+
+    // ── P2 Tests: H-13, M-15 ────────────────────────────────────────────
+
+    /// @dev H-13: processChallenge with wrong classA miner should revert.
+    function test_processChallenge_classA_mismatch_reverts() public {
+        vm.prank(classA);
+        uint256 id = registry.submitInvariant(
+            classA,
+            TARGET_HASH,
+            "inv",
+            "cond",
+            hex""
+        );
+
+        // Use classB as the classA arg — does not match the actual submitter
+        vm.expectRevert(bytes("classA mismatch"));
+        scoring.processChallenge(id, classB, classB, true);
+    }
+
+    /// @dev M-15: submitInvariant with description > MAX_STRING_LEN (10240) reverts.
+    function test_submitInvariant_descriptionTooLong_reverts() public {
+        // Build a string of 10241 bytes (one over the limit)
+        bytes memory longDesc = new bytes(10241);
+        for (uint256 i = 0; i < 10241; i++) {
+            longDesc[i] = "A";
+        }
+
+        vm.prank(classA);
+        vm.expectRevert(bytes("description too long"));
+        registry.submitInvariant(
+            classA,
+            TARGET_HASH,
+            string(longDesc),
+            "cond",
+            hex""
+        );
+    }
 }

@@ -707,3 +707,86 @@ class TestDualClassWeights:
             total = sum(weights.values())
             assert abs(total - 1.0) < 1e-9
             assert "0xDUAL" in weights
+
+
+# ── P2 Tests: H-3 Challenge History Cap ──────────────────────────────────────
+
+class TestChallengeHistoryCap:
+    """H-3: _challenge_history is capped at MAX_CHALLENGE_HISTORY."""
+
+    def test_history_evicts_oldest_entries(self, tmp_path):
+        engine = AdversarialEngine(data_dir=tmp_path, rpc_url="http://localhost:8545")
+        engine._MAX_CHALLENGE_HISTORY = 100  # smaller cap for fast test
+
+        # Submit an invariant first
+        inv = InvariantSubmission(
+            miner_address="0xMINER_A",
+            target_contract_hash="0xtask",
+            description="test inv",
+            solidity_condition="x > 0",
+            compiled_check=b"",
+        )
+        engine.submit_invariant(inv)
+
+        # Process 120 challenges — only last 100 should survive
+        for i in range(120):
+            chal = ChallengeSubmission(
+                miner_address=f"0xBREAKER_{i:03d}",
+                invariant_id=0,
+                exploit_source=f"// exploit {i}",
+                target_task_id="0xtask",
+            )
+            engine.process_challenge(chal, validation_fn=lambda t, e: True)
+
+        history = engine._challenge_history
+        assert len(history) <= 100
+        # Oldest entries (breaker_000 .. breaker_019) should be evicted
+        addresses = [h.class_b_miner for h in history]
+        assert "0xBREAKER_000" not in addresses
+        assert "0xBREAKER_119" in addresses
+
+
+# ── P2 Tests: C-3 Private Key Requirement for On-Chain Calls ─────────────────
+
+class TestOnChainPrivateKeyRequirement:
+    """C-3: On-chain calls require ETH_PRIVATE_KEY environment variable."""
+
+    def test_submit_invariant_onchain_no_key_raises(self, tmp_path):
+        from unittest.mock import patch
+        engine = AdversarialEngine(
+            data_dir=tmp_path,
+            rpc_url="http://localhost:8545",
+            registry_address="0x1234",
+        )
+        with patch.dict("os.environ", {}, clear=False):
+            # Remove ETH_PRIVATE_KEY if present
+            import os
+            os.environ.pop("ETH_PRIVATE_KEY", None)
+            with pytest.raises(RuntimeError, match="ETH_PRIVATE_KEY"):
+                engine._submit_invariant_onchain(
+                    InvariantSubmission(
+                        miner_address="0xMINER",
+                        target_contract_hash="0xtask",
+                        description="test",
+                        solidity_condition="x > 0",
+                        compiled_check=b"",
+                    )
+                )
+
+    def test_record_challenge_onchain_no_key_returns_silently(self, tmp_path):
+        from unittest.mock import patch
+        engine = AdversarialEngine(
+            data_dir=tmp_path,
+            rpc_url="http://localhost:8545",
+            scoring_address="0x5678",
+        )
+        with patch.dict("os.environ", {}, clear=False):
+            import os
+            os.environ.pop("ETH_PRIVATE_KEY", None)
+            # Should not raise — logs error and returns silently
+            engine._record_challenge_onchain(
+                invariant_id=0,
+                class_a_miner="0xA",
+                class_b_miner="0xB",
+                broken=True,
+            )
