@@ -123,9 +123,26 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._json_response(200, {"status": "ok"})
         elif self.path == "/metrics":
+            self._prometheus_response()
+        elif self.path == "/metrics/json":
             self._json_response(200, _global_store.snapshot())
         else:
             self._json_response(404, {"error": "not found"})
+
+    def _prometheus_response(self) -> None:
+        """Serve metrics in Prometheus text exposition format."""
+        snap = _global_store.snapshot()
+        lines = []
+        for key, value in sorted(snap.items()):
+            # Prometheus metric names: replace dashes, ensure valid chars
+            name = key.replace("-", "_")
+            lines.append(f"{name} {value}")
+        payload = ("\n".join(lines) + "\n").encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def _json_response(self, code: int, body: dict) -> None:
         payload = json.dumps(body, indent=2).encode()

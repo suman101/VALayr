@@ -228,8 +228,14 @@ class TestMetrics:
             data = json.loads(resp.read())
             assert data["status"] == "ok"
 
-            # /metrics
+            # /metrics (Prometheus text format)
             resp = urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics")
+            body = resp.read().decode()
+            assert "uptime_seconds" in body
+            assert resp.headers.get("Content-Type", "").startswith("text/plain")
+
+            # /metrics/json (JSON format)
+            resp = urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics/json")
             data = json.loads(resp.read())
             assert "uptime_seconds" in data
         finally:

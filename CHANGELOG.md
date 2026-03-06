@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-03-06
+
 ### Removed
 
 - **CommitReveal system** — `CommitReveal.sol` contract, `validator/commit_reveal.py` client, and all associated commit-reveal logic. Bittensor provides built-in time-locked knowledge commitments, making the custom contract redundant.

@@ -37,32 +37,53 @@ This document covers the public APIs of every VALayr module: Python classes and 
 The central pipeline that wires all sub-components together.
 
 ```python
-Orchestrator(mode: str = "local")
+Orchestrator(
+    mode: str = "local",
+    validator_id: str = "validator-0",
+    anvil_port: int = 18545,
+    corpus_dir: str | None = None,
+    data_dir: str | None = None,
+    rpc_url: str = "http://127.0.0.1:8545",
+    registry_address: str = "",
+    scoring_address: str = "",
+)
 ```
 
-| Parameter | Type  | Default   | Description                                                         |
-| --------- | ----- | --------- | ------------------------------------------------------------------- |
-| `mode`    | `str` | `"local"` | `"local"` for in-process, `"docker"` for container-based validation |
+| Parameter           | Type         | Default                    | Description                                                         |
+| ------------------- | ------------ | -------------------------- | ------------------------------------------------------------------- |
+| `mode`              | `str`        | `"local"`                  | `"local"` for in-process, `"docker"` for container-based validation |
+| `validator_id`      | `str`        | `"validator-0"`            | Identifier for this validator instance                              |
+| `anvil_port`        | `int`        | `18545`                    | Base port for Anvil fork instances                                  |
+| `corpus_dir`        | `str \| None`| `None`                     | Override corpus directory (defaults to `contracts/corpus`)          |
+| `data_dir`          | `str \| None`| `None`                     | Override data directory (defaults to `data/`)                       |
+| `rpc_url`           | `str`        | `"http://127.0.0.1:8545"` | Ethereum RPC URL for contract interactions                          |
+| `registry_address`  | `str`        | `""`                       | Deployed ProtocolRegistry address                                   |
+| `scoring_address`   | `str`        | `""`                       | Deployed InvariantRegistry/scoring address                          |
 
 **Methods:**
 
 ```python
-def generate_corpus(count_per_class: int = 2, seed: int = 42) -> dict
+def generate_corpus(
+    count_per_class: int = 2,
+    seed: int = 42,
+    max_difficulty: int = 1,
+) -> list[TaskPackage]
 ```
 
-Generate or refresh the task corpus. Returns manifest dict.
+Generate or refresh the task corpus. Returns list of generated task packages.
 
 ```python
-def load_task(task_id: str) -> TaskPackage
+def load_task(task_id: str) -> dict | None
 ```
 
-Load a task by ID or unambiguous prefix match. Raises `ValueError` if not found or ambiguous.
+Load a task by ID or unambiguous prefix match. Returns `None` if not found or ambiguous.
 
 ```python
 def process_submission(
     task_id: str,
     exploit_source: str,
-    miner_address: str
+    miner_address: str,
+    entry_functions: list[str] | None = None,
 ) -> SubmissionResult
 ```
 
@@ -157,19 +178,25 @@ class ValidationReport:
 #### Class: `ValidationEngine`
 
 ```python
-ValidationEngine()
+ValidationEngine(
+    validator_id: str = "validator-0",
+    work_dir: Path | None = None,
+    anvil_port: int = 18545,
+)
 ```
 
 **Methods:**
 
 ```python
 def validate(
+    task_json: dict,
     submission: ExploitSubmission,
-    task: TaskPackage
 ) -> ValidationReport
 ```
 
 Execute the full 11-step validation pipeline. Thread-safe (atomic port counter).
+
+> **Note:** `task_json` is the first positional parameter (a plain dict), followed by `submission`.
 
 **Constants:**
 
@@ -680,15 +707,17 @@ class TaskPackage:
     solc_version: str               # "0.8.28"
     deployment_config: DeploymentConfig
     vulnerability_class: str        # e.g. "reentrancy"
-    difficulty: str                 # "easy" | "medium" | "hard" | "expert"
-    invariant: InvariantSpec | None
+    difficulty: int                 # 1-5 (increasing difficulty)
+    invariant_spec: InvariantSpec | None
+    metadata: dict                  # additional task metadata (default: {})
+    task_id: str                    # hex task identifier (default: "")
 ```
 
 Methods:
 
 ```python
 def compute_task_id(self) -> str    # keccak256 of canonical JSON
-def to_json(self) -> dict
+def to_dict(self) -> dict
 ```
 
 #### Class: `CorpusGenerator`
@@ -757,20 +786,20 @@ Returns all current metrics as a dict:
 
 ```json
 {
-  "counters": {"validations_total": 42, ...},
-  "gauges": {"uptime_seconds": 3600.5, ...},
-  "histograms": {
-    "validation_latency_ms": {
-      "count": 42, "mean": 1500.0, "p50": 1200.0, "p99": 4500.0
-    }
-  }
+  "validations_total": 42,
+  "uptime_seconds": 3600.5,
+  "validation_latency_ms_count": 42,
+  "validation_latency_ms_sum": 63000.0,
+  "validation_latency_ms_mean": 1500.0,
+  "validation_latency_ms_p50": 1200.0,
+  "validation_latency_ms_p99": 4500.0
 }
 ```
 
 #### Class: `MetricsServer`
 
 ```python
-MetricsServer(port: int = 9946, bind: str = "0.0.0.0")
+MetricsServer(host: str = "127.0.0.1", port: int = 9946)
 ```
 
 **Methods:**
@@ -984,37 +1013,39 @@ docker run <image> COMMAND
 
 ### Metrics Server (Port 9946)
 
-| Method | Path       | Response           | Description     |
-| ------ | ---------- | ------------------ | --------------- |
-| `GET`  | `/health`  | `{"status": "ok"}` | Readiness probe |
-| `GET`  | `/metrics` | JSON (see below)   | All metrics     |
+| Method | Path            | Content-Type                              | Description                           |
+| ------ | --------------- | ----------------------------------------- | ------------------------------------- |
+| `GET`  | `/health`       | `application/json`                        | Readiness probe `{"status": "ok"}`    |
+| `GET`  | `/metrics`      | `text/plain; version=0.0.4; charset=utf-8`| Prometheus text exposition format     |
+| `GET`  | `/metrics/json` | `application/json`                        | All metrics as flat JSON dict         |
 
-**Metrics Response Schema:**
+**`/metrics` Response (Prometheus text format):**
+
+```
+validations_total 142
+validations_valid 87
+duplicates_total 23
+uptime_seconds 14523.7
+validation_latency_ms_count 142
+validation_latency_ms_sum 216323.80
+validation_latency_ms_mean 1523.4
+validation_latency_ms_p50 1200.0
+validation_latency_ms_p99 4800.0
+```
+
+**`/metrics/json` Response:**
 
 ```json
 {
-  "counters": {
-    "validations_total": 142,
-    "validations_valid": 87,
-    "duplicates_total": 23
-  },
-  "gauges": {
-    "uptime_seconds": 14523.7
-  },
-  "histograms": {
-    "validation_latency_ms": {
-      "count": 142,
-      "mean": 1523.4,
-      "p50": 1200.0,
-      "p99": 4800.0
-    },
-    "severity_score": {
-      "count": 87,
-      "mean": 0.45,
-      "p50": 0.4,
-      "p99": 0.92
-    }
-  }
+  "validations_total": 142,
+  "validations_valid": 87,
+  "duplicates_total": 23,
+  "uptime_seconds": 14523.7,
+  "validation_latency_ms_count": 142,
+  "validation_latency_ms_sum": 216323.80,
+  "validation_latency_ms_mean": 1523.4,
+  "validation_latency_ms_p50": 1200.0,
+  "validation_latency_ms_p99": 4800.0
 }
 ```
 

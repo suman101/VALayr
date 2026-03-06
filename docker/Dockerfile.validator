@@ -28,9 +28,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Uses foundryup with pinned version — same approach as CI (foundry-rs/foundry-toolchain@v1).
 # foundryup downloads from GitHub releases and verifies integrity internally.
 ENV FOUNDRY_VERSION=nightly-2024-12-01
-RUN curl -L https://foundry.paradigm.xyz | bash && \
-    /root/.foundry/bin/foundryup --version "${FOUNDRY_VERSION}"
-ENV PATH="/root/.foundry/bin:${PATH}"
+ENV FOUNDRY_DIR=/opt/foundry
+RUN curl -L https://foundry.paradigm.xyz | FOUNDRY_DIR=/opt/foundry bash && \
+    /opt/foundry/bin/foundryup --version "${FOUNDRY_VERSION}" && \
+    chmod -R a+rx /opt/foundry
+ENV PATH="/opt/foundry/bin:${PATH}"
 
 # Verify versions
 RUN forge --version && anvil --version && cast --version
@@ -72,7 +74,7 @@ RUN pip3 install --no-cache-dir -e . 2>/dev/null || true
 RUN useradd -m -s /bin/bash appuser \
     && chown -R appuser:appuser /app
 USER appuser
-ENV PATH="/home/appuser/.foundry/bin:/root/.foundry/bin:${PATH}"
+ENV PATH="/opt/foundry/bin:${PATH}"
 
 WORKDIR /app
 

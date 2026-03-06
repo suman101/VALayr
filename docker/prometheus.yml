@@ -43,7 +43,7 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets:
-          - "consensus:9946"
+          - "consensus-relay:9946"
         labels:
           service: "consensus-relay"
           subnet: "valayr"

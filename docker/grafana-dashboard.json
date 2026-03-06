@@ -230,7 +230,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "rate(container_cpu_usage_seconds_total{name=~\"valayr.*\"}[5m])",
+          "expr": "rate(container_cpu_usage_seconds_total{name=~\"exploit.*\"}[5m])",
           "legendFormat": "{{name}}"
         }
       ],
@@ -247,7 +247,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "container_memory_usage_bytes{name=~\"valayr.*\"}",
+          "expr": "container_memory_usage_bytes{name=~\"exploit.*\"}",
           "legendFormat": "{{name}}"
         }
       ],
