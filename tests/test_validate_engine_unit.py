@@ -430,3 +430,72 @@ class TestDetectTestFunctions:
         src = "contract Exploit { function run() external { } }"
         result = ValidationEngine._detect_test_functions(src)
         assert len(result) == 0
+
+
+# ── P0 Tests: C-7 FingerprintEngine Reuse ────────────────────────────────────
+
+class TestFingerprintEngineReuse:
+    """C-7: _compute_fingerprint reuses FingerprintEngine across calls."""
+
+    @patch("validator.fingerprint.dedup.FingerprintEngine.compute_fingerprint", return_value="fp1")
+    @patch("validator.fingerprint.dedup.FingerprintEngine.extract_components")
+    def test_engine_reused_across_calls(self, mock_extract, mock_fp):
+        engine = _make_engine()
+        trace = ExecutionTrace(
+            storage_diffs=[StorageSlotDiff(slot="0x0", before="0x0", after="0x1")],
+            gas_used=50000,
+        )
+        engine._compute_fingerprint(trace)
+        assert hasattr(engine, '_fp_engine')
+        fp_ref = engine._fp_engine
+        engine._compute_fingerprint(trace)
+        assert engine._fp_engine is fp_ref  # Same object reused
+
+
+# ── P0 Tests: M-4 Nested Assembly Detection ──────────────────────────────────
+
+class TestNestedAssemblyDetection:
+    """M-4: Assembly blocks with depth > 1 nesting are parsed correctly."""
+
+    def test_depth_2_sstore_rejected(self):
+        source = '''
+contract X {
+    function f() external {
+        assembly {
+            if gt(x, 0) {
+                if lt(y, 100) {
+                    sstore(slot, val)
+                }
+            }
+        }
+    }
+}
+'''
+        assert ValidationEngine._sanitize_source(source) is False
+
+    def test_safe_assembly_accepted(self):
+        source = '''
+contract X {
+    function f() external {
+        assembly {
+            let x := mload(0x40)
+            mstore(x, 1)
+        }
+    }
+}
+'''
+        assert ValidationEngine._sanitize_source(source) is True
+
+    def test_depth_2_create2_rejected(self):
+        source = '''
+contract X {
+    function f() external {
+        assembly {
+            for { let i := 0 } lt(i, 10) { i := add(i, 1) } {
+                let addr := create2(0, ptr, sz, salt)
+            }
+        }
+    }
+}
+'''
+        assert ValidationEngine._sanitize_source(source) is False

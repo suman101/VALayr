@@ -195,3 +195,64 @@ class TestUniquenessScorer:
         )
         assert result.final_multiplier <= 1.5
         assert result.final_multiplier >= 0.0
+
+
+# ── P0 Tests: C-6 MAX_TRACKED_TASKS Pruning ──────────────────────────────────
+
+class TestUniquenessScalerPruning:
+    """C-6: Oldest task is evicted when MAX_TRACKED_TASKS is exceeded."""
+
+    @patch("validator.scoring.uniqueness.MAX_TRACKED_TASKS", 5)
+    def test_prune_oldest_task_when_cap_exceeded(self):
+        scorer = UniquenessScorer()
+        for i in range(6):
+            scorer.score_submission(
+                task_id=f"task-{i}",
+                exploit_source=SAMPLE_EXPLOIT,
+                miner_address=f"miner-{i}",
+            )
+        assert len(scorer._submissions) == 5
+        assert "task-0" not in scorer._submissions
+
+    @patch("validator.scoring.uniqueness.MAX_TRACKED_TASKS", 5)
+    def test_prune_removes_corresponding_timestamp(self):
+        scorer = UniquenessScorer()
+        for i in range(6):
+            scorer.register_task(f"task-{i}")
+            scorer.score_submission(
+                task_id=f"task-{i}",
+                exploit_source=SAMPLE_EXPLOIT,
+                miner_address=f"miner-{i}",
+            )
+        assert "task-0" not in scorer._task_timestamps
+
+
+# ── P0 Tests: H-11 Thread-Safety ─────────────────────────────────────────────
+
+class TestConcurrentUniquenessScorer:
+    """H-11: Concurrent score_submission calls don't corrupt state."""
+
+    def test_concurrent_submissions_no_corruption(self):
+        import threading
+        scorer = UniquenessScorer()
+        errors = []
+
+        def worker(i):
+            try:
+                for j in range(20):
+                    scorer.score_submission(
+                        task_id=f"task-{i}-{j}",
+                        exploit_source=SAMPLE_EXPLOIT,
+                        miner_address=f"miner-{i}",
+                    )
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []
+        assert len(scorer._submissions) == 200  # 10 workers * 20 tasks each

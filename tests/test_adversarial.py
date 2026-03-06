@@ -631,3 +631,79 @@ class TestWeightBlending:
 
         epoch = orch.close_epoch(epoch_number=1, start_block=0, end_block=360)
         assert epoch is not None
+
+
+# ── P0 Tests: C-1 Solidity Condition Sanitizer ────────────────────────────────
+
+class TestConditionSanitization:
+    """C-1: Verify _FORBIDDEN_CONDITION_PATTERNS rejects dangerous conditions."""
+
+    @pytest.fixture()
+    def engine(self):
+        return AdversarialEngine(mode="local")
+
+    def _make_invariant(self, condition):
+        return InvariantRecord(
+            invariant_id=0,
+            submitter="0xAA",
+            target_contract_hash="0x" + "00" * 32,
+            description="test",
+            solidity_condition=condition,
+            compiled_check=b"",
+            submitted_at=0,
+        )
+
+    def test_valid_condition_accepted(self, engine):
+        inv = self._make_invariant("balance >= 0")
+        # Should NOT raise
+        engine._generate_invariant_test(inv, "Vault", "// exploit")
+
+    @pytest.mark.parametrize("bad_condition", [
+        "selfdestruct(address(this))",
+        "assembly { sstore(0, 1) }",
+        "delegatecall(abi.encode())",
+        'import "malicious.sol"',
+        "x; y = 1",              # semicolons
+        "call{value: 1}(data)",
+        "new MaliciousContract()",
+        "suicide(address(0))",
+        "pragma solidity ^0.8.28",
+    ])
+    def test_forbidden_patterns_rejected(self, engine, bad_condition):
+        inv = self._make_invariant(bad_condition)
+        with pytest.raises(ValueError, match="forbidden pattern"):
+            engine._generate_invariant_test(inv, "Vault", "// exploit")
+
+
+# ── P0 Tests: H-5 Dual-Class Weight Renormalization ──────────────────────────
+
+class TestDualClassWeights:
+    """H-5: Weights still sum to 1.0 when a miner is in both Class A and B."""
+
+    @pytest.fixture()
+    def engine(self):
+        return AdversarialEngine(mode="local")
+
+    def test_dual_class_miner_weights_sum_to_one(self, engine):
+        sub = InvariantSubmission(
+            miner_address="0xDUAL",
+            target_contract_hash="0x" + "00" * 64,
+            description="test invariant",
+            solidity_condition="true",
+            compiled_check=b"",
+        )
+        engine.submit_invariant(sub)
+
+        chal = ChallengeSubmission(
+            miner_address="0xDUAL",  # Same miner in both classes
+            invariant_id=0,
+            exploit_source="// exploit",
+            target_task_id="0xtask",
+        )
+        engine.process_challenge(chal, validation_fn=lambda t, e: False)
+
+        weights = engine.compute_adversarial_weights()
+        if weights:
+            total = sum(weights.values())
+            assert abs(total - 1.0) < 1e-9
+            assert "0xDUAL" in weights

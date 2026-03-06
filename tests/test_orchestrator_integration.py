@@ -193,3 +193,22 @@ class TestOrchestratorRefreshCorpus:
             )
             orch.close_epoch(5, 100, 200)
             assert orch._current_epoch == 5
+
+
+# ── P0 Tests: C-8 register_task wiring ────────────────────────────────────────
+
+class TestRegisterTaskWiring:
+    """C-8: generate_corpus calls uniqueness_scorer.register_task for each task."""
+
+    def test_refresh_corpus_registers_tasks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orch = Orchestrator(
+                data_dir=Path(tmpdir) / "data",
+                corpus_dir=Path(tmpdir) / "corpus",
+            )
+            summary = orch.refresh_corpus(epoch=1)
+            n_tasks = summary["synthetic_tasks"]
+            assert n_tasks > 0
+            # register_task was called — timestamps should be populated
+            # (may be fewer than n_tasks if some task_ids collide)
+            assert len(orch.uniqueness_scorer._task_timestamps) > 0

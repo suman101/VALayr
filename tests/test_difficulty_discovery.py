@@ -248,3 +248,34 @@ class TestRegistryWithNewMutators:
         # Should still contain core contract structure
         assert "contract" in result
         assert "function" in result
+
+
+# ── P0 Tests: H-10 ControlFlowMutator Safety ─────────────────────────────────
+
+class TestControlFlowMutatorSafety:
+    """H-10: require guards are not silently dropped when re-matching fails."""
+
+    def test_require_preserved_when_no_enclosing_function(self):
+        # require at contract level (unusual but valid Solidity structure)
+        # — the mutator should not drop the require guard
+        source = '''pragma solidity ^0.8.28;
+contract Guarded {
+    address public owner;
+    modifier onlyOwner() {
+        require(msg.sender == owner, "not owner");
+        _;
+    }
+    function withdraw() public onlyOwner {
+        payable(owner).transfer(address(this).balance);
+    }
+}
+'''
+        m = ControlFlowMutator()
+        result = m.apply(source, {"controlflow_seed": 42}, seed=42)
+        # The contract should still compile (contains contract keyword)
+        assert "contract" in result
+        # The require should NOT be silently dropped — either it remains
+        # as-is or is wrapped in an if, but should not vanish entirely
+        has_require = "require" in result
+        has_if_guard = "if" in result and "msg.sender" in result
+        assert has_require or has_if_guard

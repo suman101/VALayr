@@ -279,3 +279,26 @@ class TestCheckKeyRotation:
         neuron._check_key_rotation()
         # Config file should still exist (not archived)
         assert config_path.exists()
+
+    @patch("validator.utils.key_rotation.batch_rotate_validators")
+    def test_disallowed_env_var_rejected(self, mock_batch, tmp_path):
+        """H-1: owner_key_env not in allowlist → rotation skipped."""
+        from neurons.validator import ValidatorNeuron
+        config = {
+            "contracts": [FAKE_CONTRACT],
+            "rpc_url": FAKE_RPC,
+            "owner_key_env": "AWS_SECRET_KEY",  # Not in allowlist
+            "old_validator": FAKE_OLD_VALIDATOR,
+            "new_validator": FAKE_NEW_VALIDATOR,
+        }
+        config_path = tmp_path / "pending_rotation.json"
+        config_path.write_text(json.dumps(config))
+
+        neuron = ValidatorNeuron(mode="local")
+        neuron._rotation_config = config_path
+
+        with patch.dict(os.environ, {"AWS_SECRET_KEY": "0x" + "11" * 32}):
+            neuron._check_key_rotation()
+
+        assert not mock_batch.called
+        assert config_path.exists()  # NOT archived — rejected

@@ -178,3 +178,24 @@ class TestValidateTrace:
     def test_reverted_must_be_boolean(self):
         with pytest.raises(ValidationError):
             validate_trace({"reverted": "yes"})
+
+
+# ── P0 Tests: H-4 Additional Properties ──────────────────────────────────────
+
+class TestAdditionalPropertiesRejection:
+    """H-4: additionalProperties: false on schemas rejects unknown fields."""
+
+    def test_task_additional_properties_rejected(self):
+        with pytest.raises(ValidationError):
+            validate_task({
+                "task_id": "t1",
+                "vulnerability_class": "reentrancy",
+                "unknown_field": "malicious",
+            })
+
+    def test_trace_additional_properties_rejected(self):
+        with pytest.raises(ValidationError):
+            validate_trace({
+                "gas_used": 50000,
+                "unknown_field": "inject",
+            })

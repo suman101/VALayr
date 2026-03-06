@@ -358,3 +358,56 @@ class TestDockerSandbox:
             assert "--security-opt=no-new-privileges" in cmd_str
             assert "--pids-limit=256" in cmd_str
             assert "--network=none" in cmd_str
+
+
+# ── P0 Tests: C-2 Ed25519 Signature Verification ─────────────────────────────
+
+class TestEd25519Verification:
+    """C-2: Verify Ed25519 signed_challenge is cryptographically validated."""
+
+    @pytest.fixture()
+    def store(self, tmp_path):
+        return IdentityStore(data_dir=tmp_path / "identity")
+
+    def test_empty_challenge_rejected(self, store):
+        with pytest.raises(ValueError, match="signed_challenge"):
+            store.claim_identity(VALID_HOTKEY, "immunefi", "alice", signed_challenge="")
+
+    def test_truncated_challenge_rejected(self, store):
+        try:
+            import nacl  # noqa: F401
+        except ImportError:
+            pytest.skip("pynacl not installed — truncated check only applies with nacl")
+        with pytest.raises(ValueError, match="too short"):
+            store.claim_identity(VALID_HOTKEY, "immunefi", "alice", signed_challenge="aabb")
+
+    def test_valid_ed25519_signature_accepted(self, store):
+        """Real Ed25519 signature should be accepted when nacl is available."""
+        try:
+            import hashlib as hl
+            from nacl.signing import SigningKey
+        except ImportError:
+            pytest.skip("pynacl not installed")
+
+        hotkey, platform, pid = VALID_HOTKEY, "immunefi", "alice123"
+        msg = hl.sha256(f"{hotkey}:{platform}:{pid}".encode()).digest()
+        key = SigningKey.generate()
+        sig = key.sign(msg).signature
+        challenge = key.verify_key.encode().hex() + sig.hex()
+        # Should not raise
+        store.claim_identity(hotkey, platform, pid, signed_challenge=challenge)
+
+    def test_invalid_ed25519_signature_rejected(self, store):
+        """Wrong signature bytes should be rejected."""
+        try:
+            import hashlib as hl
+            from nacl.signing import SigningKey
+        except ImportError:
+            pytest.skip("pynacl not installed")
+
+        hotkey, platform, pid = VALID_HOTKEY, "immunefi", "alice123"
+        key = SigningKey.generate()
+        # Use correct public key but wrong signature (all zeros)
+        challenge = key.verify_key.encode().hex() + "00" * 64
+        with pytest.raises(ValueError, match="signature verification failed"):
+            store.claim_identity(hotkey, platform, pid, signed_challenge=challenge)
