@@ -78,6 +78,11 @@ if command -v docker &>/dev/null; then
     for vol_archive in "$BACKUP_DIR"/*.tar.gz; do
         [ -f "$vol_archive" ] || continue
         vol_name="$(basename "$vol_archive" .tar.gz)"
+        # SEC-2.2: validate volume name to prevent injection via crafted archive names.
+        if [[ ! "$vol_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "  WARNING: Skipping archive with unsafe name: $vol_name"
+            continue
+        fi
         full_vol="valayr_${vol_name}"
         echo "  Restoring Docker volume: $full_vol ..."
         docker volume create "$full_vol" 2>/dev/null || true

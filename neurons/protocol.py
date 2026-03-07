@@ -52,6 +52,11 @@ class ExploitSubmissionSynapse(_SynapseBase):
       - result:           dict with validation outcome
     """
 
+    # SEC-2.6: size limits for protocol-level input validation
+    MAX_TASK_ID_LEN = 66        # "0x" + 64 hex chars
+    MAX_EXPLOIT_SOURCE_BYTES = 64_000  # 64 KB
+    MAX_ENTRY_FUNCTIONS = 20
+
     # --- Miner-set request fields ---
     task_id: str = ""
     exploit_source: str = ""
@@ -61,6 +66,19 @@ class ExploitSubmissionSynapse(_SynapseBase):
 
     # --- Validator-set response fields ---
     result: Optional[Dict[str, Any]] = None
+
+    def validate(self) -> Optional[str]:
+        """SEC-2.6: validate message field sizes at protocol boundary.
+
+        Returns an error string if validation fails, else None.
+        """
+        if len(self.task_id) > self.MAX_TASK_ID_LEN:
+            return f"task_id exceeds {self.MAX_TASK_ID_LEN} chars"
+        if len(self.exploit_source.encode("utf-8", errors="replace")) > self.MAX_EXPLOIT_SOURCE_BYTES:
+            return f"exploit_source exceeds {self.MAX_EXPLOIT_SOURCE_BYTES} bytes"
+        if len(self.entry_functions) > self.MAX_ENTRY_FUNCTIONS:
+            return f"entry_functions exceeds {self.MAX_ENTRY_FUNCTIONS} items"
+        return None
 
 
 # ── Exploit Query Synapse ───────────────────────────────────────────────────

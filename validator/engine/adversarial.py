@@ -25,6 +25,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -72,6 +73,18 @@ _FORBIDDEN_CONDITION_PATTERNS = re.compile(
     r'|\bpragma\b',
     re.IGNORECASE,
 )
+
+
+def _strip_solidity_comments(source: str) -> str:
+    """Strip single-line (//) and multi-line (/* */) comments from Solidity.
+
+    SEC-2.7: prevents attackers from hiding forbidden patterns inside comments
+    that are ignored by the regex but still compiled by solc.
+    """
+    # Remove multi-line comments first, then single-line
+    source = re.sub(r'/\*.*?\*/', '', source, flags=re.DOTALL)
+    source = re.sub(r'//[^\n]*', '', source)
+    return source
 
 
 # ── Enums & Data Structures ─────────────────────────────────────────────────
@@ -184,6 +197,14 @@ class AdversarialEngine:
         self.registry_address = registry_address
         self.scoring_address = scoring_address
         self.rpc_url = rpc_url
+
+        # SEC-2.4: validate RPC URL scheme to prevent SSRF via file:// etc.
+        parsed = urllib.parse.urlparse(rpc_url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError(
+                f"Invalid RPC URL scheme '{parsed.scheme}' — only http/https allowed"
+            )
+
         self.data_dir = data_dir or Path(tempfile.mkdtemp(prefix="adversarial-"))
 
         # In-memory state (local mode)
@@ -297,7 +318,7 @@ class AdversarialEngine:
         if inv is None:
             return ChallengeReport(
                 invariant_id=challenge.invariant_id,
-                class_a_miner="",
+                class_a_miner="<unknown>",
                 class_b_miner=challenge.miner_address,
                 result=ChallengeResult.CHALLENGE_ERROR,
                 error_message=f"Invariant #{challenge.invariant_id} not found",
@@ -391,7 +412,7 @@ class AdversarialEngine:
             validation_time_ms=elapsed_ms,
         )
         self._challenge_history.append(report)
-        if len(self._challenge_history) > self._MAX_CHALLENGE_HISTORY:
+        if len(self._challenge_history) >= self._MAX_CHALLENGE_HISTORY:
             self._challenge_history = self._challenge_history[-self._MAX_CHALLENGE_HISTORY:]
 
         logger.info(
@@ -487,7 +508,8 @@ class AdversarialEngine:
     def reset(self) -> None:
         """Reset all state. For testing only."""
         self._invariants.clear()
-        self._next_id = 0
+        # Don't reset _next_id to 0 — use current value to avoid cross-epoch
+        # ID collisions with previously allocated invariant IDs.
         self._class_a_scores.clear()
         self._class_b_scores.clear()
         self._challenge_history.clear()
@@ -681,10 +703,10 @@ class AdversarialEngine:
 
         # Heuristic: if exploit heavily references invariant-specific state,
         # assume it's targeting it. V-6 fix: raised threshold from 0.60 to
-        # 0.80 and require a minimum of 3 meaningful identifiers to avoid
-        # unreliable results on small invariant conditions.
-        if len(identifiers) < 3:
-            # Too few identifiers for a meaningful heuristic — default to HELD
+        # 0.80 and require at least 1 meaningful identifier to avoid
+        # unreliable results when the invariant has no identifiable state.
+        if len(identifiers) < 1:
+            # No identifiers for a meaningful heuristic — default to HELD
             return False, (
                 f"heuristic_sim: insufficient identifiers ({len(identifiers)}) "
                 f"for reliable heuristic, defaulting to HELD"
@@ -804,8 +826,8 @@ local = "http://{self._ANVIL_HOST}:{port}"
             if not link.exists():
                 try:
                     link.symlink_to(project_forge_std)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    logger.warning("Failed to symlink forge-std to %s: %s", link, exc)
 
         return True
 
@@ -836,7 +858,9 @@ local = "http://{self._ANVIL_HOST}:{port}"
 
         # C-1 fix: reject conditions containing dangerous patterns that
         # could inject arbitrary Solidity code when interpolated.
-        if _FORBIDDEN_CONDITION_PATTERNS.search(condition):
+        # SEC-2.7: strip comments before checking so attackers cannot
+        # hide forbidden patterns inside // or /* */ comments.
+        if _FORBIDDEN_CONDITION_PATTERNS.search(_strip_solidity_comments(condition)):
             raise ValueError(
                 f"Invariant condition contains forbidden pattern — "
                 f"must be a pure boolean expression"
@@ -986,7 +1010,11 @@ contract InvariantCheckTest is Test {{
                     if "Deployed to:" in line:
                         return line.split("Deployed to:")[-1].strip()
             return None
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except subprocess.TimeoutExpired:
+            logger.warning("forge create timed out after 30s for %s", workspace)
+            return None
+        except FileNotFoundError:
+            logger.debug("forge not found — cannot deploy target contract")
             return None
 
     def _sim_run_forge_test(
@@ -1050,9 +1078,14 @@ contract InvariantCheckTest is Test {{
             )
             if result.returncode != 0:
                 raise RuntimeError(f"cast send failed: {result.stderr}")
+        finally:
+            # SEC-1.4: clear private key from local scope immediately
+            private_key = None  # noqa: F841
 
             # Parse invariant ID from event logs
             # For now, read propertyCount - 1
+        # Parse invariant ID from event logs (outside the try/finally above)
+        try:
             count_result = subprocess.run(
                 [
                     "cast", "call",
@@ -1106,3 +1139,6 @@ contract InvariantCheckTest is Test {{
                 logger.error("On-chain processChallenge failed: %s", result.stderr)
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             logger.error("On-chain processChallenge error: %s", e)
+        finally:
+            # SEC-1.4: clear private key from local scope immediately
+            private_key = None  # noqa: F841

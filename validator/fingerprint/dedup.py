@@ -101,8 +101,11 @@ class FingerprintComponents:
             # Single-tx fallback: sorted flat selectors
             parts.append("selectors:" + ",".join(sorted(self.function_selectors)))
 
-        # 2. Storage diffs (sorted by slot index)
-        sorted_diffs = sorted(self.storage_slot_diffs, key=lambda d: d.get("slot", ""))
+        # 2. Storage diffs (sorted by slot index numerically)
+        sorted_diffs = sorted(
+            self.storage_slot_diffs,
+            key=lambda d: int(d.get("slot", "0x0"), 16) if d.get("slot", "0x0").startswith("0x") else 0,
+        )
         diff_strs = []
         for d in sorted_diffs:
             diff_strs.append(f"{d['slot']}:{d.get('before','0x0')}->{d.get('after','0x0')}")
@@ -155,6 +158,19 @@ EIP1967_ADMIN_SLOT = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a71785
 OWNER_SLOTS = {"0x0", "0x00"}
 
 
+def _normalize_slot(slot: str) -> str:
+    """Normalize a hex storage slot to canonical lowercase form.
+
+    '0x0000...01' → '0x1', '0X0a' → '0xa', non-hex values pass through.
+    """
+    if not isinstance(slot, str) or not slot.startswith(("0x", "0X")):
+        return slot
+    try:
+        return hex(int(slot, 16))
+    except (ValueError, OverflowError):
+        return slot
+
+
 # ── Fingerprint Engine ───────────────────────────────────────────────────────
 
 class FingerprintEngine:
@@ -187,11 +203,13 @@ class FingerprintEngine:
         fc.per_function_selectors = execution_trace.get("per_function_selectors", {})
         fc.test_function_order = execution_trace.get("test_function_order", [])
 
-        # Storage diffs
+        # Storage diffs — normalize slot values to canonical hex form
         raw_diffs = execution_trace.get("storage_diffs", [])
         for diff in raw_diffs:
+            raw_slot = diff.get("slot", "0x0")
+            norm_slot = _normalize_slot(raw_slot)
             fc.storage_slot_diffs.append({
-                "slot": diff.get("slot", "0x0"),
+                "slot": norm_slot,
                 "before": diff.get("before", "0x" + "0" * 64),
                 "after": diff.get("after", "0x" + "0" * 64),
             })
@@ -199,17 +217,18 @@ class FingerprintEngine:
         # Balance delta
         fc.balance_delta = execution_trace.get("balance_delta", 0)
 
-        # Ownership change detection
+        # Ownership change detection (use normalized slots)
         for diff in raw_diffs:
-            slot = diff.get("slot", "")
+            slot = _normalize_slot(diff.get("slot", ""))
             if slot in OWNER_SLOTS or slot == EIP1967_ADMIN_SLOT:
                 fc.ownership_changed = True
 
-        # Proxy admin mutation
+        # Proxy admin mutation (use normalized slots)
         for diff in raw_diffs:
-            if diff.get("slot", "") == EIP1967_ADMIN_SLOT:
+            slot = _normalize_slot(diff.get("slot", ""))
+            if slot == EIP1967_ADMIN_SLOT:
                 fc.proxy_admin_mutated = True
-            if diff.get("slot", "") == EIP1967_IMPL_SLOT:
+            if slot == EIP1967_IMPL_SLOT:
                 fc.proxy_admin_mutated = True
 
         # Call graph hash — sequence-aware for multi-tx
@@ -327,6 +346,9 @@ class FingerprintEngine:
             return
         lock_path = self.db_path.with_suffix(".lock")
         try:
+            # SEC-3.3: hold the file lock for the entire read so a concurrent
+            # writer cannot modify the file between our read and a subsequent
+            # write (TOCTOU race prevention).
             with open(lock_path, "w") as lf:
                 if fcntl:
                     fcntl.flock(lf, fcntl.LOCK_SH)
@@ -346,6 +368,22 @@ class FingerprintEngine:
         except (json.JSONDecodeError, TypeError, OSError) as exc:
             logger.warning("Failed to load fingerprint DB from %s: %s — starting empty", self.db_path, exc)
             self._db = {}
+
+        # SEC-3.2: verify data directory permissions on startup.
+        # Ensure the parent directory is not world-readable, since the
+        # fingerprint DB may contain competitive intelligence.
+        db_parent = self.db_path.parent
+        try:
+            import stat
+            st = db_parent.stat()
+            if st.st_mode & (stat.S_IROTH | stat.S_IWOTH):
+                logger.warning(
+                    "Fingerprint DB directory %s is world-accessible "
+                    "(mode %o) — consider restricting to 0700",
+                    db_parent, stat.S_IMODE(st.st_mode),
+                )
+        except OSError:
+            pass
 
     def _save_db(self):
         """Persist fingerprint database (acquires _lock first)."""

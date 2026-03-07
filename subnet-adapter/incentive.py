@@ -12,11 +12,18 @@ Everything else is chain-agnostic.
 """
 
 import hashlib
-import json
-import time
 from dataclasses import dataclass, field, asdict
-from pathlib import Path
 from typing import Optional
+
+
+def _median(values: list[float]) -> float:
+    """Return the median of a non-empty list of floats."""
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    if n % 2 == 1:
+        return s[mid]
+    return (s[mid - 1] + s[mid]) / 2.0
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -98,6 +105,7 @@ class SubnetIncentiveAdapter:
         self._current_epoch = 0
         self._votes: list[ValidatorVote] = []
         self._epoch_results: list[EpochResult] = []
+        self._seen_fingerprints: set[str] = set()  # Track first-seen fingerprints across epoch
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -152,7 +160,13 @@ class SubnetIncentiveAdapter:
                 severity = max(0.0, min(1.0, severity))
                 score.total_severity += severity
 
-                if consensus.get("is_first_fingerprint", False):
+                # BUG-1 fix: track first-seen fingerprints at the epoch level,
+                # not by validator vote count.  The old logic checked
+                # fingerprints[top_fp] == 1 which counted validators, not
+                # global first-occurrence.
+                fp = consensus.get("fingerprint", "")
+                if fp and fp not in self._seen_fingerprints:
+                    self._seen_fingerprints.add(fp)
                     score.unique_fingerprints += 1
                 else:
                     score.duplicate_fingerprints += 1
@@ -173,6 +187,7 @@ class SubnetIncentiveAdapter:
 
         self._epoch_results.append(result)
         self._votes = []  # Clear for next epoch
+        self._seen_fingerprints.clear()  # Reset fingerprint tracking for next epoch
 
         return result
 
@@ -229,16 +244,14 @@ class SubnetIncentiveAdapter:
         # Count results
         result_counts: dict[str, int] = {}
         fingerprints: dict[str, int] = {}
-        severity_sum = 0.0
-        severity_count = 0
+        severity_scores: list[float] = []
 
         for vote in votes:
             result_counts[vote.result] = result_counts.get(vote.result, 0) + 1
             if vote.fingerprint:
                 fingerprints[vote.fingerprint] = fingerprints.get(vote.fingerprint, 0) + 1
             if vote.severity_score > 0:
-                severity_sum += vote.severity_score
-                severity_count += 1
+                severity_scores.append(vote.severity_score)
 
         # Check for consensus
         total_votes = len(votes)
@@ -251,7 +264,7 @@ class SubnetIncentiveAdapter:
                     "result": result,
                     "agreement_ratio": count / total_votes,
                     "total_votes": total_votes,
-                    "severity_score": severity_sum / severity_count if severity_count > 0 else 0.0,
+                    "severity_score": _median(severity_scores) if severity_scores else 0.0,
                     "low_confidence": below_quorum,
                 }
 
@@ -260,10 +273,11 @@ class SubnetIncentiveAdapter:
                     top_fp = max(fingerprints, key=fingerprints.get)
                     consensus["fingerprint"] = top_fp
                     consensus["fingerprint_agreement"] = fingerprints[top_fp] / total_votes
-                    # S-1 fix: determine if this is the first time this fingerprint
-                    # was seen. The caller (compute_epoch_weights) uses this to
-                    # distinguish unique vs duplicate exploit submissions.
-                    consensus["is_first_fingerprint"] = fingerprints[top_fp] == 1
+                    # Fingerprint agreement is how many validators agreed on
+                    # this fingerprint (used for consensus confidence only).
+                    # NOTE: is_first_fingerprint is set by compute_epoch_weights,
+                    # not here, because it requires epoch-level tracking.
+                    consensus["is_first_fingerprint"] = False  # Placeholder; set by caller
 
                 return consensus
 

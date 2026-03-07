@@ -281,6 +281,12 @@ class ValidatorNeuron:
             exploit_source = synapse.exploit_source
             miner_hotkey = synapse.dendrite.hotkey
 
+            # Protocol-level field size validation (SEC-2.6)
+            proto_err = synapse.validate()
+            if proto_err:
+                synapse.result = {"error": f"Protocol validation failed: {proto_err}"}
+                return synapse
+
             # Schema validation at system boundary
             try:
                 validate_submission({

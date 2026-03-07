@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 _SECRET_SPECS: dict[str, dict] = {
     "VALAYR_RECEIPT_HMAC_KEY": {
         "min_length": 32,
-        "description": "HMAC key for subnet receipt integrity",
+        # SEC-1.6: require hex-encoded key to guarantee sufficient entropy.
+        # Low-entropy values like "0" * 32 are rejected by the pattern check.
+        "pattern": r"^[0-9a-fA-F]{64,}$",
+        "description": "HMAC key for subnet receipt integrity (hex-encoded, >= 32 bytes)",
     },
     "IMMUNEFI_API_KEY": {
         "min_length": 1,

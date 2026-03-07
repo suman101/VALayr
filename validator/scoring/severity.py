@@ -166,7 +166,7 @@ class SeverityScorer:
             slot_norm = "0x" + slot.lstrip("0x").lstrip("0") if isinstance(slot, str) and slot.startswith("0x") else slot
             if not slot_norm or slot_norm == "0x":
                 slot_norm = "0x0"
-            if slot_norm in OWNER_SLOT_INDICES or slot == EIP1967_ADMIN_SLOT:
+            if slot_norm in OWNER_SLOT_INDICES or slot_norm == EIP1967_ADMIN_SLOT:
                 breakdown.privilege_escalation_score = 1.0
                 break
 
@@ -177,7 +177,12 @@ class SeverityScorer:
         # - Multiple *meaningful* storage slots changed simultaneously
         for diff in storage_diffs:
             slot = diff.get("slot", "") if isinstance(diff, dict) else diff.slot
-            if slot == EIP1967_IMPL_SLOT:
+            if isinstance(slot, int):
+                slot = hex(slot)
+            slot_n = "0x" + slot.lstrip("0x").lstrip("0") if isinstance(slot, str) and slot.startswith("0x") else slot
+            if not slot_n or slot_n == "0x":
+                slot_n = "0x0"
+            if slot_n == EIP1967_IMPL_SLOT:
                 breakdown.invariant_broken_score = 1.0
                 break
 
@@ -203,9 +208,14 @@ class SeverityScorer:
         for diff in storage_diffs:
             slot = diff.get("slot", "") if isinstance(diff, dict) else diff.slot
             after = diff.get("after", "") if isinstance(diff, dict) else diff.after
+            if isinstance(slot, int):
+                slot = hex(slot)
+            slot_n = "0x" + slot.lstrip("0x").lstrip("0") if isinstance(slot, str) and slot.startswith("0x") else slot
+            if not slot_n or slot_n == "0x":
+                slot_n = "0x0"
 
             # Check if a critical slot was zeroed out
-            if slot in OWNER_SLOT_INDICES or slot == EIP1967_ADMIN_SLOT:
+            if slot_n in OWNER_SLOT_INDICES or slot_n == EIP1967_ADMIN_SLOT:
                 if after == "0x" + "0" * 64:
                     breakdown.permanent_lock_score = 1.0
                     break

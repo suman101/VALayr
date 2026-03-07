@@ -110,8 +110,9 @@ class TaskPackage:
         if not self.task_id:
             self.compute_task_id()
 
-        # Sanitize task_id: keep only hex-safe characters
-        sanitized_id = "".join(c for c in self.task_id[:10] if c in "0123456789abcdef")
+        # Sanitize task_id: keep only hex-safe characters, use 24 chars to
+        # avoid collision risk (~16M tasks before birthday collision at 2^48).
+        sanitized_id = "".join(c for c in self.task_id[:24] if c in "0123456789abcdef")
         if not sanitized_id:
             sanitized_id = "unknown"
         task_dir = (output_dir / sanitized_id).resolve()

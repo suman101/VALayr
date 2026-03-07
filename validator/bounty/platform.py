@@ -16,8 +16,10 @@ forwards to the bounty platform using the miner's linked identity.
 
 import json
 import os
+import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
@@ -106,8 +108,11 @@ class BountyPlatform(ABC):
             return "Exploit source too short to be valid Solidity"
         if "pragma solidity" not in report.exploit_source and "function" not in report.exploit_source:
             return "Exploit source does not appear to be valid Solidity"
-        # Check for obvious corruption: unterminated strings, unbalanced braces
-        if report.exploit_source.count("{") != report.exploit_source.count("}"):
+        # Check for obvious corruption: unbalanced braces (strip string
+        # literals first to avoid false positives from braces inside strings).
+        stripped = re.sub(r'"[^"\\]*(?:\\.[^"\\]*)*"', '', report.exploit_source)
+        stripped = re.sub(r"'[^'\\]*(?:\\.[^'\\]*)*'", '', stripped)
+        if stripped.count("{") != stripped.count("}"):
             return "Exploit source has unbalanced braces (possibly corrupted)"
         return None
 
@@ -231,7 +236,13 @@ class ImmunefiAdapter(BountyPlatform):
             return None
         if not endpoint.startswith("/") or "?" in endpoint:
             return None
-        url = self.BASE_URL + endpoint
+        # SEC-2.5: use urljoin and validate the final URL's domain matches
+        # the expected BASE_URL to prevent endpoint manipulation.
+        url = urllib.parse.urljoin(self.BASE_URL, endpoint)
+        parsed = urllib.parse.urlparse(url)
+        expected = urllib.parse.urlparse(self.BASE_URL)
+        if parsed.netloc != expected.netloc or parsed.scheme not in ("https",):
+            return None
         data = json.dumps(payload).encode()
         req = urllib.request.Request(url, data=data, method="POST")
         req.add_header("Authorization", f"Bearer {self.api_key}")
@@ -248,7 +259,12 @@ class ImmunefiAdapter(BountyPlatform):
             return None
         if not endpoint.startswith("/") or "?" in endpoint:
             return None
-        url = self.BASE_URL + endpoint
+        # SEC-2.5: use urljoin and validate the final URL's domain matches
+        url = urllib.parse.urljoin(self.BASE_URL, endpoint)
+        parsed = urllib.parse.urlparse(url)
+        expected = urllib.parse.urlparse(self.BASE_URL)
+        if parsed.netloc != expected.netloc or parsed.scheme not in ("https",):
+            return None
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {self.api_key}")
         req.add_header("User-Agent", "VALayr-Subnet/0.1")
@@ -343,7 +359,12 @@ class Code4renaAdapter(BountyPlatform):
             return None
         if not endpoint.startswith("/") or "?" in endpoint:
             return None
-        url = self.BASE_URL + endpoint
+        # SEC-2.5: use urljoin and validate the final URL's domain matches
+        url = urllib.parse.urljoin(self.BASE_URL, endpoint)
+        parsed = urllib.parse.urlparse(url)
+        expected = urllib.parse.urlparse(self.BASE_URL)
+        if parsed.netloc != expected.netloc or parsed.scheme not in ("https",):
+            return None
         data = json.dumps(payload).encode()
         req = urllib.request.Request(url, data=data, method="POST")
         req.add_header("Authorization", f"Bearer {self.api_key}")
@@ -360,7 +381,12 @@ class Code4renaAdapter(BountyPlatform):
             return None
         if not endpoint.startswith("/") or "?" in endpoint:
             return None
-        url = self.BASE_URL + endpoint
+        # SEC-2.5: use urljoin and validate the final URL's domain matches
+        url = urllib.parse.urljoin(self.BASE_URL, endpoint)
+        parsed = urllib.parse.urlparse(url)
+        expected = urllib.parse.urlparse(self.BASE_URL)
+        if parsed.netloc != expected.netloc or parsed.scheme not in ("https",):
+            return None
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {self.api_key}")
         req.add_header("User-Agent", "VALayr-Subnet/0.1")

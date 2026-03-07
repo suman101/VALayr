@@ -553,6 +553,19 @@ The engine rejects exploit sources that contain:
 - Per-miner: 50 submissions per epoch
 - Miner blacklist: unregistered hotkeys are rejected
 
+**Bittensor Axon Configuration** — For production validators, configure Bittensor's
+built-in axon rate limiting at the network layer:
+
+```bash
+python -m neurons.validator \
+  --axon.max_workers 8 \
+  --axon.max_requests_per_second 50 \
+  ...
+```
+
+These flags throttle inbound synapse traffic before it reaches the validation
+pipeline, protecting against denial-of-service from malicious miners.
+
 ### Key Management
 
 - Private keys are passed via `ETH_PRIVATE_KEY` environment variable (never CLI args)

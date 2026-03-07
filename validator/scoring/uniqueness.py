@@ -160,6 +160,12 @@ class UniquenessScorer:
             result.complexity_detail = (
                 f"gas_used={gas_used} < min={min_gas} for difficulty={difficulty}"
             )
+        elif gas_used == 0 and difficulty > 1:
+            # Missing gas data for non-trivial difficulty — do not auto-pass.
+            result.complexity_pass = False
+            result.complexity_detail = (
+                f"gas_used=0 (missing) for difficulty={difficulty}"
+            )
         if selector_count > 0 and selector_count < min_sels:
             result.complexity_pass = False
             result.complexity_detail = (
@@ -249,8 +255,6 @@ class UniquenessScorer:
         if not a and not b:
             return 0.0  # No information = no similarity (not identical)
         union = a | b
-        if not union:
-            return 0.0
         return len(a & b) / len(union)
 
     def reset(self) -> None:

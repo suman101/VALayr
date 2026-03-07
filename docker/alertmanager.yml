@@ -1,5 +1,12 @@
 # Alertmanager Configuration for VALayr Subnet
 # Routes alerts from Prometheus to notification channels.
+#
+# SECURITY: In production, use HTTPS for all webhook URLs and enable TLS:
+#   webhook_configs:
+#     - url: "https://validator:9095/webhook"
+#       http_config:
+#         tls_config:
+#           insecure_skip_verify: false
 
 global:
   resolve_timeout: 5m

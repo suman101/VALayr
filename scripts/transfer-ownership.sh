@@ -25,9 +25,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 RPC_URL="${RPC_URL:-http://127.0.0.1:8545}"
 
-# Default Anvil[0] key — ONLY for local development.
+# SEC-1.2: Anvil[0] default key is no longer hardcoded in source.
+# For local development, the key is derived at runtime.
 # For testnet/mainnet the caller MUST provide DEPLOYER_KEY explicitly.
-ANVIL_DEFAULT_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 DEPLOYER_KEY="${DEPLOYER_KEY:-}"
 
 DEPLOYMENT_FILE=""
@@ -77,8 +77,13 @@ fi
 # For all other networks, DEPLOYER_KEY must be set explicitly.
 if [[ -z "$DEPLOYER_KEY" ]]; then
     if [[ "$RPC_URL" == *"127.0.0.1"* || "$RPC_URL" == *"localhost"* ]]; then
-        DEPLOYER_KEY="$ANVIL_DEFAULT_KEY"
-        echo "[*] Using default Anvil key for local RPC"
+        # SEC-1.2: derive Anvil key at runtime instead of using hardcoded value
+        DEPLOYER_KEY=$("$CAST_BIN" wallet private-key "test test test test test test test test test test test junk" 0 2>/dev/null || true)
+        if [[ -z "$DEPLOYER_KEY" ]]; then
+            echo "[!] Could not derive Anvil key — set DEPLOYER_KEY manually"
+            exit 1
+        fi
+        echo "[*] Using derived Anvil key for local RPC"
     else
         echo "[!] DEPLOYER_KEY must be set for non-local networks"
         echo "    export DEPLOYER_KEY=0x..."
@@ -115,7 +120,7 @@ done
 echo "  Contracts to transfer:"
 for name in "${CONTRACTS[@]}"; do
     addr=$(jq -r ".contracts.${name}" "$DEPLOYMENT_FILE")
-    current_owner=$(ETH_PRIVATE_KEY="$DEPLOYER_KEY" "$CAST_BIN" call --rpc-url "$RPC_URL" "$addr" "owner()(address)" 2>/dev/null || echo "unknown")
+    current_owner=$(echo "$DEPLOYER_KEY" | "$CAST_BIN" call --rpc-url "$RPC_URL" "$addr" "owner()(address)" 2>/dev/null || echo "unknown")
     echo "    $name ($addr) — current owner: $current_owner"
 done
 echo
@@ -134,14 +139,16 @@ for name in "${CONTRACTS[@]}"; do
     addr=$(jq -r ".contracts.${name}" "$DEPLOYMENT_FILE")
     echo "  [$name] Initiating transfer to $NEW_OWNER..."
 
-    if ETH_PRIVATE_KEY="$DEPLOYER_KEY" "$CAST_BIN" send \
+    # SEC-1.3: pass private key via stdin to prevent exposure in ps/proc
+    if echo "$DEPLOYER_KEY" | "$CAST_BIN" send \
         --rpc-url "$RPC_URL" \
+        --private-key-stdin \
         "$addr" \
         "transferOwnership(address)" \
         "$NEW_OWNER" 2>/dev/null; then
 
         # Verify pendingOwner was set
-        pending=$(ETH_PRIVATE_KEY="$DEPLOYER_KEY" "$CAST_BIN" call --rpc-url "$RPC_URL" "$addr" "pendingOwner()(address)" 2>/dev/null || echo "")
+        pending=$(echo "$DEPLOYER_KEY" | "$CAST_BIN" call --rpc-url "$RPC_URL" "$addr" "pendingOwner()(address)" 2>/dev/null || echo "")
         if [[ "${pending,,}" == "${NEW_OWNER,,}" ]]; then
             echo "    ✓ pendingOwner set to $NEW_OWNER"
         else

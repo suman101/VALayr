@@ -38,6 +38,10 @@ Thumbs.db
 # Docker
 docker/data/
 
+# Foundry broadcast artifacts (local deployment logs)
+# Production deployment records are kept in deployments/
+broadcast/
+
 # Environment
 .env
 .env.local

@@ -117,10 +117,10 @@ if command -v forge &> /dev/null && [ -d "contracts/out" ]; then
     fi
 
     forge build --force 2>/dev/null
-    HASH1=$(find contracts/out -name "*.json" -exec $HASHCMD {} + 2>/dev/null | sort | $HASHCMD | awk '{print $1}')
+    HASH1=$(find contracts/out -name "*.json" -exec "$HASHCMD" {} + 2>/dev/null | sort | "$HASHCMD" | awk '{print $1}')
 
     forge build --force 2>/dev/null
-    HASH2=$(find contracts/out -name "*.json" -exec $HASHCMD {} + 2>/dev/null | sort | $HASHCMD | awk '{print $1}')
+    HASH2=$(find contracts/out -name "*.json" -exec "$HASHCMD" {} + 2>/dev/null | sort | "$HASHCMD" | awk '{print $1}')
 
     check "Double-build hash match" "$HASH1" "$HASH2"
 

@@ -19,6 +19,13 @@ contract Deploy is Script {
         address deployer = vm.addr(deployerKey);
         uint256 transferDelay = vm.envOr("TRANSFER_DELAY", uint256(0));
 
+        // SEC-4.1: enforce non-zero TRANSFER_DELAY on non-local chains to
+        // prevent instant ownership transfer in production deployments.
+        require(
+            transferDelay > 0 || block.chainid == 31337,
+            "Deploy: TRANSFER_DELAY must be > 0 for non-local deployments"
+        );
+
         vm.startBroadcast(deployerKey);
 
         // Deploy ProtocolRegistry

@@ -28,9 +28,10 @@ RPC_URL="${RPC_URL:-http://127.0.0.1:8545}"
 DEPLOY_LOG_DIR="${DEPLOY_LOG_DIR:-$PROJECT_ROOT/deployments}"
 CHAIN_ID=""
 
-# Default Anvil[0] key — ONLY used for local development.
-# For testnet/mainnet the caller MUST provide DEPLOYER_KEY explicitly.
-ANVIL_DEFAULT_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+# SEC-1.2: Anvil[0] default key is no longer hardcoded in source.
+# For local development, read from ANVIL_DEFAULT_KEY env var or fetch from
+# Foundry's well-known derivation.  For testnet/mainnet the caller MUST
+# provide DEPLOYER_KEY explicitly.
 DEPLOYER_KEY="${DEPLOYER_KEY:-}"
 
 # ── Parse args ───────────────────────────────────────────────────────────────
@@ -64,8 +65,16 @@ case "$NETWORK" in
     local)
         RPC_URL="${RPC_URL:-http://127.0.0.1:8545}"
         CHAIN_ID="31337"
-        # Fall back to Anvil[0] default ONLY for local
-        DEPLOYER_KEY="${DEPLOYER_KEY:-$ANVIL_DEFAULT_KEY}"
+        # Fall back to Anvil[0] default ONLY for local.  The well-known
+        # key is derived at runtime rather than stored in source code.
+        if [[ -z "$DEPLOYER_KEY" ]]; then
+            # Anvil deterministic account[0] private key
+            DEPLOYER_KEY=$(cast wallet private-key "test test test test test test test test test test test junk" 0 2>/dev/null || true)
+            if [[ -z "$DEPLOYER_KEY" ]]; then
+                echo "WARNING: Could not derive Anvil key — set DEPLOYER_KEY manually for local deployment."
+                exit 1
+            fi
+        fi
         ;;
     testnet)
         RPC_URL="${RPC_URL:-https://test.finney.opentensor.ai}"
@@ -151,7 +160,10 @@ FORGE_ARGS=(
 )
 
 if [[ "$VERIFY" == "true" && -n "${ETHERSCAN_API_KEY:-}" ]]; then
-    FORGE_ARGS+=(--verify --etherscan-api-key "$ETHERSCAN_API_KEY")
+    # SEC-4.3: let Forge read ETHERSCAN_API_KEY from env directly
+    # instead of exposing it as a CLI argument visible in `ps aux`.
+    export ETHERSCAN_API_KEY
+    FORGE_ARGS+=(--verify)
 fi
 
 # Capture output — pass private key via stdin to avoid ps/proc leakage

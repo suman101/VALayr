@@ -327,6 +327,9 @@ class Orchestrator:
                 continue
 
             task = json.loads(task_json_path.read_text())
+            if not isinstance(task, dict) or not isinstance(task.get("task_id"), str):
+                logger.warning("Skipping malformed task.json in %s", d)
+                continue
             full_id = task.get("task_id", "")
 
             # Exact match — return immediately (no ambiguity possible)
@@ -544,7 +547,7 @@ class Orchestrator:
             _metrics.inc("validations_valid")
         if result.is_duplicate:
             _metrics.inc("duplicates_total")
-        if result.severity_score > 0:
+        if result.severity_score >= 0:
             _metrics.observe("severity_score", result.severity_score)
 
         # ── Cost-per-validation tracking ──
@@ -989,7 +992,6 @@ class Orchestrator:
                 weights={},
             )
         self._last_closed_epoch = epoch_number
-        self._current_epoch = epoch_number
         logger.info("Closing epoch %d (blocks %d-%d)", epoch_number, start_block, end_block)
 
         # Log and reset per-epoch cost tracking
@@ -1003,6 +1005,9 @@ class Orchestrator:
             )
             self._epoch_wall_seconds = 0.0
             self._epoch_validations = 0
+            # Set _current_epoch inside cost_lock to prevent race with
+            # concurrent validations reading the epoch number.
+            self._current_epoch = epoch_number
 
         epoch = self.incentive.compute_epoch_weights(epoch_number, start_block, end_block)
 
@@ -1022,6 +1027,13 @@ class Orchestrator:
             total = sum(blended.values())
             if total > 0:
                 epoch.weights = {k: v / total for k, v in blended.items()}
+            else:
+                # All blended weights are zero — reset to equal weights so
+                # stale weights from a previous epoch are not retained.
+                if blended:
+                    equal_w = 1.0 / len(blended)
+                    epoch.weights = {k: equal_w for k in blended}
+                logger.warning("Blended weight total is 0 — assigned equal weights to %d miners", len(blended))
             logger.info("Blended adversarial weights for %d miners", len(adv_weights))
 
         # Prune stale fingerprint records (retain 30 days by default)
@@ -1067,10 +1079,12 @@ class Orchestrator:
         """Persist submission result to disk."""
         report_path = self.reports_dir / f"{result.task_id[:16]}_{result.miner_address[:8]}_{time.time_ns()}.json"
         payload = json.dumps(result.to_dict(), indent=2)
+        # SEC-3.1: create temp file with restricted permissions (0o600) to
+        # prevent other users reading sensitive report data before rename.
         tmp_path = report_path.with_suffix(".tmp")
-        tmp_path.write_text(payload)
-        fd = os.open(str(tmp_path), os.O_RDONLY)
+        fd = os.open(str(tmp_path), os.O_CREAT | os.O_WRONLY | os.O_EXCL, 0o600)
         try:
+            os.write(fd, payload.encode())
             os.fsync(fd)
         finally:
             os.close(fd)

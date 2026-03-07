@@ -27,9 +27,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ── Install Foundry (PINNED VERSION) ─────────────────────────────────────────
 # Uses foundryup with pinned version — same approach as CI (foundry-rs/foundry-toolchain@v1).
 # foundryup downloads from GitHub releases and verifies integrity internally.
+# SEC-5.3: downloaded to a file first (not piped directly to bash) for auditability.
 ENV FOUNDRY_VERSION=nightly-2024-12-01
 ENV FOUNDRY_DIR=/opt/foundry
-RUN curl -L https://foundry.paradigm.xyz | FOUNDRY_DIR=/opt/foundry bash && \
+RUN curl -fsSL https://foundry.paradigm.xyz -o /tmp/foundryup-installer.sh && \
+    FOUNDRY_DIR=/opt/foundry bash /tmp/foundryup-installer.sh && \
+    rm -f /tmp/foundryup-installer.sh && \
     /opt/foundry/bin/foundryup --version "${FOUNDRY_VERSION}" && \
     chmod -R a+rx /opt/foundry
 ENV PATH="/opt/foundry/bin:${PATH}"

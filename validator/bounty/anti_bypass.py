@@ -24,6 +24,7 @@ import hmac
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -51,11 +52,30 @@ else:
         else:
             _KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
             _RECEIPT_HMAC_KEY = os.urandom(32)
-            _KEY_PATH.write_bytes(_RECEIPT_HMAC_KEY)
-            # Restrict permissions so only the owner can read the key
-            os.chmod(_KEY_PATH, 0o600)
+            # SEC-1 fix: create file with restricted permissions atomically
+            # to prevent a race window where the key is world-readable.
+            fd = os.open(
+                str(_KEY_PATH),
+                os.O_CREAT | os.O_WRONLY | os.O_EXCL,
+                0o600,
+            )
+            try:
+                os.write(fd, _RECEIPT_HMAC_KEY)
+            finally:
+                os.close(fd)
+    except FileExistsError:
+        # Another process created the file between our exists() check and
+        # os.open(..., O_EXCL). Safe to read it.
+        _RECEIPT_HMAC_KEY = _KEY_PATH.read_bytes()
     except OSError:
-        # Last resort: in-memory only (container w/ read-only filesystem)
+        # Last resort: in-memory only (container w/ read-only filesystem).
+        # SEC-3.4: warn loudly — receipt verification will NOT survive restarts.
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "Cannot persist HMAC key to disk — receipt verification is "
+            "non-persistent and will break on restart. Set "
+            "VALAYR_RECEIPT_HMAC_KEY env var for multi-validator setups."
+        )
         _RECEIPT_HMAC_KEY = os.urandom(32)
 
 # Grace window: platform submission within this many seconds AFTER subnet
@@ -121,6 +141,7 @@ class AntiBypassEngine:
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
         self._receipts_path = self.data_dir / "subnet_receipts.json"
         self._violations_path = self.data_dir / "violations.json"
         self._receipts: dict[str, SubnetReceipt] = {}  # fingerprint → receipt
@@ -136,19 +157,20 @@ class AntiBypassEngine:
         bittensor_block: int = 0,
     ) -> SubnetReceipt:
         """Record that an exploit was received on the subnet."""
-        receipt = SubnetReceipt(
-            task_id=task_id,
-            miner_hotkey=miner_hotkey,
-            fingerprint=fingerprint,
-            subnet_timestamp=int(time.time()),
-            bittensor_block=bittensor_block,
-        )
-        receipt.hmac_tag = receipt.compute_hmac()
-        self._receipts[fingerprint] = receipt
-        # AG-5 fix: prune old receipts to prevent unbounded memory growth
-        self._prune_receipts()
-        self._save_receipts()
-        return receipt
+        with self._lock:
+            receipt = SubnetReceipt(
+                task_id=task_id,
+                miner_hotkey=miner_hotkey,
+                fingerprint=fingerprint,
+                subnet_timestamp=int(time.time()),
+                bittensor_block=bittensor_block,
+            )
+            receipt.hmac_tag = receipt.compute_hmac()
+            self._receipts[fingerprint] = receipt
+            # AG-5 fix: prune old receipts to prevent unbounded memory growth
+            self._prune_receipts()
+            self._save_receipts()
+            return receipt
 
     def check_platform_submission(
         self,
@@ -160,49 +182,51 @@ class AntiBypassEngine:
 
         Returns a BypassViolation if bypass is detected, None otherwise.
         """
-        receipt = self._receipts.get(fingerprint)
-        if not receipt:
-            # No subnet receipt found — likely unlinked miner or new exploit
-            return None
+        with self._lock:
+            receipt = self._receipts.get(fingerprint)
+            if not receipt:
+                # No subnet receipt found — likely unlinked miner or new exploit
+                return None
 
-        delta = platform_timestamp - receipt.subnet_timestamp
+            delta = platform_timestamp - receipt.subnet_timestamp
 
-        # Platform submission after subnet + grace: legitimate
-        if delta >= -BYPASS_THRESHOLD_SECONDS:
-            return None
+            # Platform submission after subnet + grace: legitimate
+            if delta >= -BYPASS_THRESHOLD_SECONDS:
+                return None
 
-        # Platform submission significantly before subnet: bypass
-        if delta < -3600:
-            severity = "critical"
-        elif delta < -BYPASS_THRESHOLD_SECONDS:
-            severity = "violation"
-        else:
-            severity = "warning"
+            # Platform submission significantly before subnet: bypass
+            if delta < -3600:
+                severity = "critical"
+            elif delta < -BYPASS_THRESHOLD_SECONDS:
+                severity = "violation"
+            else:
+                severity = "warning"
 
-        violation = BypassViolation(
-            miner_hotkey=receipt.miner_hotkey,
-            task_id=receipt.task_id,
-            fingerprint=fingerprint,
-            subnet_timestamp=receipt.subnet_timestamp,
-            platform_timestamp=platform_timestamp,
-            platform=platform,
-            delta_seconds=delta,
-            severity=severity,
-        )
-        self._violations.append(violation)
-        self._save_violations()
+            violation = BypassViolation(
+                miner_hotkey=receipt.miner_hotkey,
+                task_id=receipt.task_id,
+                fingerprint=fingerprint,
+                subnet_timestamp=receipt.subnet_timestamp,
+                platform_timestamp=platform_timestamp,
+                platform=platform,
+                delta_seconds=delta,
+                severity=severity,
+            )
+            self._violations.append(violation)
+            self._save_violations()
 
-        # Auto-slash for violations
-        if severity in ("violation", "critical"):
-            slash_duration = 86400 if severity == "violation" else 604800  # 1d or 7d
-            self._slashed[receipt.miner_hotkey] = int(time.time()) + slash_duration
+            # Auto-slash for violations
+            if severity in ("violation", "critical"):
+                slash_duration = 86400 if severity == "violation" else 604800  # 1d or 7d
+                self._slashed[receipt.miner_hotkey] = int(time.time()) + slash_duration
 
-        return violation
+            return violation
 
     def is_slashed(self, miner_hotkey: str) -> bool:
         """Check if a miner is currently slashed."""
-        until = self._slashed.get(miner_hotkey, 0)
-        return int(time.time()) < until
+        with self._lock:
+            until = self._slashed.get(miner_hotkey, 0)
+            return int(time.time()) < until
 
     def get_violations(self, miner_hotkey: Optional[str] = None) -> list[BypassViolation]:
         """Get all violations, optionally filtered by miner."""

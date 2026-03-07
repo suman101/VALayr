@@ -20,12 +20,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 # ── Application Code ─────────────────────────────────────────────────────────
 COPY neurons/ /app/neurons/
 COPY miner/ /app/miner/
-COPY validator/ /app/validator/
 COPY task-generator/ /app/task-generator/
 COPY subnet-adapter/ /app/subnet-adapter/
 COPY orchestrator.py /app/orchestrator.py
 COPY pyproject.toml /app/pyproject.toml
-COPY foundry.toml /app/foundry.toml
 COPY contracts/corpus/ /app/contracts/corpus/
 
 # Module symlinks for hyphenated directories

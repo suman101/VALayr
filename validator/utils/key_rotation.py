@@ -90,10 +90,24 @@ def _cast_send(
         "--rpc-url", rpc_url,
     ]
     from validator.utils.retry import retry_subprocess
-    result = retry_subprocess(
-        cmd, max_retries=3, timeout=60,
-        env={**os.environ, "ETH_PRIVATE_KEY": private_key},
-    )
+    # SEC-1.5: build a sanitized env dict so that exception tracebacks
+    # cannot leak the private key.
+    safe_env = {**os.environ, "ETH_PRIVATE_KEY": private_key}
+    try:
+        result = retry_subprocess(
+            cmd, max_retries=3, timeout=60,
+            env=safe_env,
+        )
+    except Exception as exc:
+        # Re-raise with a sanitized message that cannot contain the key
+        raise RuntimeError(
+            f"cast send to {contract} failed: {type(exc).__name__}: "
+            f"{str(exc)[:200]}"
+        ) from None
+    finally:
+        # Clear the private key from the env dict to minimise exposure window
+        safe_env.pop("ETH_PRIVATE_KEY", None)
+        del safe_env
     if result.returncode != 0:
         raise RuntimeError(f"cast send failed: {result.stderr.strip()}")
     return result.stdout.strip()

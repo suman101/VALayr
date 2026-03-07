@@ -39,7 +39,7 @@ def keccak256(data: bytes) -> str:
         k.update(data)
         return "0x" + k.hexdigest()
     except ImportError:
-        pass
+        logger.debug("pycryptodome not available, falling back to cast CLI")
 
     # Fallback: Foundry's `cast keccak` CLI
     try:
@@ -52,7 +52,7 @@ def keccak256(data: bytes) -> str:
         if result.returncode == 0 and result.stdout.strip().startswith("0x"):
             return result.stdout.strip()
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+        logger.debug("cast CLI unavailable — will raise RuntimeError")
 
     raise RuntimeError(
         "Cannot compute Ethereum keccak256: install pycryptodome "

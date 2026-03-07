@@ -86,6 +86,13 @@ contract ProtocolRegistry is Pausable {
     );
     event ValidatorUpdated(address indexed validator, bool status);
     event BountyWithdrawn(bytes32 indexed contractHash, uint256 amount);
+    /// SEC-4.2: emitted when a reward exceeds the remaining bounty pool
+    /// and is silently capped, giving miners transparency.
+    event RewardCapped(
+        bytes32 indexed contractHash,
+        uint256 calculatedReward,
+        uint256 actualReward
+    );
 
     // ── Errors ───────────────────────────────────────────────────────────
 
@@ -256,7 +263,11 @@ contract ProtocolRegistry is Pausable {
         // Split multiplication to prevent overflow for large bounty pools (>1000 ETH).
         uint256 scaledSeverity = (reg.bountyPool * severityScore) / 1e18;
         uint256 reward = (scaledSeverity * MAX_REWARD_BPS) / 10000;
-        if (reward > reg.bountyPool) reward = reg.bountyPool;
+        if (reward > reg.bountyPool) {
+            // SEC-4.2: emit event when reward is capped for transparency
+            emit RewardCapped(contractHash, reward, reg.bountyPool);
+            reward = reg.bountyPool;
+        }
 
         claims[contractHash][exploitFingerprint] = ExploitClaim({
             miner: miner,

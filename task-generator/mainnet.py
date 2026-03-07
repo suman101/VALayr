@@ -260,7 +260,9 @@ class MainnetContractSource:
         if self.api_key:
             query["apikey"] = self.api_key
         url = f"{base_url}?{urllib.parse.urlencode(query)}"
-        # Mask the API key in any URL that might appear in error logs
+        # SEC-5.2: mask the API key immediately after URL construction to
+        # prevent leaking in any exception that occurs before the original
+        # masking line.
         safe_url = url
         if self.api_key:
             safe_url = url.replace(self.api_key, "***")

@@ -65,4 +65,6 @@ def retry_subprocess(
             )
             time.sleep(delay)
 
-    raise last_exc  # type: ignore[misc]
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError(f"Command failed after {max_retries} retries (no attempts made): {cmd}")

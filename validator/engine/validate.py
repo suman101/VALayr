@@ -96,18 +96,18 @@ def _set_local_resource_limits():
     import resource
     try:
         resource.setrlimit(resource.RLIMIT_CPU, (LOCAL_MAX_CPU_SECONDS, LOCAL_MAX_CPU_SECONDS))
-    except (ValueError, OSError):
-        pass
+    except (ValueError, OSError) as exc:
+        logger.debug("RLIMIT_CPU not available on this platform: %s", exc)
     try:
         resource.setrlimit(resource.RLIMIT_FSIZE, (LOCAL_MAX_FILE_SIZE, LOCAL_MAX_FILE_SIZE))
-    except (ValueError, OSError):
-        pass
+    except (ValueError, OSError) as exc:
+        logger.debug("RLIMIT_FSIZE not available on this platform: %s", exc)
     # RLIMIT_AS is Linux-only (limits virtual address space)
     if hasattr(resource, "RLIMIT_AS"):
         try:
             resource.setrlimit(resource.RLIMIT_AS, (LOCAL_MAX_VMEM_BYTES, LOCAL_MAX_VMEM_BYTES))
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as exc:
+            logger.debug("RLIMIT_AS not available on this platform: %s", exc)
 
 
 # ── Enums & Data Structures ─────────────────────────────────────────────────
@@ -216,6 +216,9 @@ class ValidationEngine:
         # Allocate unique port per instance to avoid collisions (thread-safe).
         with ValidationEngine._port_lock:
             ValidationEngine._port_counter = (ValidationEngine._port_counter % self._PORT_RANGE) + 1
+            if ValidationEngine._port_counter == 1 and hasattr(self, '_port_wrapped'):
+                logger.warning("Port counter wrapped around %d range — potential collision with long-lived instances", self._PORT_RANGE)
+            self._port_wrapped = True
             self.anvil_port = anvil_port + ValidationEngine._port_counter - 1
         self._anvil_proc = None
 
@@ -616,6 +619,10 @@ contract ExploitTest is Test {{
                 if depth == 0:
                     blocks.append(source[start:i])
                     break
+            else:
+                # Unclosed assembly block — include what we have so dangerous
+                # opcodes inside malformed source are still caught.
+                blocks.append(source[start:])
         return blocks
 
     @staticmethod
@@ -636,12 +643,28 @@ contract ExploitTest is Test {{
 
             # Check import lines AND string literals containing paths
             if stripped.startswith("import") or (stripped.startswith("from") and "import" in stripped):
-                # Allow standard Foundry single-parent traversal (../src/*)
-                # but block deeper traversals or chained ../ sequences.
-                # Count total traversal depth to catch ../lib/../../../etc
-                traversal_depth = stripped.count("../")
-                if traversal_depth > 1:
-                    return False
+                # SEC-2.1: extract all quoted path segments and resolve them
+                # to catch interleaved traversals like ../lib/../../../etc
+                import_paths = re.findall(r'["\']([^"\']+)["\']', stripped)
+                for import_path in import_paths:
+                    # Normalise the path and check for traversal escapes.
+                    # PurePosixPath.parts gives us each component; track
+                    # peak upward depth to detect deep traversals.
+                    # Allow single ../src/* (standard Foundry layout) but
+                    # reject anything that goes >1 level above start.
+                    from pathlib import PurePosixPath
+                    parts = PurePosixPath(import_path).parts
+                    depth = 0       # current net upward position
+                    max_depth = 0   # peak upward position reached
+                    for part in parts:
+                        if part == "..":
+                            depth += 1
+                            max_depth = max(max_depth, depth)
+                        elif part != ".":
+                            depth = max(0, depth - 1)
+                    if max_depth > 1:
+                        return False
+
                 # Disallow absolute paths (Unix + Windows)
                 if re.search(r'["\']/', stripped) or re.search(r'["\'][A-Za-z]:\\\\?', stripped):
                     return False
@@ -682,8 +705,12 @@ contract ExploitTest is Test {{
                 r"^\s*contract\s+(\w+)", source, re.MULTILINE
             )
             if contracts:
-                # Use the last concrete contract (typically the main one)
-                return f"src/Vulnerable.sol:{contracts[-1]}"
+                # Prefer a contract named "Vulnerable" (task convention),
+                # then fall back to the first concrete contract.
+                for name in contracts:
+                    if name.lower() == "vulnerable":
+                        return f"src/Vulnerable.sol:{name}"
+                return f"src/Vulnerable.sol:{contracts[0]}"
         except (FileNotFoundError, ValueError, IndexError) as e:
             logger.debug("Could not extract contract name: %s", e)
         # Fallback: use conventional name (forge requires exact contract name, not wildcard)
@@ -809,11 +836,21 @@ contract ExploitTest is Test {{
                                 # F-5 fix: raised helper storage capture from
                                 # 32 to 128 slots to reduce fingerprint blind
                                 # spots for contracts with many storage variables.
-                                state["helper_contracts"][addr_lower] = {
+                                # Store slot count even when truncating so the
+                                # fingerprinter knows data was clipped.
+                                helper_entry: dict = {
                                     "balance": balance,
                                     "storage_slots": len(non_zero),
-                                    "storage": non_zero if len(non_zero) <= 128 else {},
                                 }
+                                if len(non_zero) <= 128:
+                                    helper_entry["storage"] = non_zero
+                                else:
+                                    # Keep first 128 slots (sorted) so fingerprint
+                                    # still captures partial state instead of nothing.
+                                    sorted_keys = sorted(non_zero.keys(), key=lambda k: int(k, 16) if k.startswith("0x") else 0)[:128]
+                                    helper_entry["storage"] = {k: non_zero[k] for k in sorted_keys}
+                                    helper_entry["storage_truncated"] = True
+                                state["helper_contracts"][addr_lower] = helper_entry
             except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
                 logger.debug("anvil_dumpState failed or returned unexpected format")
 
@@ -986,7 +1023,9 @@ contract ExploitTest is Test {{
             # V-9 fix: first SSTORE (cold) costs 20,000 gas, not 5,000.
             # Subsequent writes to the same slot (warm) cost ~5,000.
             # Use 20,000 as the safer estimate for fallback.
-            trace.gas_used = 21_000 + len(trace.storage_diffs) * 20_000
+            # Only set fallback if we don't already have valid partial data.
+            if not trace.gas_used:
+                trace.gas_used = 21_000 + len(trace.storage_diffs) * 20_000
 
         # Extract function selectors from call trace, grouped per test_* function
         selectors = set()
